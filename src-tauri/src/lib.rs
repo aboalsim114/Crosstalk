@@ -4,6 +4,7 @@
 //! All native features live here, behind Tauri commands, events and plugins:
 //!
 //! - `audio`     WASAPI capture of cs2.exe (process loopback, device fallback), levels
+//! - `speech`    Silero VAD + whisper.cpp transcription of the captured voices (ru, en)
 //! - `game`      CS2 process detection (names and PIDs only, the game is never opened)
 //! - `tray`      notification-area icon; the app keeps running when the window is closed
 //! - `shortcuts` system-wide Ctrl+Alt+F8 / F9 / F10
@@ -20,6 +21,7 @@ mod overlay;
 #[allow(dead_code)]
 mod pipeline;
 mod shortcuts;
+pub mod speech;
 mod tray;
 
 use std::sync::Arc;
@@ -29,6 +31,25 @@ use tauri_plugin_autostart::MacosLauncher;
 
 /// Passed by the autostart entry so Windows login starts Crosstalk in the tray.
 pub const MINIMIZED_FLAG: &str = "--minimized";
+
+/// Capture events go to the UI; a capture that stops also purges the speech
+/// pipeline (no segment survives a stop, an emergency stop or CS2 closing).
+struct CaptureEvents {
+    ui: audio::TauriEvents,
+    speech: Arc<speech::SpeechService>,
+}
+
+impl audio::AudioEvents for CaptureEvents {
+    fn status(&self, status: &audio::CaptureStatus) {
+        if status.state != audio::CaptureState::Capturing {
+            self.speech.purge();
+        }
+        self.ui.status(status);
+    }
+    fn level(&self, reading: audio::LevelReading) {
+        self.ui.level(reading);
+    }
+}
 
 pub fn run() {
     tauri::Builder::default()
@@ -51,15 +72,26 @@ pub fn run() {
             audio::audio_devices,
             audio::audio_start,
             audio::audio_stop,
-            game::cs2_status
+            game::cs2_status,
+            speech::speech_status,
+            speech::speech_stats,
+            speech::speech_models,
+            speech::speech_configure,
+            speech::speech_rescan
         ])
         .setup(|app| {
             let handle = app.handle();
 
+            let speech = speech::start(handle);
+            app.manage(speech.clone());
             let audio = Arc::new(audio::AudioService::new(
                 audio::default_backend(),
-                Arc::new(audio::TauriEvents(handle.clone())),
+                Arc::new(CaptureEvents {
+                    ui: audio::TauriEvents(handle.clone()),
+                    speech: speech.clone(),
+                }),
             ));
+            audio.set_sink(Some(Box::new(speech.sink())));
             app.manage(audio.clone());
             let watcher = Arc::new(game::Cs2Watcher::default());
             watcher.poll();
