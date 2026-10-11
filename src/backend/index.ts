@@ -5,6 +5,7 @@
 // `npm run dev` for quick styling work), so components never have to check themselves.
 
 import { invoke, isTauri as tauriPresent } from '@tauri-apps/api/core';
+import { getCurrentWindow } from '@tauri-apps/api/window';
 
 export const isTauri: boolean = tauriPresent();
 
@@ -24,3 +25,10 @@ export async function getAppInfo(): Promise<AppInfo> {
     return FALLBACK_INFO;
   }
 }
+
+/** Custom title-bar buttons (the main window is frameless to match the design). */
+export const windowControls = {
+  minimize: () => (isTauri ? getCurrentWindow().minimize() : Promise.resolve()),
+  toggleMaximize: () => (isTauri ? getCurrentWindow().toggleMaximize() : Promise.resolve()),
+  close: () => (isTauri ? getCurrentWindow().close() : Promise.resolve()),
+};
