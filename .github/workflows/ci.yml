@@ -1,0 +1,94 @@
+name: CI
+
+# Git workflow (see CONTRIBUTING.md):
+#   feature/fix/chore branches ──PR──▶ develop ──release PR──▶ main
+# Every PR into develop or main, and every push to either, runs the full Windows
+# build. Job names are stable because branch protection requires them by name.
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  # Production only takes release PRs: from develop, or release/* and hotfix/* branches.
+  release-gate:
+    name: release-gate
+    if: github.event_name == 'pull_request' && github.base_ref == 'main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check the PR source branch
+        env:
+          HEAD_REF: ${{ github.head_ref }}
+        run: |
+          case "$HEAD_REF" in
+            develop|release/*|hotfix/*) echo "OK: $HEAD_REF -> main" ;;
+            *) echo "::error::main only accepts PRs from develop, release/* or hotfix/* (got '$HEAD_REF'). Target develop instead."; exit 1 ;;
+          esac
+
+  windows:
+    name: windows-build
+    runs-on: windows-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+          components: clippy, rustfmt
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri -> target
+
+      - name: Install JS dependencies
+        run: npm ci
+
+      - name: Typecheck UI
+        run: npm run typecheck
+
+      - name: Test UI
+        run: npm test
+
+      # The release build embeds dist/, so build the UI before the Rust checks.
+      - name: Build UI
+        run: npm run build
+
+      - name: Rust format
+        working-directory: src-tauri
+        run: cargo fmt --all -- --check
+
+      - name: Rust lint
+        working-directory: src-tauri
+        run: cargo clippy --all-targets --locked -- -D warnings
+
+      - name: Rust tests
+        working-directory: src-tauri
+        run: cargo test --locked
+
+      - name: Build Windows installers (NSIS + MSI)
+        run: npx tauri build --target x86_64-pc-windows-msvc
+
+      - name: Upload installers
+        uses: actions/upload-artifact@v4
+        with:
+          name: crosstalk-windows-x64
+          if-no-files-found: error
+          path: |
+            src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis/*.exe
+            src-tauri/target/x86_64-pc-windows-msvc/release/bundle/msi/*.msi
+            src-tauri/target/x86_64-pc-windows-msvc/release/crosstalk.exe

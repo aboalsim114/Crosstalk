@@ -1,0 +1,243 @@
+@import 'tailwindcss';
+
+@import '@fontsource/instrument-serif/400.css';
+@import '@fontsource/instrument-serif/400-italic.css';
+@import '@fontsource/geist-sans/300.css';
+@import '@fontsource/geist-sans/400.css';
+@import '@fontsource/geist-sans/500.css';
+@import '@fontsource/geist-sans/600.css';
+@import '@fontsource/jetbrains-mono/400.css';
+@import '@fontsource/jetbrains-mono/500.css';
+@import '@fontsource/jetbrains-mono/600.css';
+
+/* Design tokens from the cinematic mockup (design/maquette). Exposed as Tailwind
+   utilities (text-ember, bg-ink, font-serif…) and as CSS variables. */
+@theme static {
+  --font-serif: 'Instrument Serif', Georgia, serif;
+  --font-sans: 'Geist Sans', 'Geist', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+
+  --color-ink: #020203;
+  --color-text: #ece6dc;
+  --color-text-hi: #f3ede3;
+  --color-text-2: #bdb6ab;
+  --color-text-3: #a49d92;
+  --color-muted: #8f8a83;
+  --color-muted-2: #6e6961;
+  --color-muted-3: #5a5650;
+  --color-muted-4: #4a4640;
+  --color-muted-5: #3d3a36;
+  --color-ember: #ffa24a;
+  --color-ember-hi: #ffc68a;
+  --color-ice: #7fd4ff;
+  --color-ok: #7fe0a8;
+  --color-danger: #ff8a7a;
+
+  --ease-cine: cubic-bezier(0.2, 0.7, 0.1, 1);
+}
+
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+  body {
+    background: var(--color-ink);
+    font-family: var(--font-sans);
+    color: var(--color-text);
+    -webkit-font-smoothing: antialiased;
+    user-select: none;
+    overflow: hidden;
+  }
+  input,
+  textarea {
+    user-select: text;
+  }
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.08);
+    border-radius: 3px;
+  }
+}
+
+@keyframes grain {
+  0% { transform: translate(0, 0); }
+  25% { transform: translate(-3%, 2%); }
+  50% { transform: translate(2%, -3%); }
+  75% { transform: translate(-2%, -1%); }
+  100% { transform: translate(0, 0); }
+}
+
+/* Repeated pieces of the cinematic design. One-off layout lives in Tailwind classes. */
+@layer components {
+  body.framed {
+    overflow: auto;
+  }
+  .frame-host {
+    min-height: 100vh;
+    display: flex;
+    align-items: safe center;
+    justify-content: safe center;
+    padding: 32px;
+    width: max-content;
+    min-width: 100%;
+  }
+  .app-shell {
+    display: flex;
+    flex-direction: column;
+    position: relative;
+    overflow: hidden;
+    background: radial-gradient(120% 90% at 38% 38%, #141113 0%, #08080a 55%, #030304 100%);
+  }
+  .app-shell.native {
+    width: 100vw;
+    height: 100vh;
+  }
+  .app-shell.framed {
+    width: 1320px;
+    height: 840px;
+    flex: none;
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 12px;
+    box-shadow: 0 40px 120px rgba(0, 0, 0, 0.8), 0 0 0 1px rgba(0, 0, 0, 0.6);
+  }
+
+  .lbl {
+    font: 500 9.5px var(--font-mono);
+    letter-spacing: 0.16em;
+    color: var(--color-muted-2);
+  }
+  .glass {
+    background: rgba(10, 10, 12, 0.55);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid rgba(255, 255, 255, 0.07);
+    border-radius: 16px;
+  }
+  .row-title {
+    font: 500 13px var(--font-sans);
+    color: var(--color-text);
+  }
+  .row-sub {
+    font: 400 11px var(--font-sans);
+    color: var(--color-muted-2);
+  }
+
+  .pill {
+    border-radius: 999px;
+    cursor: pointer;
+    transition: background 0.25s;
+  }
+  .pill-ghost { border: 1px solid rgba(255, 255, 255, 0.08); }
+  .pill-ghost:hover { background: rgba(255, 255, 255, 0.05); }
+  .pill-ember { border: 1px solid rgba(255, 162, 74, 0.4); color: var(--color-ember-hi); }
+  .pill-ember:hover { background: rgba(255, 162, 74, 0.08); }
+  .pill-danger { border: 1px solid rgba(255, 107, 107, 0.25); color: var(--color-danger); }
+  .pill-danger:hover { background: rgba(255, 107, 107, 0.08); }
+
+  .seg {
+    display: flex;
+    gap: 2px;
+    padding: 3px;
+    border-radius: 999px;
+    border: 1px solid rgba(255, 255, 255, 0.06);
+  }
+  .seg > div {
+    border-radius: 999px;
+    cursor: pointer;
+    transition: all 0.25s;
+  }
+
+  .toggle {
+    width: 36px;
+    height: 20px;
+    border-radius: 10px;
+    position: relative;
+    cursor: pointer;
+    flex: none;
+    transition: background 0.3s;
+  }
+  .toggle > div {
+    position: absolute;
+    top: 2px;
+    width: 16px;
+    height: 16px;
+    border-radius: 8px;
+    background: #fff;
+    transition: left 0.3s var(--ease-cine);
+  }
+
+  .slider-head {
+    display: flex;
+    justify-content: space-between;
+    font: 400 12.5px var(--font-sans);
+    color: var(--color-text-2);
+  }
+  .slider-head > span:last-child {
+    font: 500 11px var(--font-mono);
+    color: var(--color-muted-2);
+  }
+  input[type='range'] {
+    accent-color: var(--color-ember);
+    width: 100%;
+  }
+
+  .warn-box {
+    padding: 10px 12px;
+    border-radius: 10px;
+    background: rgba(255, 162, 74, 0.07);
+    border: 1px solid rgba(255, 162, 74, 0.2);
+    font: 400 11.5px/1.5 var(--font-sans);
+    color: #f0cfa6;
+  }
+
+  .text-input {
+    padding: 8px 14px;
+    border-radius: 999px;
+    background: rgba(0, 0, 0, 0.3);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    font: 400 12.5px var(--font-mono);
+    color: var(--color-text);
+    outline: none;
+  }
+  .text-input::placeholder { color: var(--color-muted-3); }
+
+  .nav-item {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 10px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: background 0.3s;
+  }
+  .nav-item:hover { background: rgba(255, 255, 255, 0.03) !important; }
+
+  .win-btn { width: 46px; text-align: center; }
+  .win-btn:hover { background: rgba(255, 255, 255, 0.05); }
+  .win-btn.close:hover { background: #c42b1c; color: #fff; }
+
+  .del-x { cursor: pointer; }
+  .del-x:hover { color: var(--color-danger) !important; }
+
+  .grain {
+    position: absolute;
+    inset: -50%;
+    z-index: 7;
+    pointer-events: none;
+    opacity: 0.07;
+    mix-blend-mode: overlay;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+    animation: grain 0.9s steps(4) infinite;
+  }
+}
+
+/* The in-game overlay window is transparent: only the subtitle blocks are drawn. */
+html.overlay-window,
+html.overlay-window body {
+  background: transparent !important;
+}
