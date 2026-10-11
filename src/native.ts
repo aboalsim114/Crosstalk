@@ -1,7 +1,8 @@
 // Wires the store to the native side: global shortcuts / tray actions in, and the
 // in-game overlay window out. Only active inside the Tauri app.
 
-import { audioCapture, cs2, isTauri, onNativeAction, overlayWindow, type CaptureStatus, type NativeAction, type OverlayWindowConfig } from './backend';
+import { audioCapture, cs2, isTauri, onNativeAction, overlayWindow, speech, type CaptureStatus, type NativeAction, type OverlayWindowConfig } from './backend';
+import { refreshModels, speechConfigFrom, transcriptEntry, useSpeech } from './state/speech';
 import { captureModeFor, levelToUnit, recordTestLevel, refreshDevices, useAudio } from './state/audio';
 import { isRunning, useApp, type AppState, type FeedEntry, type Session } from './state/store';
 
@@ -104,11 +105,51 @@ function startAudioBridge(): Promise<() => void>[] {
   return unlisten;
 }
 
+/** Settings that the Rust speech service needs, as a comparable key. */
+export const speechConfigKey = (s: AppState) => JSON.stringify(speechConfigFrom(s));
+
+/** Mirrors the Rust speech recognition: status, real transcripts, voice activity. */
+function startSpeechBridge(): Promise<() => void>[] {
+  const unlisten: Promise<() => void>[] = [];
+  speech.status().then((status) => useSpeech.setState({ status }));
+  speech.stats().then((stats) => useSpeech.setState({ stats }));
+  refreshModels();
+  unlisten.push(
+    speech.onStatus((status) => {
+      useSpeech.setState({ status });
+      refreshModels();
+    }),
+  );
+  unlisten.push(speech.onStats((stats) => useSpeech.setState({ stats })));
+  unlisten.push(speech.onActivity((activity) => useSpeech.setState({ activity })));
+  unlisten.push(
+    speech.onTranscript((t) => {
+      const app = useApp.getState();
+      if (capturesDuring(app.session)) app.addLine(transcriptEntry(t));
+    }),
+  );
+
+  // Model, VAD threshold, languages and glossary follow the UI settings.
+  let lastKey = '';
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const push = (s: AppState) => {
+    const key = speechConfigKey(s);
+    if (key === lastKey) return;
+    lastKey = key;
+    clearTimeout(timer);
+    timer = setTimeout(() => speech.configure(speechConfigFrom(s)).then((status) => status && useSpeech.setState({ status })), 250);
+  };
+  push(useApp.getState());
+  unlisten.push(Promise.resolve(useApp.subscribe((s) => push(s))));
+  return unlisten;
+}
+
 export function startNativeBridge(): () => void {
   if (!isTauri) return () => {};
   const unlisten: Promise<() => void>[] = [];
   unlisten.push(onNativeAction(applyNativeAction));
   unlisten.push(...startAudioBridge());
+  unlisten.push(...startSpeechBridge());
 
   const push = () => overlayWindow.pushState(overlayPayload(useApp.getState()));
   unlisten.push(overlayWindow.onReady(push));
