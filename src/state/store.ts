@@ -1,9 +1,11 @@
 import { create } from 'zustand';
 import { config } from '../config';
+import { isCapturing, useAudio } from './audio';
 import { EVENTS, GLOSSARY, type GlossEntry, type ModelId, type PageId, type SimEvent } from './data';
 
 export type Session = 'IDLE' | 'INITIALIZING' | 'LISTENING' | 'DEGRADED' | 'PAUSED' | 'STOPPING' | 'STOPPED';
-export type FeedStatus = 'provisoire' | 'final' | 'original' | 'erreur';
+/** 'transcrit': real speech recognition in the original language, not translated yet. */
+export type FeedStatus = 'provisoire' | 'final' | 'original' | 'erreur' | 'transcrit';
 export type FeedMode = 'text' | 'voice' | 'mixed';
 export type OverlayFormat = 'minimal' | 'bilingue' | 'accessible';
 export type Corner = 'tl' | 'tr' | 'bl' | 'br';
@@ -85,6 +87,8 @@ export interface AppActions {
   addTerm: () => void;
   removeTerm: (i: number) => void;
   clearFeed: () => void;
+  /** Adds a real line (speech transcript) to the Script and the overlay. */
+  addLine: (entry: FeedEntry) => void;
   flash: (msg: string) => void;
 }
 
@@ -147,13 +151,19 @@ export const useApp = create<AppState & AppActions>()((set, get) => {
   const schedule = (ms = 2400) => later(tick, ms);
 
   // Plays the next simulated event: voice goes VAD → ASR (provisional) → final; chat lands at once.
+  // In the desktop app voices are really transcribed: only the written chat is still simulated.
   function tick() {
     const s = get();
     if (!isLive(s) || s.paused) return;
+    const realVoice = useAudio.getState().native;
+    if (realVoice && s.mode === 'voice') {
+      schedule(3000);
+      return;
+    }
     let i = s.idx;
     let e = EVENTS[i % EVENTS.length];
     let guard = 0;
-    while (((s.mode === 'text' && e.kind === 'voice') || (s.mode === 'voice' && e.kind === 'chat')) && guard < 10) {
+    while ((((s.mode === 'text' || realVoice) && e.kind === 'voice') || (s.mode === 'voice' && e.kind === 'chat')) && guard < 10) {
       i++;
       e = EVENTS[i % EVENTS.length];
       guard++;
@@ -302,6 +312,11 @@ export const useApp = create<AppState & AppActions>()((set, get) => {
     },
     removeTerm: (i) => set((st) => ({ gloss: st.gloss.filter((_, j) => j !== i) })),
     clearFeed: () => set({ feed: [] }),
+    addLine: (entry) => {
+      if (get().mode === 'text') return;
+      sceneFx.push('ember');
+      set((st) => ({ feed: [entry, ...st.feed].slice(0, 40), seg: st.seg + 1 }));
+    },
 
     flash: (msg) => {
       clearTimeout(toastTimer);
@@ -311,11 +326,19 @@ export const useApp = create<AppState & AppActions>()((set, get) => {
   };
 });
 
-/** Drives the simulated input meter and the session timecode (~11 Hz, like the prototype). */
+/**
+ * Drives the session timecode and, without a real capture, the simulated input
+ * meter (~11 Hz, like the prototype). During a real capture the level comes from
+ * the Rust audio events instead (see native.ts).
+ */
 export function startMeter(): () => void {
   const iv = setInterval(() => {
     const s = useApp.getState();
     const run = isLive(s) && !s.paused;
+    if (isCapturing(useAudio.getState().status)) {
+      if (run) useApp.setState({ now: Date.now() });
+      return;
+    }
     if (!run && s.level === 0) return;
     const r = Math.random();
     const v = !run ? 0 : s.speaking ? 0.45 + r * 0.55 : r < 0.07 ? 0.5 + Math.random() * 0.35 : r * 0.14;

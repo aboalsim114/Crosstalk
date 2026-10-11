@@ -3,6 +3,9 @@
 //! The React UI (../src) is embedded in this binary and rendered by WebView2.
 //! All native features live here, behind Tauri commands, events and plugins:
 //!
+//! - `audio`     WASAPI capture of cs2.exe (process loopback, device fallback), levels
+//! - `speech`    Silero VAD + whisper.cpp transcription of the captured voices (ru, en)
+//! - `game`      CS2 process detection (names and PIDs only, the game is never opened)
 //! - `tray`      notification-area icon; the app keeps running when the window is closed
 //! - `shortcuts` system-wide Ctrl+Alt+F8 / F9 / F10
 //! - `overlay`   transparent, always-on-top, click-through subtitle window
@@ -10,19 +13,43 @@
 //! - `pipeline`  seams for audio capture, speech recognition, translation and CS2
 
 mod actions;
+pub mod audio;
 mod commands;
+pub mod game;
 mod overlay;
 // Traits and helpers for the upcoming native pipeline; wired in later phases.
 #[allow(dead_code)]
 mod pipeline;
 mod shortcuts;
+pub mod speech;
 mod tray;
 
-use tauri::WindowEvent;
+use std::sync::Arc;
+
+use tauri::{Emitter, Manager, WindowEvent};
 use tauri_plugin_autostart::MacosLauncher;
 
 /// Passed by the autostart entry so Windows login starts Crosstalk in the tray.
 pub const MINIMIZED_FLAG: &str = "--minimized";
+
+/// Capture events go to the UI; a capture that stops also purges the speech
+/// pipeline (no segment survives a stop, an emergency stop or CS2 closing).
+struct CaptureEvents {
+    ui: audio::TauriEvents,
+    speech: Arc<speech::SpeechService>,
+}
+
+impl audio::AudioEvents for CaptureEvents {
+    fn status(&self, status: &audio::CaptureStatus) {
+        if status.state != audio::CaptureState::Capturing {
+            self.speech.purge();
+        }
+        self.ui.status(status);
+    }
+    fn level(&self, reading: audio::LevelReading) {
+        self.ui.level(reading);
+    }
+}
 
 pub fn run() {
     tauri::Builder::default()
@@ -39,10 +66,47 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             commands::app_info,
             overlay::overlay_configure,
-            shortcuts::shortcut_status
+            shortcuts::shortcut_status,
+            audio::audio_status,
+            audio::audio_platform,
+            audio::audio_devices,
+            audio::audio_start,
+            audio::audio_stop,
+            game::cs2_status,
+            speech::speech_status,
+            speech::speech_stats,
+            speech::speech_models,
+            speech::speech_configure,
+            speech::speech_rescan
         ])
         .setup(|app| {
             let handle = app.handle();
+
+            let speech = speech::start(handle);
+            app.manage(speech.clone());
+            let audio = Arc::new(audio::AudioService::new(
+                audio::default_backend(),
+                Arc::new(CaptureEvents {
+                    ui: audio::TauriEvents(handle.clone()),
+                    speech: speech.clone(),
+                }),
+            ));
+            audio.set_sink(Some(Box::new(speech.sink())));
+            app.manage(audio.clone());
+            let watcher = Arc::new(game::Cs2Watcher::default());
+            watcher.poll();
+            app.manage(watcher.clone());
+            let events = handle.clone();
+            watcher.spawn(move |change, status| {
+                let _ = events.emit(game::STATUS_EVENT, status);
+                match change {
+                    game::Cs2Change::Exited(pid) | game::Cs2Change::Restarted { old: pid, .. } => {
+                        audio.on_process_exited(pid)
+                    }
+                    game::Cs2Change::Started(_) => {}
+                }
+            });
+
             tray::create(handle)?;
             shortcuts::register_all(handle);
             overlay::create(handle)?;

@@ -9,7 +9,11 @@ export const STATUS_COLOR: Record<FeedStatus, string> = {
   final: '#7fe0a8',
   original: '#8f8a83',
   erreur: '#ff8a7a',
+  transcrit: '#7fd4ff',
 };
+
+/** Shown under every real transcript: it is the original text, not a French translation. */
+export const TRANSCRIPT_NOTE = 'Transcription en langue originale — traduction en français à venir';
 
 export interface FeedRow {
   id: number;
@@ -30,6 +34,25 @@ export interface FeedRow {
 }
 
 export function feedRow(f: FeedEntry): FeedRow {
+  if (f.status === 'transcrit') {
+    return {
+      id: f.id,
+      tag: 'VOIX',
+      color: '#ffa24a',
+      time: f.time,
+      langs: f.src.toUpperCase() + ' · TRANSCRIPTION',
+      lead: '',
+      orig: '',
+      shown: f.orig,
+      trColor: '#ece6dc',
+      italic: false,
+      note: TRANSCRIPT_NOTE,
+      noteColor: '#6e6961',
+      status: 'TRANSCRIT',
+      statusColor: STATUS_COLOR.transcrit,
+      lat: f.lat ? fmtSeconds(f.lat) : '',
+    };
+  }
   const voice = f.kind === 'voice';
   const fr = f.status === 'original';
   const prov = f.status === 'provisoire';
@@ -78,6 +101,19 @@ export function subtitle(f0: FeedEntry | undefined, live: boolean): Subtitle {
       note: live ? '' : 'Démarrez la session pour sous-titrer la partie.',
       noteColor: '#5a5650',
     };
+  if (f0.status === 'transcrit') {
+    return {
+      tag: 'VOIX · ' + LANG_NAME[f0.src] + ' · TRANSCRIPTION',
+      sender: '',
+      color: '#ffa24a',
+      orig: '',
+      text: '« ' + f0.orig + ' »',
+      italic: false,
+      trColor: '#f3ede3',
+      note: TRANSCRIPT_NOTE,
+      noteColor: '#6e6961',
+    };
+  }
   const fr = f0.status === 'original';
   const prov = f0.status === 'provisoire';
   return {
