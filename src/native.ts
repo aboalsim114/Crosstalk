@@ -1,8 +1,9 @@
 // Wires the store to the native side: global shortcuts / tray actions in, and the
 // in-game overlay window out. Only active inside the Tauri app.
 
-import { isTauri, onNativeAction, overlayWindow, type NativeAction, type OverlayWindowConfig } from './backend';
-import { isRunning, useApp, type AppState, type FeedEntry } from './state/store';
+import { audioCapture, cs2, isTauri, onNativeAction, overlayWindow, type CaptureStatus, type NativeAction, type OverlayWindowConfig } from './backend';
+import { captureModeFor, levelToUnit, recordTestLevel, refreshDevices, useAudio } from './state/audio';
+import { isRunning, useApp, type AppState, type FeedEntry, type Session } from './state/store';
 
 export interface OverlayPayload {
   feed: FeedEntry[];
@@ -44,10 +45,70 @@ export function applyNativeAction(a: NativeAction) {
   ({ overlay: s.toggleOverlay, pause: s.togglePause, emergency: s.emergency, session: s.toggleSession })[a]();
 }
 
+/** Sessions during which the real capture runs. */
+export const capturesDuring = (s: Session) => s === 'INITIALIZING' || s === 'LISTENING' || s === 'DEGRADED';
+
+/** What the capture must do when the session goes from `prev` to `next`. */
+export function captureActionFor(prev: Session, next: Session): 'start' | 'stop' | null {
+  const was = capturesDuring(prev);
+  const is = capturesDuring(next);
+  return is && !was ? 'start' : was && !is ? 'stop' : null;
+}
+
+/** A capture that runs on the fallback device, or failed, degrades the session. */
+export const captureDegraded = (c: CaptureStatus) => c.state === 'error' || (c.state === 'capturing' && c.fallbackReason !== null);
+
+/** Mirrors the Rust capture into the stores and drives it from the session. */
+function startAudioBridge(): Promise<() => void>[] {
+  const unlisten: Promise<() => void>[] = [];
+  audioCapture.status().then((status) => useAudio.setState({ status }));
+  audioCapture.platform().then((platform) => useAudio.setState({ platform }));
+  cs2.status().then((c) => useAudio.setState({ cs2: c }));
+  refreshDevices();
+
+  unlisten.push(
+    audioCapture.onStatus((status) => {
+      useAudio.setState({ status, ...(status.state === 'capturing' ? {} : { level: null }) });
+      if (status.state !== 'capturing') useApp.setState({ level: 0 });
+      const app = useApp.getState();
+      if (app.session === 'LISTENING' && captureDegraded(status)) useApp.setState({ session: 'DEGRADED' });
+    }),
+  );
+  unlisten.push(
+    audioCapture.onLevel((level) => {
+      useAudio.setState({ level });
+      recordTestLevel(level);
+      useApp.setState({ level: levelToUnit(level.rmsDb) });
+    }),
+  );
+  unlisten.push(cs2.onStatus((c) => useAudio.setState({ cs2: c })));
+
+  const unsub = useApp.subscribe((next, prev) => {
+    if (next.session === 'LISTENING' && captureDegraded(useAudio.getState().status)) {
+      useApp.setState({ session: 'DEGRADED' });
+    }
+    const action = captureActionFor(prev.session, next.session);
+    if (action === 'stop') audioCapture.stop();
+    if (action === 'start') {
+      audioCapture.start(captureModeFor(next.capture), useAudio.getState().deviceId).then((res) => {
+        if (!capturesDuring(useApp.getState().session)) {
+          audioCapture.stop();
+          return;
+        }
+        if (res.state === 'error') useApp.getState().flash(`Capture audio indisponible : ${res.error?.message ?? 'erreur'}`);
+        else if (res.fallbackReason) useApp.getState().flash('Capture par processus indisponible · repli sur le périphérique de sortie');
+      });
+    }
+  });
+  unlisten.push(Promise.resolve(unsub));
+  return unlisten;
+}
+
 export function startNativeBridge(): () => void {
   if (!isTauri) return () => {};
   const unlisten: Promise<() => void>[] = [];
   unlisten.push(onNativeAction(applyNativeAction));
+  unlisten.push(...startAudioBridge());
 
   const push = () => overlayWindow.pushState(overlayPayload(useApp.getState()));
   unlisten.push(overlayWindow.onReady(push));

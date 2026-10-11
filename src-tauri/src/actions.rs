@@ -1,8 +1,12 @@
 //! User actions that can come from outside the UI (global shortcuts, tray menu)
 //! and are forwarded to the main window, which owns the session state.
 
+use std::sync::Arc;
+
 use serde::Serialize;
 use tauri::{AppHandle, Emitter, Manager};
+
+use crate::audio::{AudioService, StopReason};
 
 /// Event name the UI listens to (see `src/backend/index.ts`).
 pub const ACTION_EVENT: &str = "crosstalk://action";
@@ -22,6 +26,13 @@ pub enum Action {
 }
 
 pub fn dispatch(app: &AppHandle, action: Action) {
+    // The emergency stop cuts the capture here, in Rust, without waiting for the
+    // UI: it must take effect in under 200 ms even if the window is hidden.
+    if action == Action::Emergency {
+        if let Some(audio) = app.try_state::<Arc<AudioService>>() {
+            audio.stop(StopReason::Emergency);
+        }
+    }
     if let Err(e) = app.emit_to(MAIN_WINDOW, ACTION_EVENT, action) {
         eprintln!("crosstalk: failed to forward {action:?}: {e}");
     }

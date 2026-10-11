@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { config } from '../config';
+import { isCapturing, useAudio } from './audio';
 import { EVENTS, GLOSSARY, type GlossEntry, type ModelId, type PageId, type SimEvent } from './data';
 
 export type Session = 'IDLE' | 'INITIALIZING' | 'LISTENING' | 'DEGRADED' | 'PAUSED' | 'STOPPING' | 'STOPPED';
@@ -311,11 +312,19 @@ export const useApp = create<AppState & AppActions>()((set, get) => {
   };
 });
 
-/** Drives the simulated input meter and the session timecode (~11 Hz, like the prototype). */
+/**
+ * Drives the session timecode and, without a real capture, the simulated input
+ * meter (~11 Hz, like the prototype). During a real capture the level comes from
+ * the Rust audio events instead (see native.ts).
+ */
 export function startMeter(): () => void {
   const iv = setInterval(() => {
     const s = useApp.getState();
     const run = isLive(s) && !s.paused;
+    if (isCapturing(useAudio.getState().status)) {
+      if (run) useApp.setState({ now: Date.now() });
+      return;
+    }
     if (!run && s.level === 0) return;
     const r = Math.random();
     const v = !run ? 0 : s.speaking ? 0.45 + r * 0.55 : r < 0.07 ? 0.5 + Math.random() * 0.35 : r * 0.14;
