@@ -1,5 +1,7 @@
 import { config } from '../config';
 import { Radio, Seg, Slider, Toggle, ToggleRow, fnt } from '../components/atoms';
+import { LevelMeter } from '../components/LevelMeter';
+import { captureSummary, cs2Summary, isCapturing, refreshDevices, runCaptureTest, testMessage, useAudio } from '../state/audio';
 import { MODELS } from '../state/data';
 import { useApp, type Accel, type CaptureSource, type Engine } from '../state/store';
 
@@ -15,16 +17,32 @@ const ENGINES: [Engine, string][] = [
 
 function CaptureCard() {
   const s = useApp();
-  const fb = config.win10Fallback;
-  const opts: [CaptureSource, string, string, string, boolean][] = [
-    ['process', 'Audio de CS2 uniquement', 'Process loopback WASAPI ciblant cs2.exe. Sans injection.', fb ? 'INDISPONIBLE' : 'RECOMMANDÉ', fb],
-    ['device', 'Périphérique de sortie', 'Loopback du casque — capte aussi Discord, navigateur…', 'REPLI', false],
-    ['wav', 'Fichier WAV de démonstration', 'Tester la chaîne sans lancer CS2', 'TEST', false],
-  ];
-  const testing = s.test > 0 && s.test < 100;
+  const audio = useAudio();
+  const native = audio.native;
+  const fb = !native && config.win10Fallback;
+  const cs2 = cs2Summary(audio.cs2);
+  const opts: [CaptureSource, string, string, string, boolean][] = native
+    ? [
+        ['process', 'Audio de CS2 uniquement', `Process loopback WASAPI ciblant cs2.exe. Sans injection. ${audio.cs2?.running ? `CS2 détecté (PID ${audio.cs2.pid}).` : 'CS2 non détecté.'}`, 'RECOMMANDÉ', false],
+        ['device', 'Périphérique de sortie', 'Loopback du casque — capte aussi Discord, navigateur…', 'REPLI', false],
+        ['wav', 'Fichier WAV de démonstration', 'Arrive avec la reconnaissance vocale', 'À VENIR', true],
+      ]
+    : [
+        ['process', 'Audio de CS2 uniquement', 'Process loopback WASAPI ciblant cs2.exe. Sans injection.', fb ? 'INDISPONIBLE' : 'RECOMMANDÉ', fb],
+        ['device', 'Périphérique de sortie', 'Loopback du casque — capte aussi Discord, navigateur…', 'REPLI', false],
+        ['wav', 'Fichier WAV de démonstration', 'Tester la chaîne sans lancer CS2', 'TEST', false],
+      ];
+  const capture = captureSummary(audio.status);
+  const capturing = isCapturing(audio.status);
+  const testing = native ? audio.test.running : s.test > 0 && s.test < 100;
+  const progress = native ? audio.test.progress : s.test;
+  const deviceMode = s.capture === 'device';
   return (
     <div className="glass flex flex-col gap-2.5 p-5">
-      <div className="lbl">SOURCE DE CAPTURE</div>
+      <div className="flex items-center justify-between">
+        <span className="lbl">SOURCE DE CAPTURE</span>
+        {native && <span style={{ font: fnt(500, 9.5, 'mono'), letterSpacing: '.12em', color: cs2.color }}>CS2 · {cs2.value.toUpperCase()}</span>}
+      </div>
       {opts.map(([id, name, sub, tag, disabled]) => {
         const on = s.capture === id && !disabled;
         return (
@@ -56,23 +74,63 @@ function CaptureCard() {
           </div>
         );
       })}
-      {(s.capture === 'device' || fb) && (
+      {native && (deviceMode || s.capture === 'process') && (
+        <label className="flex items-center justify-between gap-3" style={{ font: fnt(400, 12), color: '#bdb6ab' }}>
+          <span>{deviceMode ? 'Périphérique capturé' : 'Périphérique de repli'}</span>
+          <select
+            aria-label="Périphérique de sortie"
+            value={audio.deviceId ?? ''}
+            onChange={(e) => useAudio.setState({ deviceId: e.target.value || null })}
+            onFocus={() => refreshDevices()}
+            className="text-input max-w-[230px] cursor-pointer truncate"
+            style={{ font: fnt(400, 11.5), padding: '6px 12px' }}
+          >
+            <option value="">Périphérique par défaut de Windows</option>
+            {audio.devices.map((d) => (
+              <option key={d.id} value={d.id}>
+                {d.name}
+                {d.isDefault ? ' (par défaut)' : ''}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
+      {(deviceMode || fb || (native && audio.status.fallbackReason)) && (
         <div className="warn-box">Le loopback système capte tout le son du périphérique — y compris des conversations privées d’autres applications.</div>
       )}
+      {native && (
+        <div className="flex flex-col gap-2 rounded-xl px-3.5 py-3" style={{ border: '1px solid rgba(255,255,255,.06)', background: 'rgba(0,0,0,.18)' }}>
+          <LevelMeter level={audio.level} active={capturing} color={capture.color === '#8f8a83' ? '#7fe0a8' : capture.color} />
+          <div className="flex items-baseline justify-between gap-3" data-testid="capture-state">
+            <span style={{ font: fnt(500, 12), color: capture.color }}>{capture.value}</span>
+            <span className="truncate text-right" style={{ font: fnt(400, 11), color: '#6e6961' }}>
+              {capture.detail}
+            </span>
+          </div>
+          {audio.status.fallbackReason && <span style={{ font: fnt(400, 10.5, 'sans', 1.45), color: '#f0cfa6' }}>Raison du repli : {audio.status.fallbackReason}</span>}
+        </div>
+      )}
       <div className="flex items-center gap-3.5 pt-1.5">
-        <div className="pill pill-ember flex-none px-4 py-[9px]" role="button" onClick={s.runTest} style={{ font: fnt(500, 12.5) }}>
-          {testing ? 'Écoute…' : 'Test audio 10 s'}
+        <div
+          className="pill pill-ember flex-none px-4 py-[9px]"
+          role="button"
+          onClick={() => (native ? runCaptureTest(s.capture) : s.runTest())}
+          style={{ font: fnt(500, 12.5) }}
+        >
+          {testing ? 'Écoute…' : native ? 'Tester la capture 10 s' : 'Test audio 10 s'}
         </div>
         <div className="flex flex-1 flex-col gap-1.5">
           <div className="h-0.5 overflow-hidden rounded-[1px]" style={{ background: 'rgba(255,255,255,.07)' }}>
-            <div className="h-0.5" data-testid="test-progress" style={{ width: `${s.test}%`, background: '#ffa24a', boxShadow: '0 0 10px #ffa24a', transition: 'width .25s linear' }} />
+            <div className="h-0.5" data-testid="test-progress" style={{ width: `${progress}%`, background: '#ffa24a', boxShadow: '0 0 10px #ffa24a', transition: 'width .25s linear' }} />
           </div>
-          <span style={{ font: fnt(400, 11), color: '#6e6961' }}>
-            {s.testDone
-              ? 'Voix détectée · ~1,3 s de traitement par segment de 4 s'
-              : s.test > 0
-                ? `${Math.round(s.test / 10)} / 10 s`
-                : 'Valide l’entrée, la détection de voix et le temps de traitement'}
+          <span style={{ font: fnt(400, 11), color: native && audio.test.error ? '#ff8a7a' : '#6e6961' }}>
+            {native
+              ? testMessage(audio.test)
+              : s.testDone
+                ? 'Voix détectée · ~1,3 s de traitement par segment de 4 s'
+                : s.test > 0
+                  ? `${Math.round(s.test / 10)} / 10 s`
+                  : 'Valide l’entrée, la détection de voix et le temps de traitement'}
           </span>
         </div>
       </div>

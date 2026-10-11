@@ -241,3 +241,9 @@ html.overlay-window,
 html.overlay-window body {
   background: transparent !important;
 }
+
+/* Native <select> options follow the dark theme (device picker). */
+select.text-input option {
+  background: #0d0c0e;
+  color: var(--color-text);
+}

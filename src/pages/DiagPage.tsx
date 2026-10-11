@@ -2,9 +2,22 @@ import { useEffect, useState } from 'react';
 import { getShortcutStatus, type ShortcutStatus } from '../backend';
 import { config } from '../config';
 import { fnt } from '../components/atoms';
+import { useAudio, type AudioState } from '../state/audio';
 import { useApp } from '../state/store';
 
 type DiagState = 'OK' | 'AVERT.' | 'ÉCHEC';
+
+/** Real process-loopback row from the Rust capture and the Windows build. */
+export function captureDiag(a: Pick<AudioState, 'platform' | 'status'>): [string, DiagState] {
+  const build = a.platform?.windowsBuild;
+  const doc = a.platform?.processLoopbackDocumented;
+  const base = build ? `Build ${build}${doc === false ? ' < 20348 (non documenté, tenté)' : ''}` : 'Build inconnu';
+  const st = a.status;
+  if (st.state === 'error') return [`${base} · ${st.error?.message ?? 'erreur'}`, 'ÉCHEC'];
+  if (st.state === 'capturing' && st.source?.kind === 'process') return [`${base} · ${st.source.processName} ciblé (PID ${st.source.pid})`, 'OK'];
+  if (st.state === 'capturing') return [`${base} · repli système${st.fallbackReason ? ` — ${st.fallbackReason}` : ''}`, 'AVERT.'];
+  return [`${base} · non testé dans cette session`, doc === false ? 'AVERT.' : 'OK'];
+}
 
 export function DiagPage() {
   const s = useApp();
@@ -17,11 +30,15 @@ export function DiagPage() {
     getShortcutStatus().then(setKeys);
   }, [s.diag]);
   const keysFailed = keys?.filter((k) => !k.registered) ?? [];
+  const audio = useAudio();
+  const [captureDetail, captureState] = audio.native
+    ? captureDiag(audio)
+    : [fb ? 'Build 19045 < 20348 — repli système' : 'Build 26100 · cs2.exe ciblé', (fb ? 'AVERT.' : 'OK') as DiagState];
   const rows: [string, string, DiagState][] = [
     ['Journal console.log', 'D:\\SteamLibrary\\steamapps\\common\\Counter-Strike Global Offensive\\game\\csgo\\console.log', 'OK'],
     ['Option -condebug', 'Détectée dans les options Steam', 'OK'],
     ['Parseur de chat', 'cs2-2026.09 · 42 fixtures validées', 'OK'],
-    ['Process loopback', fb ? 'Build 19045 < 20348 — repli système' : 'Build 26100 · cs2.exe ciblé', fb ? 'AVERT.' : 'OK'],
+    ['Process loopback', captureDetail, captureState],
     ['Modèle whisper-' + s.model, 'Chargé en 1,8 s · ' + s.accel.toUpperCase(), 'OK'],
     ['Traduction · ' + s.engine, down ? 'Délai dépassé (5 s) — repli sur l’original' : 'Réponse en 210 ms', down ? 'ÉCHEC' : 'OK'],
     keysFailed.length

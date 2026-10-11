@@ -1,6 +1,7 @@
 import { AnimatePresence, motion } from 'motion/react';
 import { config } from '../config';
 import { EASE, Seg, fmtSeconds, fnt } from '../components/atoms';
+import { SIGNAL_THRESHOLD_DB, captureSummary, cs2Summary, isCapturing, useAudio } from '../state/audio';
 import { isLive, useApp, type FeedMode } from '../state/store';
 import { feedRow, subtitle, voiceLatency } from './derive';
 
@@ -14,6 +15,8 @@ function Subtitle() {
   const f0 = useApp((s) => s.feed[0]);
   const live = useApp(isLive);
   const sub = subtitle(f0, live);
+  // Transcription and translation are not implemented yet: say so in the desktop app.
+  const demo = useAudio((a) => a.native) && !!f0;
   return (
     <motion.div
       key={f0?.id ?? 'idle'}
@@ -31,6 +34,7 @@ function Subtitle() {
         className="flex flex-col items-center gap-3"
       >
         <div className="flex items-center gap-2.5" style={{ font: fnt(500, 10.5, 'mono'), letterSpacing: '.16em', color: sub.color }}>
+          {demo && <span style={{ color: '#ffa24a' }}>DÉMO ·</span>}
           <span>{sub.tag}</span>
           <span style={{ color: '#5a5650' }}>{sub.sender}</span>
         </div>
@@ -59,9 +63,11 @@ function Subtitle() {
 function Pipeline() {
   const s = useApp();
   const live = isLive(s);
+  const audio = useAudio();
   const fb = config.win10Fallback;
+  const captureSub = audio.native ? captureSummary(audio.status).short : fb ? 'loopback' : 'cs2.exe';
   const stages: [string, string][] = [
-    ['Capture', fb ? 'loopback' : 'cs2.exe'],
+    ['Capture', captureSub],
     ['VAD', `seuil ${s.vad} %`],
     ['Transcription', `whisper ${s.model}`],
     ['Traduction', `${s.engine} → fr`],
@@ -71,7 +77,7 @@ function Pipeline() {
     <div className="flex items-center px-2 pb-[22px]">
       {stages.map(([name, sub], i) => {
         const running = live && !s.paused;
-        const active = running && (i === 0 || s.stage === i);
+        const active = i === 0 && audio.native ? isCapturing(audio.status) : running && (i === 0 || s.stage === i);
         const done = running && i > 0 && s.stage > i;
         const col = i === 0 ? '#7fe0a8' : '#ffa24a';
         return (
@@ -97,9 +103,16 @@ function StatusCards() {
   const fb = config.win10Fallback;
   const down = config.translatorDown;
   const lat = voiceLatency(s.feed);
+  const audio = useAudio();
+  const cs2 = cs2Summary(audio.cs2);
+  const capture = captureSummary(audio.status);
   const cards = [
-    { label: 'COUNTER-STRIKE 2', value: live ? 'En cours' : 'Détecté', sub: 'console.log · -condebug actif', dot: '#7fe0a8' },
-    { label: 'CAPTURE', value: fb ? 'Loopback système' : 'Process loopback', sub: fb ? 'Repli — tout le périphérique' : 'Son de cs2.exe uniquement', dot: fb ? '#ffa24a' : '#7fe0a8' },
+    audio.native
+      ? { label: 'COUNTER-STRIKE 2', value: cs2.value, sub: cs2.detail, dot: cs2.color }
+      : { label: 'COUNTER-STRIKE 2', value: live ? 'En cours' : 'Détecté', sub: 'console.log · -condebug actif', dot: '#7fe0a8' },
+    audio.native
+      ? { label: 'CAPTURE', value: capture.value, sub: capture.detail, dot: capture.color }
+      : { label: 'CAPTURE', value: fb ? 'Loopback système' : 'Process loopback', sub: fb ? 'Repli — tout le périphérique' : 'Son de cs2.exe uniquement', dot: fb ? '#ffa24a' : '#7fe0a8' },
     { label: 'MOTEURS', value: `Whisper ${s.model}`, sub: `${s.accel.toUpperCase()} · ${s.engine}${down ? ' indisponible' : ''}`, dot: down ? '#ff8a7a' : '#7fe0a8' },
     {
       label: 'LATENCE VOIX',
@@ -130,12 +143,21 @@ function ScriptPanel() {
   const cloud = useApp((s) => s.tg.cloud);
   const live = useApp(isLive);
   const set = useApp((s) => s.set);
+  const native = useAudio((a) => a.native);
   return (
     <div className="glass flex min-h-0 flex-col overflow-hidden">
       <div className="flex items-center justify-between px-[18px] pt-4 pb-3.5" style={{ borderBottom: '1px solid rgba(255,255,255,.05)' }}>
         <div className="flex items-baseline gap-2.5">
           <span style={{ font: fnt(400, 22, 'serif'), color: '#ece6dc' }}>Script</span>
           <span style={{ font: fnt(400, 10.5, 'mono'), color: '#5a5650' }}>{feed.length ? `${feed.length} répliques` : ''}</span>
+          {native && (
+            <span
+              title="La transcription et la traduction arrivent dans les prochaines versions : ces répliques sont des exemples."
+              style={{ font: fnt(600, 9, 'mono'), letterSpacing: '.14em', color: '#ffa24a', border: '1px solid rgba(255,162,74,.35)', borderRadius: 999, padding: '2px 7px' }}
+            >
+              SIMULÉ
+            </span>
+          )}
         </div>
         <Seg options={MODES} value={mode} onChange={(v) => set({ mode: v })} item={{ padding: '4px 10px', font: fnt(500, 11) }} />
       </div>
@@ -191,14 +213,35 @@ export function Dashboard() {
   const live = useApp(isLive);
   const session = useApp((s) => s.session);
   const speaking = useApp((s) => s.speaking);
+  const audio = useAudio();
   const fb = config.win10Fallback;
-  const scene = live ? (fb ? 'SCÈNE EN DIRECT · CAPTURE DE REPLI' : 'SCÈNE EN DIRECT · CS2.EXE') : session === 'PAUSED' ? 'SCÈNE EN PAUSE' : 'AUCUNE SCÈNE';
+  const capturing = isCapturing(audio.status);
+  const scene = audio.native
+    ? capturing
+      ? `SCÈNE EN DIRECT · ${captureSummary(audio.status).short.toUpperCase()}`
+      : session === 'PAUSED'
+        ? 'SCÈNE EN PAUSE'
+        : 'AUCUNE SCÈNE'
+    : live
+      ? fb
+        ? 'SCÈNE EN DIRECT · CAPTURE DE REPLI'
+        : 'SCÈNE EN DIRECT · CS2.EXE'
+      : session === 'PAUSED'
+        ? 'SCÈNE EN PAUSE'
+        : 'AUCUNE SCÈNE';
+  // In the desktop app, show the real signal presence (no voice detection yet).
+  const signal = capturing && audio.level !== null && audio.level.rmsDb > SIGNAL_THRESHOLD_DB;
+  const indicator = audio.native
+    ? { text: capturing ? (signal ? '● SIGNAL AUDIO' : 'silence') : '', color: signal ? '#7fe0a8' : '#4a4640' }
+    : { text: !live ? '' : speaking ? '● PAROLE DÉTECTÉE' : 'bruit ignoré', color: speaking ? '#ffa24a' : '#4a4640' };
   return (
     <div className="grid h-full gap-5" style={{ gridTemplateColumns: 'minmax(0,1fr) 372px' }}>
       <div className="flex min-w-0 flex-col">
         <div className="flex justify-between" style={{ font: fnt(500, 10, 'mono'), letterSpacing: '.16em', color: '#5a5650' }}>
           <span>{scene}</span>
-          <span style={{ color: speaking ? '#ffa24a' : '#4a4640' }}>{!live ? '' : speaking ? '● PAROLE DÉTECTÉE' : 'bruit ignoré'}</span>
+          <span style={{ color: indicator.color }} data-testid="signal-indicator">
+            {indicator.text}
+          </span>
         </div>
         <div className="flex-1" />
         <Subtitle />
