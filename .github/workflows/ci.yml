@@ -1,9 +1,14 @@
 name: CI
 
+# Git workflow (see CONTRIBUTING.md):
+#   feature/fix/chore branches ──PR──▶ develop ──release PR──▶ main
+# Every PR into develop or main, and every push to either, runs the full Windows
+# build. Job names are stable because branch protection requires them by name.
 on:
   push:
-    branches: [main]
+    branches: [main, develop]
   pull_request:
+    branches: [main, develop]
   workflow_dispatch:
 
 concurrency:
@@ -14,8 +19,23 @@ permissions:
   contents: read
 
 jobs:
+  # Production only takes release PRs: from develop, or release/* and hotfix/* branches.
+  release-gate:
+    name: release-gate
+    if: github.event_name == 'pull_request' && github.base_ref == 'main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check the PR source branch
+        env:
+          HEAD_REF: ${{ github.head_ref }}
+        run: |
+          case "$HEAD_REF" in
+            develop|release/*|hotfix/*) echo "OK: $HEAD_REF -> main" ;;
+            *) echo "::error::main only accepts PRs from develop, release/* or hotfix/* (got '$HEAD_REF'). Target develop instead."; exit 1 ;;
+          esac
+
   windows:
-    name: Windows x64 — test & package
+    name: windows-build
     runs-on: windows-latest
     timeout-minutes: 60
     steps:

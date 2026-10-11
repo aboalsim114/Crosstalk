@@ -1,0 +1,73 @@
+name: Release
+
+# Publishing a version (see CONTRIBUTING.md, "Release"):
+#   1. the release PR develop → main is merged after validation;
+#   2. a maintainer tags the merge commit on main: git tag v0.3.0 && git push origin v0.3.0
+# This workflow then builds the Windows installers and attaches them to a *draft*
+# GitHub Release, which the maintainer reviews and publishes by hand.
+on:
+  push:
+    tags: ['v*.*.*']
+
+permissions:
+  contents: write
+
+jobs:
+  windows-release:
+    name: windows-release
+    runs-on: windows-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check the tag is on main and matches the app version
+        shell: bash
+        run: |
+          git fetch origin main
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
+            echo "::error::Tag $GITHUB_REF_NAME is not on main. Only commits merged to main can be released."
+            exit 1
+          fi
+          version=$(node -p "require('./src-tauri/tauri.conf.json').version")
+          if [ "v$version" != "$GITHUB_REF_NAME" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME does not match tauri.conf.json version v$version."
+            exit 1
+          fi
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri -> target
+
+      - name: Install JS dependencies
+        run: npm ci
+
+      - name: Test
+        run: |
+          npm run typecheck
+          npm test
+          npm run build
+          cd src-tauri
+          cargo test --locked
+
+      - name: Build installers and draft the GitHub Release
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName: ${{ github.ref_name }}
+          releaseName: Crosstalk ${{ github.ref_name }}
+          releaseBody: Installateurs Windows 10/11 x64 de Crosstalk ${{ github.ref_name }}. Voir CHANGELOG / Pull Requests de la release.
+          releaseDraft: true
+          prerelease: false
+          args: --target x86_64-pc-windows-msvc

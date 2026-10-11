@@ -66,6 +66,9 @@ Les installateurs sont générés dans `src-tauri/target/release/bundle/` (`nsis
 
 ## Contribution
 
-- Aucun développement directement sur `main`.
-- Une branche par fonctionnalité (`feat/…`, `chore/…`, `fix/…`), puis une Pull Request.
-- Aucune fusion sans validation du propriétaire du dépôt.
+- `develop` est la branche de développement et la branche par défaut. `main` est la production.
+- Chaque sujet a sa branche (`feat/…`, `fix/…`, `chore/…`), part de `develop` et y revient par Pull Request, avec une CI verte.
+- `main` n'accepte que des Pull Requests de release (`develop` → `main`), validées par le propriétaire du dépôt.
+- Les publications se font par tag `vx.y.z` sur `main`, qui produit une Release GitHub en brouillon avec les installateurs.
+
+Le détail est dans [CONTRIBUTING.md](CONTRIBUTING.md).
