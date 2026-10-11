@@ -1,3 +1,5 @@
+import { useEffect, useState } from 'react';
+import { getShortcutStatus, type ShortcutStatus } from '../backend';
 import { config } from '../config';
 import { fnt } from '../components/atoms';
 import { useApp } from '../state/store';
@@ -9,6 +11,12 @@ export function DiagPage() {
   const fb = config.win10Fallback;
   const down = config.translatorDown;
   const done = s.diag === 'done';
+  // Real registration result from the Rust core in the desktop app; simulated otherwise.
+  const [keys, setKeys] = useState<ShortcutStatus[] | null>(null);
+  useEffect(() => {
+    getShortcutStatus().then(setKeys);
+  }, [s.diag]);
+  const keysFailed = keys?.filter((k) => !k.registered) ?? [];
   const rows: [string, string, DiagState][] = [
     ['Journal console.log', 'D:\\SteamLibrary\\steamapps\\common\\Counter-Strike Global Offensive\\game\\csgo\\console.log', 'OK'],
     ['Option -condebug', 'Détectée dans les options Steam', 'OK'],
@@ -16,7 +24,9 @@ export function DiagPage() {
     ['Process loopback', fb ? 'Build 19045 < 20348 — repli système' : 'Build 26100 · cs2.exe ciblé', fb ? 'AVERT.' : 'OK'],
     ['Modèle whisper-' + s.model, 'Chargé en 1,8 s · ' + s.accel.toUpperCase(), 'OK'],
     ['Traduction · ' + s.engine, down ? 'Délai dépassé (5 s) — repli sur l’original' : 'Réponse en 210 ms', down ? 'ÉCHEC' : 'OK'],
-    ['Raccourcis globaux', 'Ctrl+Alt+F8 / F9 / F10 · aucun conflit', 'OK'],
+    keysFailed.length
+      ? ['Raccourcis globaux', `${keysFailed.map((k) => k.keys).join(', ')} déjà utilisé par une autre application`, 'AVERT.']
+      : ['Raccourcis globaux', 'Ctrl+Alt+F8 / F9 / F10 · aucun conflit', 'OK'],
   ];
   const logs: [string, string, string][] = [
     ['14:02:11', 'INFO', 'app-shell: instance unique acquise'],

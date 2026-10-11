@@ -15,6 +15,10 @@ export default defineConfig({
     target: 'chrome120',
     outDir: 'dist',
     chunkSizeWarningLimit: 1200,
+    // Two windows: the main app and the transparent in-game overlay.
+    rollupOptions: {
+      input: { main: 'index.html', overlay: 'overlay.html' },
+    },
   },
   test: {
     environment: 'jsdom',

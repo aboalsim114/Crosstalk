@@ -1,7 +1,34 @@
 import { useEffect, useState } from 'react';
-import { FALLBACK_INFO, getAppInfo, type AppInfo } from '../backend';
-import { fnt } from '../components/atoms';
+import { FALLBACK_INFO, autostart, getAppInfo, isTauri, type AppInfo } from '../backend';
+import { ToggleRow, fnt } from '../components/atoms';
 import { LICENSES, NEVERS } from '../state/data';
+
+/** Windows integration: launch at login (straight to the notification area). */
+function WindowsCard() {
+  const [launch, setLaunch] = useState(false);
+  useEffect(() => {
+    autostart.isEnabled().then(setLaunch, () => setLaunch(false));
+  }, []);
+  const toggle = async () => {
+    const next = !launch;
+    setLaunch(next);
+    try {
+      await autostart.set(next);
+    } catch {
+      setLaunch(!next);
+    }
+  };
+  return (
+    <div className="glass flex flex-col gap-3.5 p-6">
+      <div className="lbl">WINDOWS</div>
+      <ToggleRow title="Lancer avec Windows" sub="Démarre réduit dans la zone de notification" on={launch} onClick={toggle} />
+      <div style={{ font: fnt(400, 11.5, 'sans', 1.6), color: '#6e6961' }}>
+        Fermer la fenêtre garde Crosstalk actif dans la zone de notification. Pour quitter : clic droit sur l’icône, puis « Quitter Crosstalk ».
+        {!isTauri && ' (Disponible dans l’application de bureau.)'}
+      </div>
+    </div>
+  );
+}
 
 export function AboutPage() {
   const [info, setInfo] = useState<AppInfo>(FALLBACK_INFO);
@@ -24,17 +51,20 @@ export function AboutPage() {
           Aucune garantie « VAC safe » n’est revendiquée. Les interactions externes sont documentées et revues après chaque mise à jour de CS2.
         </div>
       </div>
-      <div className="glass flex flex-col gap-2 p-6">
-        <div className="lbl pb-1">LICENCES TIERCES</div>
-        {LICENSES.map(([n, l]) => (
-          <div key={n} className="flex justify-between py-[5px]" style={{ font: fnt(400, 12, 'mono'), color: '#bdb6ab', borderBottom: '1px solid rgba(255,255,255,.04)' }}>
-            <span>{n}</span>
-            <span style={{ color: '#6e6961' }}>{l}</span>
+      <div className="flex flex-col gap-4">
+        <div className="glass flex flex-col gap-2 p-6">
+          <div className="lbl pb-1">LICENCES TIERCES</div>
+          {LICENSES.map(([n, l]) => (
+            <div key={n} className="flex justify-between py-[5px]" style={{ font: fnt(400, 12, 'mono'), color: '#bdb6ab', borderBottom: '1px solid rgba(255,255,255,.04)' }}>
+              <span>{n}</span>
+              <span style={{ color: '#6e6961' }}>{l}</span>
+            </div>
+          ))}
+          <div className="pt-2" style={{ font: fnt(400, 10.5, 'mono'), color: '#5a5650' }}>
+            v{info.version} · build 2026-10-11 · Windows x64
           </div>
-        ))}
-        <div className="pt-2" style={{ font: fnt(400, 10.5, 'mono'), color: '#5a5650' }}>
-          v{info.version} · build 2026-10-11 · Windows x64
         </div>
+        <WindowsCard />
       </div>
     </div>
   );

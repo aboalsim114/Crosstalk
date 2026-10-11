@@ -24,6 +24,17 @@ Phase 1 : l'interface complète, les animations et les interactions fonctionnent
 | `design/` | Maquette d'origine (Claude Design), cahier des charges et transcriptions de conception. Sert de référence uniquement. |
 | `.github/workflows/` | CI GitHub Actions sur runner Windows : tests, puis génération des installateurs. |
 
+## Intégration Windows
+
+| Fonction | Comportement |
+| --- | --- |
+| Fenêtre | Fenêtre native sans bordures, redimensionnable, avec la barre de titre de la maquette. Apparaît dans la barre des tâches. |
+| Zone de notification | Icône avec menu : afficher, démarrer/arrêter, overlay, pause, arrêt d'urgence, quitter. Fermer la fenêtre la masque, l'application continue de tourner. |
+| Raccourcis globaux | `Ctrl+Alt+F8` overlay, `Ctrl+Alt+F9` pause, `Ctrl+Alt+F10` arrêt d'urgence. Actifs même quand CS2 a le focus (`RegisterHotKey`, sans hook clavier). Les conflits avec d'autres applications sont signalés dans *Diagnostic*. |
+| Overlay en jeu | Seconde fenêtre transparente, toujours au premier plan, absente de la barre des tâches et click-through par défaut. Elle s'ancre dans le coin choisi et peut être repositionnée. Fonctionne avec CS2 en mode fenêtré sans bordures. |
+| Démarrage avec Windows | Option dans *À propos* : lance Crosstalk réduit dans la zone de notification (`--minimized`). |
+| Instance unique | Un second lancement remet la fenêtre existante au premier plan. |
+
 ## Installation (utilisateurs)
 
 Téléchargez l'installateur depuis les artefacts de la CI (`crosstalk-windows-x64`) ou depuis une Release :
