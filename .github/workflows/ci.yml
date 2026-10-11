@@ -107,6 +107,8 @@ jobs:
           cargo build --release --locked --example audio_probe --example asr_bench --target x86_64-pc-windows-msvc
           cp target/x86_64-pc-windows-msvc/release/examples/audio_probe.exe target/x86_64-pc-windows-msvc/release/crosstalk-audio-probe.exe
           cp target/x86_64-pc-windows-msvc/release/examples/asr_bench.exe target/x86_64-pc-windows-msvc/release/crosstalk-asr-bench.exe
+          # Flat artifact: the helper scripts sit next to the executables.
+          cp ../scripts/download-models.ps1 ../scripts/fetch-asr-corpus.py target/x86_64-pc-windows-msvc/release/
 
       - name: Upload installers
         uses: actions/upload-artifact@v4
@@ -119,7 +121,8 @@ jobs:
             src-tauri/target/x86_64-pc-windows-msvc/release/crosstalk.exe
             src-tauri/target/x86_64-pc-windows-msvc/release/crosstalk-audio-probe.exe
             src-tauri/target/x86_64-pc-windows-msvc/release/crosstalk-asr-bench.exe
-            scripts/download-models.ps1
+            src-tauri/target/x86_64-pc-windows-msvc/release/download-models.ps1
+            src-tauri/target/x86_64-pc-windows-msvc/release/fetch-asr-corpus.py
 
   # Speech recognition measurements on a real Windows CPU with real models and a
   # public reference corpus (FLEURS ru/en). Informative: it depends on Hugging
