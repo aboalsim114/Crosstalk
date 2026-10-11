@@ -29,12 +29,18 @@ export function overlayBlocks(feed: OverlayLine[], maxBlocks: number): OverlayBl
   return src.slice(0, maxBlocks).map((f, i) => {
     const voice = f.kind === 'voice';
     const t = f.shown || f.orig;
+    // A real transcript is the original text: never labelled as French.
+    const transcript = f.status === 'transcrit';
     return {
       key: `${i}-${f.orig}`,
       color: voice ? '#ffa24a' : '#7fd4ff',
-      head: voice ? `VOIX • ${LANG_NAME[f.src]} → FRANÇAIS` : `CHAT • ${CHANNEL_NAME[f.ch!]} • ${LANG_NAME[f.src]} → FRANÇAIS`,
-      orig: f.orig,
-      line: f.sender ? `${f.sender} : « ${t} »` : `« ${t} »`,
+      head: transcript
+        ? `VOIX • ${LANG_NAME[f.src]} • TRANSCRIPTION (NON TRADUITE)`
+        : voice
+          ? `VOIX • ${LANG_NAME[f.src]} → FRANÇAIS`
+          : `CHAT • ${CHANNEL_NAME[f.ch!]} • ${LANG_NAME[f.src]} → FRANÇAIS`,
+      orig: transcript ? '' : f.orig,
+      line: transcript ? `[${f.src.toUpperCase()}] « ${t} »` : f.sender ? `${f.sender} : « ${t} »` : `« ${t} »`,
       opacity: i === maxBlocks - 1 && maxBlocks > 2 ? 0.5 : 1,
     };
   });

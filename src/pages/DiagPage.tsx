@@ -3,6 +3,7 @@ import { getShortcutStatus, type ShortcutStatus } from '../backend';
 import { config } from '../config';
 import { fnt } from '../components/atoms';
 import { useAudio, type AudioState } from '../state/audio';
+import { engineSummary, useSpeech } from '../state/speech';
 import { useApp } from '../state/store';
 
 type DiagState = 'OK' | 'AVERT.' | 'ÉCHEC';
@@ -34,12 +35,17 @@ export function DiagPage() {
   const [captureDetail, captureState] = audio.native
     ? captureDiag(audio)
     : [fb ? 'Build 19045 < 20348 — repli système' : 'Build 26100 · cs2.exe ciblé', (fb ? 'AVERT.' : 'OK') as DiagState];
+  const sp = useSpeech();
+  const engine = engineSummary(sp.status);
+  const asrRow: [string, string, DiagState] = sp.native
+    ? ['Modèle whisper-' + s.model, `${engine.value} · ${engine.detail}`, sp.status?.state === 'ready' ? 'OK' : sp.status?.state === 'error' ? 'ÉCHEC' : 'AVERT.']
+    : ['Modèle whisper-' + s.model, 'Chargé en 1,8 s · ' + s.accel.toUpperCase(), 'OK'];
   const rows: [string, string, DiagState][] = [
     ['Journal console.log', 'D:\\SteamLibrary\\steamapps\\common\\Counter-Strike Global Offensive\\game\\csgo\\console.log', 'OK'],
     ['Option -condebug', 'Détectée dans les options Steam', 'OK'],
     ['Parseur de chat', 'cs2-2026.09 · 42 fixtures validées', 'OK'],
     ['Process loopback', captureDetail, captureState],
-    ['Modèle whisper-' + s.model, 'Chargé en 1,8 s · ' + s.accel.toUpperCase(), 'OK'],
+    asrRow,
     ['Traduction · ' + s.engine, down ? 'Délai dépassé (5 s) — repli sur l’original' : 'Réponse en 210 ms', down ? 'ÉCHEC' : 'OK'],
     keysFailed.length
       ? ['Raccourcis globaux', `${keysFailed.map((k) => k.keys).join(', ')} déjà utilisé par une autre application`, 'AVERT.']

@@ -2,6 +2,7 @@ import { AnimatePresence, motion } from 'motion/react';
 import { config } from '../config';
 import { EASE, Seg, fmtSeconds, fnt } from '../components/atoms';
 import { SIGNAL_THRESHOLD_DB, captureSummary, cs2Summary, isCapturing, useAudio } from '../state/audio';
+import { engineSummary, useSpeech } from '../state/speech';
 import { isLive, useApp, type FeedMode } from '../state/store';
 import { feedRow, subtitle, voiceLatency } from './derive';
 
@@ -15,8 +16,8 @@ function Subtitle() {
   const f0 = useApp((s) => s.feed[0]);
   const live = useApp(isLive);
   const sub = subtitle(f0, live);
-  // Transcription and translation are not implemented yet: say so in the desktop app.
-  const demo = useAudio((a) => a.native) && !!f0;
+  // In the desktop app only real transcripts are genuine; anything else (written chat) is still a demo.
+  const demo = useAudio((a) => a.native) && !!f0 && f0.status !== 'transcrit';
   return (
     <motion.div
       key={f0?.id ?? 'idle'}
@@ -64,21 +65,24 @@ function Pipeline() {
   const s = useApp();
   const live = isLive(s);
   const audio = useAudio();
+  const sp = useSpeech();
   const fb = config.win10Fallback;
   const captureSub = audio.native ? captureSummary(audio.status).short : fb ? 'loopback' : 'cs2.exe';
   const stages: [string, string][] = [
     ['Capture', captureSub],
-    ['VAD', `seuil ${s.vad} %`],
-    ['Transcription', `whisper ${s.model}`],
-    ['Traduction', `${s.engine} → fr`],
+    ['VAD', audio.native ? `Silero · seuil ${s.vad} %` : `seuil ${s.vad} %`],
+    ['Transcription', audio.native ? `whisper ${s.model} · ${sp.status?.state === 'ready' ? 'prêt' : engineSummary(sp.status).value.toLowerCase()}` : `whisper ${s.model}`],
+    ['Traduction', audio.native ? 'à venir' : `${s.engine} → fr`],
     ['Overlay', s.fmt],
   ];
   return (
     <div className="flex items-center px-2 pb-[22px]">
       {stages.map(([name, sub], i) => {
         const running = live && !s.paused;
-        const active = i === 0 && audio.native ? isCapturing(audio.status) : running && (i === 0 || s.stage === i);
-        const done = running && i > 0 && s.stage > i;
+        // Desktop app: real states (capture, voice detected, Whisper running); no translation yet.
+        const nativeActive = [isCapturing(audio.status), sp.activity.speaking, sp.activity.transcribing, false, false][i];
+        const active = audio.native ? running && nativeActive : running && (i === 0 || s.stage === i);
+        const done = !audio.native && running && i > 0 && s.stage > i;
         const col = i === 0 ? '#7fe0a8' : '#ffa24a';
         return (
           <div key={name} className="flex flex-1 flex-col gap-2" data-active={active || undefined}>
@@ -106,6 +110,7 @@ function StatusCards() {
   const audio = useAudio();
   const cs2 = cs2Summary(audio.cs2);
   const capture = captureSummary(audio.status);
+  const engine = engineSummary(useSpeech((x) => x.status));
   const cards = [
     audio.native
       ? { label: 'COUNTER-STRIKE 2', value: cs2.value, sub: cs2.detail, dot: cs2.color }
@@ -113,7 +118,9 @@ function StatusCards() {
     audio.native
       ? { label: 'CAPTURE', value: capture.value, sub: capture.detail, dot: capture.color }
       : { label: 'CAPTURE', value: fb ? 'Loopback système' : 'Process loopback', sub: fb ? 'Repli — tout le périphérique' : 'Son de cs2.exe uniquement', dot: fb ? '#ffa24a' : '#7fe0a8' },
-    { label: 'MOTEURS', value: `Whisper ${s.model}`, sub: `${s.accel.toUpperCase()} · ${s.engine}${down ? ' indisponible' : ''}`, dot: down ? '#ff8a7a' : '#7fe0a8' },
+    audio.native
+      ? { label: 'TRANSCRIPTION', value: engine.value, sub: `${engine.detail} · traduction à venir`, dot: engine.color }
+      : { label: 'MOTEURS', value: `Whisper ${s.model}`, sub: `${s.accel.toUpperCase()} · ${s.engine}${down ? ' indisponible' : ''}`, dot: down ? '#ff8a7a' : '#7fe0a8' },
     {
       label: 'LATENCE VOIX',
       value: lat ? `p50 ${fmtSeconds(lat.p50)}` : '—',
@@ -152,10 +159,10 @@ function ScriptPanel() {
           <span style={{ font: fnt(400, 10.5, 'mono'), color: '#5a5650' }}>{feed.length ? `${feed.length} répliques` : ''}</span>
           {native && (
             <span
-              title="La transcription et la traduction arrivent dans les prochaines versions : ces répliques sont des exemples."
+              title="Les voix sont réellement transcrites (TRANSCRIT, sans traduction). Le chat écrit est encore simulé : ces lignes sont des exemples."
               style={{ font: fnt(600, 9, 'mono'), letterSpacing: '.14em', color: '#ffa24a', border: '1px solid rgba(255,162,74,.35)', borderRadius: 999, padding: '2px 7px' }}
             >
-              SIMULÉ
+              CHAT SIMULÉ
             </span>
           )}
         </div>
@@ -166,7 +173,7 @@ function ScriptPanel() {
           <div className="flex h-full flex-col items-center justify-center gap-2.5 px-[30px] py-10 text-center">
             <div style={{ font: fnt(400, 22, 'serif'), fontStyle: 'italic', color: '#bdb6ab' }}>{live ? 'En écoute…' : 'Rien à l’écran.'}</div>
             <div style={{ font: fnt(400, 12, 'sans', 1.6), color: '#6e6961' }}>
-              {live ? 'Chaque réplique traduite s’inscrit ici.' : 'Ctrl+Alt+F9 met en pause, Ctrl+Alt+F10 coupe toutes les captures.'}
+              {live ? (native ? 'Chaque phrase transcrite s’inscrit ici, dans sa langue d’origine.' : 'Chaque réplique traduite s’inscrit ici.') : 'Ctrl+Alt+F9 met en pause, Ctrl+Alt+F10 coupe toutes les captures.'}
             </div>
           </div>
         )}
@@ -229,10 +236,13 @@ export function Dashboard() {
       : session === 'PAUSED'
         ? 'SCÈNE EN PAUSE'
         : 'AUCUNE SCÈNE';
-  // In the desktop app, show the real signal presence (no voice detection yet).
+  // In the desktop app: real voice detection (Silero), else real signal presence.
+  const activity = useSpeech((x) => x.activity);
   const signal = capturing && audio.level !== null && audio.level.rmsDb > SIGNAL_THRESHOLD_DB;
   const indicator = audio.native
-    ? { text: capturing ? (signal ? '● SIGNAL AUDIO' : 'silence') : '', color: signal ? '#7fe0a8' : '#4a4640' }
+    ? capturing && activity.speaking
+      ? { text: '● PAROLE DÉTECTÉE', color: '#ffa24a' }
+      : { text: capturing ? (signal ? '● SIGNAL AUDIO' : 'silence') : '', color: signal ? '#7fe0a8' : '#4a4640' }
     : { text: !live ? '' : speaking ? '● PAROLE DÉTECTÉE' : 'bruit ignoré', color: speaking ? '#ffa24a' : '#4a4640' };
   return (
     <div className="grid h-full gap-5" style={{ gridTemplateColumns: 'minmax(0,1fr) 372px' }}>
