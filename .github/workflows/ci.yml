@@ -58,6 +58,20 @@ jobs:
       - name: Install JS dependencies
         run: npm ci
 
+      # Non-negotiable constraint (docs/cahier-des-charges.md §3): Crosstalk never
+      # opens, reads, writes or hooks another process. Comments are ignored.
+      - name: Anti-cheat guard (no process access APIs)
+        shell: bash
+        run: |
+          pattern='\b(OpenProcess|ReadProcessMemory|WriteProcessMemory|NtReadVirtualMemory|NtWriteVirtualMemory|VirtualAllocEx|CreateRemoteThread|SetWindowsHookEx[AW]?|DebugActiveProcess)\b'
+          hits=$(grep -rnE "$pattern" src-tauri/src src-tauri/examples | grep -vE '^[^:]+:[0-9]+:[[:space:]]*//' || true)
+          if [ -n "$hits" ]; then
+            echo "::error::Forbidden process-access API used:"
+            echo "$hits"
+            exit 1
+          fi
+          echo "OK: no process-access API in the Rust sources."
+
       - name: Typecheck UI
         run: npm run typecheck
 
@@ -83,6 +97,13 @@ jobs:
       - name: Build Windows installers (NSIS + MSI)
         run: npx tauri build --target x86_64-pc-windows-msvc
 
+      - name: Build the audio diagnostic probe
+        working-directory: src-tauri
+        shell: bash
+        run: |
+          cargo build --release --locked --example audio_probe --target x86_64-pc-windows-msvc
+          cp target/x86_64-pc-windows-msvc/release/examples/audio_probe.exe target/x86_64-pc-windows-msvc/release/crosstalk-audio-probe.exe
+
       - name: Upload installers
         uses: actions/upload-artifact@v4
         with:
@@ -92,3 +113,4 @@ jobs:
             src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis/*.exe
             src-tauri/target/x86_64-pc-windows-msvc/release/bundle/msi/*.msi
             src-tauri/target/x86_64-pc-windows-msvc/release/crosstalk.exe
+            src-tauri/target/x86_64-pc-windows-msvc/release/crosstalk-audio-probe.exe
