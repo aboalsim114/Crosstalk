@@ -19,7 +19,39 @@ Phase 1 : l'interface complète, les animations et les interactions fonctionnent
 
 | Dossier | Contenu |
 | --- | --- |
+| `src-tauri/` | Cœur Rust : application Tauri v2, commandes natives, configuration de l'installateur. |
+| `src/` | Interface React + TypeScript (Tailwind CSS, Motion, Three.js), embarquée dans l'exécutable. |
 | `design/` | Maquette d'origine (Claude Design), cahier des charges et transcriptions de conception. Sert de référence uniquement. |
+| `.github/workflows/` | CI GitHub Actions sur runner Windows : tests, puis génération des installateurs. |
+
+## Installation (utilisateurs)
+
+Téléchargez l'installateur depuis les artefacts de la CI (`crosstalk-windows-x64`) ou depuis une Release :
+
+- `Crosstalk_x.y.z_x64-setup.exe` (NSIS) : installation pour l'utilisateur courant, sans droits administrateur ;
+- `Crosstalk_x.y.z_x64_fr-FR.msi` (WiX) : pour un déploiement géré.
+
+Il n'y a rien d'autre à installer, ni Rust ni Node.js. Si le runtime WebView2 manque (rare sous Windows 10, toujours présent sous Windows 11), l'installateur l'installe automatiquement.
+
+## Développement
+
+Prérequis sous Windows 10/11 x64 :
+
+- [Rust](https://rustup.rs) stable (toolchain MSVC) ;
+- Node.js 22 ;
+- les *Build Tools* de Visual Studio, avec la charge de travail « Développement desktop en C++ ».
+
+```powershell
+npm install
+npm run app:dev     # lance l'application Tauri avec rechargement à chaud
+npm test            # tests de l'interface (Vitest)
+cd src-tauri; cargo test   # tests du cœur Rust
+npm run app:build   # produit le .exe et les installateurs NSIS / MSI
+```
+
+Les installateurs sont générés dans `src-tauri/target/release/bundle/` (`nsis/` et `msi/`).
+
+> `npm run dev` sert uniquement l'interface dans un navigateur, pour des retouches visuelles rapides. Le produit livré est toujours l'application Tauri.
 
 ## Contribution
 

@@ -1,0 +1,65 @@
+@import 'tailwindcss';
+
+@import '@fontsource/instrument-serif/400.css';
+@import '@fontsource/instrument-serif/400-italic.css';
+@import '@fontsource/geist-sans/300.css';
+@import '@fontsource/geist-sans/400.css';
+@import '@fontsource/geist-sans/500.css';
+@import '@fontsource/geist-sans/600.css';
+@import '@fontsource/jetbrains-mono/400.css';
+@import '@fontsource/jetbrains-mono/500.css';
+@import '@fontsource/jetbrains-mono/600.css';
+
+/* Design tokens from the cinematic mockup (design/maquette). Exposed as Tailwind
+   utilities (text-ember, bg-ink, font-serif…) and as CSS variables. */
+@theme {
+  --font-serif: 'Instrument Serif', Georgia, serif;
+  --font-sans: 'Geist Sans', 'Geist', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+
+  --color-ink: #020203;
+  --color-text: #ece6dc;
+  --color-text-hi: #f3ede3;
+  --color-text-2: #bdb6ab;
+  --color-text-3: #a49d92;
+  --color-muted: #8f8a83;
+  --color-muted-2: #6e6961;
+  --color-muted-3: #5a5650;
+  --color-muted-4: #4a4640;
+  --color-muted-5: #3d3a36;
+  --color-ember: #ffa24a;
+  --color-ember-hi: #ffc68a;
+  --color-ice: #7fd4ff;
+  --color-ok: #7fe0a8;
+  --color-danger: #ff8a7a;
+
+  --ease-cine: cubic-bezier(0.2, 0.7, 0.1, 1);
+}
+
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+  body {
+    background: var(--color-ink);
+    font-family: var(--font-sans);
+    color: var(--color-text);
+    -webkit-font-smoothing: antialiased;
+    user-select: none;
+    overflow: hidden;
+  }
+  input,
+  textarea {
+    user-select: text;
+  }
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.08);
+    border-radius: 3px;
+  }
+}
