@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { motion } from 'motion/react';
 import { isTauri } from './backend';
 import { config } from './config';
+import { startNativeBridge } from './native';
 import { EASE } from './components/atoms';
 import { Intro, Letterbox, Toast } from './components/Intro';
 import { PageHeader } from './components/PageHeader';
@@ -28,7 +29,7 @@ const PAGES: Record<PageId, () => React.JSX.Element> = {
   about: AboutPage,
 };
 
-/** Ctrl+Alt+F8 overlay, F9 pause, F10 emergency stop while the window has focus. */
+/** Ctrl+Alt+F8 overlay, F9 pause, F10 emergency stop (focused window, outside Tauri). */
 export function handleShortcut(e: Pick<KeyboardEvent, 'ctrlKey' | 'altKey' | 'key' | 'preventDefault'>) {
   if (!(e.ctrlKey && e.altKey)) return;
   const s = useApp.getState();
@@ -47,11 +48,15 @@ export default function App() {
 
   useEffect(() => {
     const stopMeter = startMeter();
-    window.addEventListener('keydown', handleShortcut);
+    // In the desktop app the shortcuts are system-wide (registered in Rust) and arrive
+    // through the native bridge; the window listener only serves the UI dev server.
+    const stopNative = startNativeBridge();
+    if (!isTauri) window.addEventListener('keydown', handleShortcut);
     let autoStart: ReturnType<typeof setTimeout> | undefined;
     if (config.autoStart) autoStart = setTimeout(() => useApp.getState().toggleSession(), 400);
     return () => {
       stopMeter();
+      stopNative();
       window.removeEventListener('keydown', handleShortcut);
       clearTimeout(autoStart);
     };

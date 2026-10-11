@@ -235,3 +235,9 @@
     animation: grain 0.9s steps(4) infinite;
   }
 }
+
+/* The in-game overlay window is transparent: only the subtitle blocks are drawn. */
+html.overlay-window,
+html.overlay-window body {
+  background: transparent !important;
+}
