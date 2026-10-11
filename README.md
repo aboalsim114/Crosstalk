@@ -21,7 +21,8 @@ Phase 1 : l'interface complète, les animations et les interactions fonctionnent
 | --- | --- |
 | `src-tauri/` | Cœur Rust : application Tauri v2, commandes natives, configuration de l'installateur. |
 | `src/` | Interface React + TypeScript (Tailwind CSS, Motion, Three.js), embarquée dans l'exécutable. |
-| `design/` | Maquette d'origine (Claude Design), cahier des charges et transcriptions de conception. Sert de référence uniquement. |
+| `docs/` | **Cahier des charges v2.0** ([cahier-des-charges.md](docs/cahier-des-charges.md)) et **architecture** ([architecture.md](docs/architecture.md)) : les documents de référence. |
+| `design/` | Maquette d'origine (Claude Design), cahier des charges v1.0 et transcriptions de conception. Référence historique. |
 | `.github/workflows/` | CI GitHub Actions sur runner Windows : tests, puis génération des installateurs. |
 
 ## Intégration Windows
