@@ -23,6 +23,14 @@ tauri-plugin-global-shortcut = "2"
 tauri-plugin-autostart = "2"
 tauri-plugin-single-instance = "2"
 thiserror = "2"
+# whisper.cpp bindings: speech recognition and the Silero VAD (ggml port), both
+# run locally on the CPU. Optional so the Windows target can be type-checked
+# from Linux (`--no-default-features`), where whisper.cpp cannot be cross-built.
+whisper-rs = { version = "0.16.0", optional = true }
+
+[features]
+default = ["whisper"]
+whisper = ["dep:whisper-rs"]
 
 # Native Windows APIs used by the audio capture (WASAPI) and the CS2 process
 # watcher (Toolhelp snapshots: enumerates names and PIDs, never opens cs2.exe).
