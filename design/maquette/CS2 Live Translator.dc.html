@@ -1,0 +1,528 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#08090a;font-family:'IBM Plex Sans',system-ui,sans-serif;color:#e6e8ea;-webkit-font-smoothing:antialiased}
+a{color:#4cc3d9;text-decoration:none}a:hover{color:#8adcea}
+input[type=range]{accent-color:#f2a93b;width:100%}
+*{box-sizing:border-box}
+::-webkit-scrollbar{width:8px}::-webkit-scrollbar-thumb{background:#2a2f35;border-radius:4px}
+</style>
+</helmet>
+<div style="min-height:100vh;display:flex;align-items:safe center;justify-content:safe center;padding:32px;width:max-content;min-width:100%">
+<div data-screen-label="App window" style="width:1320px;height:840px;flex:none;display:flex;flex-direction:column;background:#121417;border:1px solid #2a2f35;border-radius:10px;overflow:hidden;box-shadow:0 30px 80px rgba(0,0,0,.6);position:relative">
+
+<div style="height:36px;flex:none;display:flex;align-items:center;justify-content:space-between;padding:0 0 0 14px;background:#0b0d0f;border-bottom:1px solid #1e2226">
+<div style="display:flex;align-items:center;gap:10px;font:500 12px 'IBM Plex Sans';color:#8b939b">
+<div style="width:16px;height:16px;border-radius:3px;background:#f2a93b;color:#0b0d0f;font:700 9px/16px 'IBM Plex Mono';text-align:center">TL</div>
+<span>CS2 Live Translator</span>
+</div>
+<div style="display:flex;height:36px;font:400 13px/36px 'IBM Plex Mono';color:#8b939b">
+<div style="width:46px;text-align:center">—</div><div style="width:46px;text-align:center">▢</div><div style="width:46px;text-align:center" style-hover="background:#c42b1c;color:#fff">✕</div>
+</div>
+</div>
+
+<div style="flex:1;display:flex;min-height:0">
+
+<div style="width:232px;flex:none;display:flex;flex-direction:column;background:#0d0f11;border-right:1px solid #1e2226;padding:20px 12px 14px">
+<div style="display:flex;align-items:center;gap:10px;padding:0 8px 22px">
+<div style="width:34px;height:34px;border-radius:7px;background:#f2a93b;color:#0d0f11;font:700 13px/34px 'IBM Plex Mono';text-align:center">TL</div>
+<div style="display:flex;flex-direction:column;gap:2px">
+<div style="font:600 14px/1.1 'IBM Plex Sans';color:#e6e8ea">Live Translator</div>
+<div style="font:400 11px 'IBM Plex Mono';color:#5c646c">v0.1.0 · MVP</div>
+</div>
+</div>
+<div style="display:flex;flex-direction:column;gap:2px">
+<sc-for list="{{ nav }}" as="n" hint-placeholder-count="7">
+<div onClick="{{ n.go }}" style="display:flex;align-items:center;gap:12px;padding:9px 10px;border-radius:6px;cursor:pointer;background:{{ n.bg }};color:{{ n.color }}" style-hover="background:#171a1e">
+<span style="font:500 10px 'IBM Plex Mono';color:{{ n.numColor }};width:16px">{{ n.num }}</span>
+<span style="font:500 13.5px 'IBM Plex Sans'">{{ n.label }}</span>
+</div>
+</sc-for>
+</div>
+<div style="flex:1"></div>
+<div style="display:flex;flex-direction:column;gap:10px;padding:14px 10px;border-top:1px solid #1e2226">
+<div style="font:500 10px 'IBM Plex Mono';letter-spacing:.08em;color:#5c646c">RACCOURCIS</div>
+<div style="display:flex;justify-content:space-between;align-items:center;font:400 12px 'IBM Plex Sans';color:#8b939b"><span>Overlay</span><span style="font:500 10.5px 'IBM Plex Mono';color:#c3c8cd;background:#1a1e22;border:1px solid #2a2f35;border-radius:4px;padding:2px 6px">Ctrl+Alt+F8</span></div>
+<div style="display:flex;justify-content:space-between;align-items:center;font:400 12px 'IBM Plex Sans';color:#8b939b"><span>Pause</span><span style="font:500 10.5px 'IBM Plex Mono';color:#c3c8cd;background:#1a1e22;border:1px solid #2a2f35;border-radius:4px;padding:2px 6px">Ctrl+Alt+F9</span></div>
+<div style="display:flex;justify-content:space-between;align-items:center;font:400 12px 'IBM Plex Sans';color:#8b939b"><span>Arrêt d'urgence</span><span style="font:500 10.5px 'IBM Plex Mono';color:#ef8a8a;background:#1f1416;border:1px solid #3a2226;border-radius:4px;padding:2px 6px">Ctrl+Alt+F10</span></div>
+</div>
+</div>
+
+<div style="flex:1;display:flex;flex-direction:column;min-width:0">
+<div style="height:72px;flex:none;display:flex;align-items:center;justify-content:space-between;padding:0 28px;border-bottom:1px solid #1e2226">
+<div style="display:flex;flex-direction:column;gap:4px">
+<div style="font:600 20px/1.1 'IBM Plex Sans';color:#e6e8ea">{{ pageTitle }}</div>
+<div style="font:400 12.5px 'IBM Plex Sans';color:#7d868f">{{ pageSub }}</div>
+</div>
+<div style="display:flex;align-items:center;gap:10px">
+<div style="display:flex;align-items:center;gap:8px;padding:6px 11px;border-radius:5px;background:{{ badgeBg }};font:600 11px 'IBM Plex Mono';letter-spacing:.06em;color:{{ badgeColor }}">
+<div style="width:7px;height:7px;border-radius:4px;background:{{ badgeColor }}"></div>{{ badgeLabel }}
+</div>
+<div onClick="{{ togglePause }}" style="padding:9px 14px;border-radius:6px;border:1px solid #2a2f35;font:500 13px 'IBM Plex Sans';color:{{ pauseColor }};cursor:pointer" style-hover="background:#1a1e22">{{ pauseLabel }}</div>
+<div onClick="{{ emergency }}" style="padding:9px 14px;border-radius:6px;border:1px solid #3a2226;background:#1f1416;font:500 13px 'IBM Plex Sans';color:#ef8a8a;cursor:pointer" style-hover="background:#2a191c">Arrêt d'urgence</div>
+<div onClick="{{ toggleSession }}" style="padding:9px 18px;border-radius:6px;background:{{ startBg }};font:600 13px 'IBM Plex Sans';color:{{ startColor }};cursor:pointer;min-width:128px;text-align:center">{{ startLabel }}</div>
+</div>
+</div>
+
+<div style="flex:1;overflow:auto;padding:22px 28px 26px">
+
+<sc-if value="{{ isDash }}" hint-placeholder-val="{{ true }}">
+<div style="display:flex;flex-direction:column;gap:16px">
+<sc-if value="{{ fallback }}" hint-placeholder-val="{{ false }}">
+<div style="display:flex;gap:12px;align-items:flex-start;padding:12px 16px;border-radius:8px;background:#1f1a10;border:1px solid #3d3216;font:400 13px/1.5 'IBM Plex Sans';color:#e8cf9c">
+<span style="font:600 11px/20px 'IBM Plex Mono';color:#f2a93b">REPLI</span>
+<span>Capture par processus indisponible sur ce build Windows (&lt; 20348). Loopback du périphérique actif : Discord, Spotify et notifications peuvent aussi être captés.</span>
+</div>
+</sc-if>
+<div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px">
+<sc-for list="{{ statusCards }}" as="c" hint-placeholder-count="4">
+<div style="background:#16191d;border:1px solid #23282e;border-radius:8px;padding:14px 16px;display:flex;flex-direction:column;gap:8px">
+<div style="display:flex;align-items:center;justify-content:space-between"><span style="font:500 10.5px 'IBM Plex Mono';letter-spacing:.08em;color:#7d868f">{{ c.label }}</span><div style="width:7px;height:7px;border-radius:4px;background:{{ c.dot }}"></div></div>
+<div style="font:600 16px/1.2 'IBM Plex Sans';color:#e6e8ea">{{ c.value }}</div>
+<div style="font:400 12px/1.3 'IBM Plex Sans';color:#7d868f">{{ c.sub }}</div>
+</div>
+</sc-for>
+</div>
+
+<div style="display:grid;grid-template-columns:minmax(0,1fr) 330px;gap:16px;align-items:start">
+<div style="background:#16191d;border:1px solid #23282e;border-radius:8px;display:flex;flex-direction:column;height:556px">
+<div style="display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-bottom:1px solid #23282e">
+<div style="display:flex;align-items:baseline;gap:10px"><span style="font:600 14px 'IBM Plex Sans';color:#e6e8ea">Flux en direct</span><span style="font:400 11.5px 'IBM Plex Mono';color:#5c646c">{{ feedCount }}</span></div>
+<div style="display:flex;gap:2px;padding:3px;background:#0f1113;border:1px solid #23282e;border-radius:6px">
+<sc-for list="{{ modes }}" as="m" hint-placeholder-count="3">
+<div onClick="{{ m.fn }}" style="padding:5px 11px;border-radius:4px;font:500 12px 'IBM Plex Sans';cursor:pointer;background:{{ m.bg }};color:{{ m.color }}">{{ m.label }}</div>
+</sc-for>
+</div>
+</div>
+<div style="flex:1;overflow:auto">
+<sc-if value="{{ feedEmpty }}" hint-placeholder-val="{{ true }}">
+<div style="height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;padding:40px;text-align:center">
+<div style="font:500 14px 'IBM Plex Sans';color:#c3c8cd">{{ emptyTitle }}</div>
+<div style="font:400 12.5px/1.5 'IBM Plex Sans';color:#7d868f;max-width:360px">{{ emptySub }}</div>
+</div>
+</sc-if>
+<sc-for list="{{ feedRows }}" as="e" hint-placeholder-count="0">
+<div style="display:grid;grid-template-columns:96px minmax(0,1fr) 64px;gap:16px;padding:14px 18px;border-bottom:1px solid #1e2226">
+<div style="display:flex;flex-direction:column;gap:6px;align-items:flex-start">
+<span style="font:600 10.5px 'IBM Plex Mono';letter-spacing:.05em;padding:3px 7px;border-radius:4px;background:{{ e.tagBg }};color:{{ e.color }}">{{ e.tag }}</span>
+<span style="font:400 11px 'IBM Plex Mono';color:#5c646c">{{ e.time }}</span>
+</div>
+<div style="display:flex;flex-direction:column;gap:5px;min-width:0">
+<div style="display:flex;gap:8px;align-items:baseline;font:500 11px 'IBM Plex Mono';color:#7d868f"><span>{{ e.langs }}</span><span style="color:#c3c8cd">{{ e.sender }}</span></div>
+<div style="font:400 13px/1.45 'IBM Plex Sans';color:#8b939b">{{ e.orig }}</div>
+<div style="font:500 15px/1.4 'IBM Plex Sans';color:{{ e.trColor }};font-style:{{ e.italic }};text-wrap:pretty">{{ e.shown }}</div>
+<div style="font:400 11.5px 'IBM Plex Sans';color:{{ e.noteColor }}">{{ e.note }}</div>
+</div>
+<div style="display:flex;flex-direction:column;gap:6px;align-items:flex-end">
+<span style="font:500 10.5px 'IBM Plex Mono';color:{{ e.statusColor }}">{{ e.status }}</span>
+<span style="font:400 11px 'IBM Plex Mono';color:#7d868f">{{ e.lat }}</span>
+</div>
+</div>
+</sc-for>
+</div>
+</div>
+
+<div style="display:flex;flex-direction:column;gap:12px">
+<div style="background:#16191d;border:1px solid #23282e;border-radius:8px;padding:16px 18px;display:flex;flex-direction:column;gap:14px">
+<div style="display:flex;justify-content:space-between;align-items:center"><span style="font:500 10.5px 'IBM Plex Mono';letter-spacing:.08em;color:#7d868f">SIGNAL CAPTÉ</span><span style="font:500 11px 'IBM Plex Mono';color:{{ vadColor }}">{{ vadLabel }}</span></div>
+<div style="height:56px;display:flex;align-items:center;gap:2px">
+<sc-for list="{{ bars }}" as="b" hint-placeholder-count="40">
+<div style="flex:1;border-radius:1px;height:{{ b.h }};background:{{ b.c }}"></div>
+</sc-for>
+</div>
+<div style="display:flex;align-items:center;gap:8px;font:400 11px 'IBM Plex Mono';color:#5c646c"><div style="flex:1;height:1px;background:#2a2f35"></div><span>seuil VAD {{ vad }} %</span></div>
+</div>
+<div style="background:#16191d;border:1px solid #23282e;border-radius:8px;padding:16px 18px;display:flex;flex-direction:column;gap:12px">
+<div style="font:500 10.5px 'IBM Plex Mono';letter-spacing:.08em;color:#7d868f">PIPELINE VOCAL</div>
+<sc-for list="{{ stages }}" as="s" hint-placeholder-count="5">
+<div style="display:flex;gap:12px;align-items:center">
+<div style="width:9px;height:9px;border-radius:5px;flex:none;background:{{ s.dot }}"></div>
+<div style="flex:1;display:flex;justify-content:space-between;gap:8px;align-items:baseline"><span style="font:500 13px 'IBM Plex Sans';color:{{ s.color }}">{{ s.name }}</span><span style="font:400 11px 'IBM Plex Mono';color:#5c646c">{{ s.sub }}</span></div>
+</div>
+</sc-for>
+<div style="display:flex;gap:16px;padding-top:10px;border-top:1px solid #23282e;font:400 11.5px 'IBM Plex Mono';color:#7d868f"><span>{{ segLabel }}</span><span>{{ dropLabel }}</span></div>
+</div>
+<div style="background:#16191d;border:1px solid #23282e;border-radius:8px;padding:16px 18px;display:flex;flex-direction:column;gap:10px">
+<div style="font:500 10.5px 'IBM Plex Mono';letter-spacing:.08em;color:#7d868f">LANGUES</div>
+<div style="display:flex;align-items:center;gap:10px;font:600 15px 'IBM Plex Sans';color:#e6e8ea"><span>{{ srcLabel }}</span><span style="color:#5c646c">→</span><span>Français</span></div>
+<div style="font:400 12px/1.5 'IBM Plex Sans';color:#7d868f">Glossaire CS2 actif · {{ glossCount }} termes protégés</div>
+</div>
+<div style="display:flex;gap:10px;align-items:flex-start;padding:12px 14px;border-radius:8px;border:1px dashed #2a2f35;font:400 12px/1.5 'IBM Plex Sans';color:#8b939b">
+<span style="font:600 10.5px/18px 'IBM Plex Mono';color:#5fd38d">{{ privacyTag }}</span><span>{{ privacyText }}</span>
+</div>
+</div>
+</div>
+</div>
+</sc-if>
+
+<sc-if value="{{ isOverlay }}" hint-placeholder-val="{{ false }}">
+<div style="display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:16px;align-items:start">
+<div style="display:flex;flex-direction:column;gap:10px">
+<div style="position:relative;aspect-ratio:16/9;border-radius:8px;overflow:hidden;border:1px solid #23282e;background:repeating-linear-gradient(135deg,#15181b 0 14px,#121417 14px 28px)">
+<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font:500 12px 'IBM Plex Mono';color:#3d444b;letter-spacing:.06em">CAPTURE DU JEU · FENÊTRÉ SANS BORDURES</div>
+<sc-if value="{{ overlayOn }}" hint-placeholder-val="{{ true }}">
+<div style="position:absolute;top:{{ ov.top }};bottom:{{ ov.bottom }};left:{{ ov.left }};right:{{ ov.right }};width:400px;display:flex;flex-direction:column;gap:8px;outline:{{ ov.outline }};outline-offset:6px">
+<sc-for list="{{ ovBlocks }}" as="o" hint-placeholder-count="2">
+<div style="background:{{ ovBg }};border-radius:6px;padding:10px 14px;display:flex;flex-direction:column;gap:5px;opacity:{{ o.op }}">
+<sc-if value="{{ showHead }}" hint-placeholder-val="{{ true }}"><div style="font:600 10.5px 'IBM Plex Mono';letter-spacing:.06em;color:{{ o.color }}">{{ o.head }}</div></sc-if>
+<sc-if value="{{ showOrig }}" hint-placeholder-val="{{ true }}"><div style="font:400 12.5px/1.4 'IBM Plex Sans';color:#a7aeb5;text-shadow:0 1px 2px #000">{{ o.orig }}</div></sc-if>
+<div style="display:flex;gap:8px;align-items:baseline"><div style="width:6px;height:6px;border-radius:3px;flex:none;background:{{ o.color }};transform:translateY(-2px)"></div><div style="font-weight:600;font-family:'IBM Plex Sans';font-size:{{ ovSize }};line-height:1.35;color:#fff;text-shadow:0 1px 2px #000,0 0 6px rgba(0,0,0,.8)">{{ o.line }}</div></div>
+</div>
+</sc-for>
+</div>
+</sc-if>
+</div>
+<div style="display:flex;justify-content:space-between;font:400 12px 'IBM Plex Sans';color:#7d868f"><span>Aperçu à l'échelle · {{ ovHint }}</span><span>Plein écran exclusif : compatibilité expérimentale, non garantie</span></div>
+</div>
+<div style="display:flex;flex-direction:column;gap:12px">
+<div style="background:#16191d;border:1px solid #23282e;border-radius:8px;padding:16px 18px;display:flex;flex-direction:column;gap:16px">
+<div style="display:flex;flex-direction:column;gap:8px">
+<div style="font:500 10.5px 'IBM Plex Mono';letter-spacing:.08em;color:#7d868f">FORMAT</div>
+<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:2px;padding:3px;background:#0f1113;border:1px solid #23282e;border-radius:6px">
+<sc-for list="{{ fmts }}" as="m" hint-placeholder-count="3"><div onClick="{{ m.fn }}" style="padding:6px 0;text-align:center;border-radius:4px;font:500 12px 'IBM Plex Sans';cursor:pointer;background:{{ m.bg }};color:{{ m.color }}">{{ m.label }}</div></sc-for>
+</div>
+</div>
+<div style="display:flex;gap:16px;align-items:center">
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;width:92px;height:56px;padding:4px;border:1px solid #2a2f35;border-radius:6px;flex:none">
+<sc-for list="{{ corners }}" as="k" hint-placeholder-count="4"><div onClick="{{ k.fn }}" style="border-radius:3px;cursor:pointer;background:{{ k.bg }}"></div></sc-for>
+</div>
+<div style="display:flex;flex-direction:column;gap:3px"><div style="font:500 10.5px 'IBM Plex Mono';letter-spacing:.08em;color:#7d868f">POSITION</div><div style="font:500 13.5px 'IBM Plex Sans';color:#e6e8ea">{{ cornerLabel }}</div></div>
+</div>
+<div style="display:flex;flex-direction:column;gap:6px"><div style="display:flex;justify-content:space-between;font:500 12.5px 'IBM Plex Sans';color:#c3c8cd"><span>Opacité du fond</span><span style="font:500 12px 'IBM Plex Mono';color:#7d868f">{{ opacity }} %</span></div><input type="range" min="0" max="100" value="{{ opacity }}" onChange="{{ setOpacity }}"></div>
+<div style="display:flex;flex-direction:column;gap:6px"><div style="display:flex;justify-content:space-between;font:500 12.5px 'IBM Plex Sans';color:#c3c8cd"><span>Taille du texte</span><span style="font:500 12px 'IBM Plex Mono';color:#7d868f">{{ textSize }} px</span></div><input type="range" min="14" max="28" value="{{ textSize }}" onChange="{{ setTextSize }}"></div>
+<div style="display:flex;flex-direction:column;gap:6px"><div style="display:flex;justify-content:space-between;font:500 12.5px 'IBM Plex Sans';color:#c3c8cd"><span>Disparition en fondu après</span><span style="font:500 12px 'IBM Plex Mono';color:#7d868f">{{ duration }} s</span></div><input type="range" min="4" max="8" value="{{ duration }}" onChange="{{ setDuration }}"></div>
+<div style="display:flex;justify-content:space-between;align-items:center"><span style="font:500 12.5px 'IBM Plex Sans';color:#c3c8cd">Blocs visibles</span>
+<div style="display:flex;gap:2px;padding:3px;background:#0f1113;border:1px solid #23282e;border-radius:6px"><sc-for list="{{ blockOpts }}" as="m" hint-placeholder-count="2"><div onClick="{{ m.fn }}" style="padding:4px 12px;border-radius:4px;font:500 12px 'IBM Plex Mono';cursor:pointer;background:{{ m.bg }};color:{{ m.color }}">{{ m.label }}</div></sc-for></div>
+</div>
+</div>
+<div style="background:#16191d;border:1px solid #23282e;border-radius:8px;padding:16px 18px;display:flex;flex-direction:column;gap:14px">
+<div style="display:flex;justify-content:space-between;align-items:center;gap:12px"><div style="display:flex;flex-direction:column;gap:3px"><span style="font:500 13px 'IBM Plex Sans';color:#e6e8ea">Click-through en jeu</span><span style="font:400 11.5px/1.4 'IBM Plex Sans';color:#7d868f">La souris traverse l'overlay, aucun vol de focus</span></div>
+<div onClick="{{ t.click.fn }}" style="width:36px;height:20px;border-radius:10px;background:{{ t.click.bg }};position:relative;cursor:pointer;flex:none"><div style="position:absolute;top:2px;left:{{ t.click.x }};width:16px;height:16px;border-radius:8px;background:#fff"></div></div></div>
+<div style="display:flex;justify-content:space-between;align-items:center;gap:12px"><div style="display:flex;flex-direction:column;gap:3px"><span style="font:500 13px 'IBM Plex Sans';color:#e6e8ea">Overlay affiché</span><span style="font:400 11.5px 'IBM Plex Sans';color:#7d868f">Ctrl+Alt+F8</span></div>
+<div onClick="{{ toggleOverlay }}" style="width:36px;height:20px;border-radius:10px;background:{{ ovTg.bg }};position:relative;cursor:pointer;flex:none"><div style="position:absolute;top:2px;left:{{ ovTg.x }};width:16px;height:16px;border-radius:8px;background:#fff"></div></div></div>
+<div onClick="{{ toggleReposition }}" style="padding:9px 0;text-align:center;border-radius:6px;border:1px solid #2a2f35;font:500 13px 'IBM Plex Sans';color:#e6e8ea;cursor:pointer;background:{{ reposBg }}" style-hover="border-color:#3a4047">{{ reposLabel }}</div>
+</div>
+</div>
+</div>
+</sc-if>
+
+<sc-if value="{{ isAudio }}" hint-placeholder-val="{{ false }}">
+<div style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px;align-items:start">
+<div style="display:flex;flex-direction:column;gap:12px">
+<div style="background:#16191d;border:1px solid #23282e;border-radius:8px;padding:16px 18px;display:flex;flex-direction:column;gap:10px">
+<div style="font:500 10.5px 'IBM Plex Mono';letter-spacing:.08em;color:#7d868f">SOURCE DE CAPTURE</div>
+<sc-for list="{{ captureOpts }}" as="o" hint-placeholder-count="3">
+<div onClick="{{ o.fn }}" style="display:flex;gap:12px;padding:12px 14px;border-radius:7px;border:1px solid {{ o.border }};background:{{ o.bg }};cursor:{{ o.cursor }};opacity:{{ o.op }}">
+<div style="width:16px;height:16px;border-radius:8px;border:2px solid {{ o.ring }};flex:none;margin-top:1px;display:flex;align-items:center;justify-content:center"><div style="width:6px;height:6px;border-radius:3px;background:{{ o.fill }}"></div></div>
+<div style="display:flex;flex-direction:column;gap:3px;flex:1"><div style="display:flex;justify-content:space-between;gap:8px"><span style="font:500 13.5px 'IBM Plex Sans';color:#e6e8ea">{{ o.name }}</span><span style="font:500 10.5px 'IBM Plex Mono';color:{{ o.tagColor }}">{{ o.tag }}</span></div><span style="font:400 12px/1.45 'IBM Plex Sans';color:#7d868f">{{ o.sub }}</span></div>
+</div>
+</sc-for>
+<sc-if value="{{ deviceWarn }}" hint-placeholder-val="{{ false }}">
+<div style="padding:10px 12px;border-radius:6px;background:#1f1a10;border:1px solid #3d3216;font:400 12px/1.5 'IBM Plex Sans';color:#e8cf9c">Le loopback système capte tout le son du périphérique — y compris des conversations privées d'autres applications.</div>
+</sc-if>
+<div style="display:flex;flex-direction:column;gap:6px;padding-top:4px"><span style="font:500 12.5px 'IBM Plex Sans';color:#c3c8cd">Périphérique de sortie</span>
+<div style="padding:9px 12px;border-radius:6px;background:#0f1113;border:1px solid #2a2f35;display:flex;justify-content:space-between;font:400 13px 'IBM Plex Sans';color:#e6e8ea"><span>Casque — HyperX Cloud II (USB)</span><span style="color:#5c646c">▾</span></div></div>
+<div style="display:flex;align-items:center;gap:12px;padding-top:6px">
+<div onClick="{{ runTest }}" style="padding:9px 14px;border-radius:6px;background:#22272c;font:500 13px 'IBM Plex Sans';color:#e6e8ea;cursor:pointer;flex:none" style-hover="background:#2a3036">{{ testBtn }}</div>
+<div style="flex:1;display:flex;flex-direction:column;gap:5px"><div style="height:4px;border-radius:2px;background:#23282e;overflow:hidden"><div style="height:4px;width:{{ testPct }};background:#f2a93b"></div></div><span style="font:400 11.5px 'IBM Plex Sans';color:#7d868f">{{ testMsg }}</span></div>
+</div>
+</div>
+<div style="background:#16191d;border:1px solid #23282e;border-radius:8px;padding:16px 18px;display:flex;flex-direction:column;gap:14px">
+<div style="font:500 10.5px 'IBM Plex Mono';letter-spacing:.08em;color:#7d868f">DÉTECTION DE PAROLE (VAD)</div>
+<div style="display:flex;flex-direction:column;gap:6px"><div style="display:flex;justify-content:space-between;font:500 12.5px 'IBM Plex Sans';color:#c3c8cd"><span>Seuil de détection</span><span style="font:500 12px 'IBM Plex Mono';color:#7d868f">{{ vad }} %</span></div><input type="range" min="20" max="90" value="{{ vad }}" onChange="{{ setVad }}"><span style="font:400 11.5px 'IBM Plex Sans';color:#5c646c">Plus haut = ignore davantage les tirs et bruitages</span></div>
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+<div style="padding:10px 12px;border-radius:6px;background:#0f1113;border:1px solid #23282e;display:flex;justify-content:space-between;font:400 12.5px 'IBM Plex Sans';color:#8b939b"><span>Pré-roll</span><span style="font:500 12px 'IBM Plex Mono';color:#e6e8ea">250 ms</span></div>
+<div style="padding:10px 12px;border-radius:6px;background:#0f1113;border:1px solid #23282e;display:flex;justify-content:space-between;font:400 12.5px 'IBM Plex Sans';color:#8b939b"><span>Post-roll</span><span style="font:500 12px 'IBM Plex Mono';color:#e6e8ea">400 ms</span></div>
+</div>
+<div style="display:flex;justify-content:space-between;align-items:center;gap:12px"><div style="display:flex;flex-direction:column;gap:3px"><span style="font:500 13px 'IBM Plex Sans';color:#e6e8ea">Suppression de bruit <span style="font:500 10px 'IBM Plex Mono';color:#f2a93b;margin-left:6px">EXPÉRIMENTAL</span></span><span style="font:400 11.5px 'IBM Plex Sans';color:#7d868f">Coût CPU supplémentaire ~4 %</span></div>
+<div onClick="{{ t.noise.fn }}" style="width:36px;height:20px;border-radius:10px;background:{{ t.noise.bg }};position:relative;cursor:pointer;flex:none"><div style="position:absolute;top:2px;left:{{ t.noise.x }};width:16px;height:16px;border-radius:8px;background:#fff"></div></div></div>
+</div>
+</div>
+<div style="display:flex;flex-direction:column;gap:12px">
+<div style="background:#16191d;border:1px solid #23282e;border-radius:8px;padding:16px 18px;display:flex;flex-direction:column;gap:10px">
+<div style="display:flex;justify-content:space-between;align-items:center"><span style="font:500 10.5px 'IBM Plex Mono';letter-spacing:.08em;color:#7d868f">MODÈLE DE TRANSCRIPTION LOCAL</span>
+<div style="display:flex;gap:2px;padding:3px;background:#0f1113;border:1px solid #23282e;border-radius:6px"><sc-for list="{{ accels }}" as="m" hint-placeholder-count="2"><div onClick="{{ m.fn }}" style="padding:3px 10px;border-radius:4px;font:500 11px 'IBM Plex Mono';cursor:pointer;background:{{ m.bg }};color:{{ m.color }}">{{ m.label }}</div></sc-for></div></div>
+<sc-for list="{{ models }}" as="m" hint-placeholder-count="5">
+<div onClick="{{ m.fn }}" style="display:grid;grid-template-columns:16px minmax(0,1fr) auto;gap:12px;align-items:center;padding:10px 12px;border-radius:6px;border:1px solid {{ m.border }};background:{{ m.bg }};cursor:pointer">
+<div style="width:14px;height:14px;border-radius:7px;border:2px solid {{ m.ring }};display:flex;align-items:center;justify-content:center"><div style="width:5px;height:5px;border-radius:3px;background:{{ m.fill }}"></div></div>
+<div style="display:flex;flex-direction:column;gap:2px;min-width:0"><span style="font:500 13px 'IBM Plex Mono';color:#e6e8ea">{{ m.name }}</span><span style="font:400 11.5px 'IBM Plex Sans';color:#7d868f">{{ m.desc }}</span></div>
+<div style="display:flex;flex-direction:column;align-items:flex-end;gap:2px"><span style="font:400 11.5px 'IBM Plex Mono';color:#8b939b">{{ m.size }}</span><span style="font:500 11px 'IBM Plex Sans';color:{{ m.stColor }}">{{ m.st }}</span></div>
+</div>
+</sc-for>
+<div style="font:400 11.5px/1.5 'IBM Plex Sans';color:#5c646c">whisper.cpp via whisper-rs · modèles Whisper sous licence MIT · stockés dans %LOCALAPPDATA%\CS2LiveTranslator\models</div>
+</div>
+<div style="background:#16191d;border:1px solid #23282e;border-radius:8px;padding:16px 18px;display:flex;flex-direction:column;gap:12px">
+<div style="font:500 10.5px 'IBM Plex Mono';letter-spacing:.08em;color:#7d868f">MOTEUR DE TRADUCTION</div>
+<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:2px;padding:3px;background:#0f1113;border:1px solid #23282e;border-radius:6px"><sc-for list="{{ engines }}" as="m" hint-placeholder-count="3"><div onClick="{{ m.fn }}" style="padding:6px 0;text-align:center;border-radius:4px;font:500 12px 'IBM Plex Sans';cursor:pointer;background:{{ m.bg }};color:{{ m.color }}">{{ m.label }}</div></sc-for></div>
+<div style="font:400 12px/1.5 'IBM Plex Sans';color:#7d868f">Clé API stockée dans le Gestionnaire d'identification Windows — jamais dans config.json ni dans les journaux.</div>
+<div style="height:1px;background:#23282e"></div>
+<div style="display:flex;justify-content:space-between;align-items:center;gap:12px"><div style="display:flex;flex-direction:column;gap:3px"><span style="font:500 13px 'IBM Plex Sans';color:#e6e8ea">Transcription cloud (opt-in)</span><span style="font:400 11.5px 'IBM Plex Sans';color:#7d868f">Pour CPU/GPU insuffisants</span></div>
+<div onClick="{{ t.cloud.fn }}" style="width:36px;height:20px;border-radius:10px;background:{{ t.cloud.bg }};position:relative;cursor:pointer;flex:none"><div style="position:absolute;top:2px;left:{{ t.cloud.x }};width:16px;height:16px;border-radius:8px;background:#fff"></div></div></div>
+<sc-if value="{{ t.cloud.on }}" hint-placeholder-val="{{ false }}">
+<div style="padding:10px 12px;border-radius:6px;background:#1f1a10;border:1px solid #3d3216;font:400 12px/1.5 'IBM Plex Sans';color:#e8cf9c">Les segments vocaux détectés seront envoyés au fournisseur choisi. Coût estimé : ~0,36 € / heure de parole. Aucun audio n'est conservé localement.</div>
+</sc-if>
+</div>
+</div>
+</div>
+</sc-if>
+
+<sc-if value="{{ isLang }}" hint-placeholder-val="{{ false }}">
+<div style="display:grid;grid-template-columns:320px minmax(0,1fr);gap:16px;align-items:start">
+<div style="background:#16191d;border:1px solid #23282e;border-radius:8px;padding:16px 18px;display:flex;flex-direction:column;gap:16px">
+<div style="display:flex;flex-direction:column;gap:6px"><span style="font:500 10.5px 'IBM Plex Mono';letter-spacing:.08em;color:#7d868f">LANGUE CIBLE</span>
+<div style="padding:9px 12px;border-radius:6px;background:#0f1113;border:1px solid #2a2f35;display:flex;justify-content:space-between;font:500 13.5px 'IBM Plex Sans';color:#e6e8ea"><span>Français (fr)</span><span style="color:#5c646c">▾</span></div></div>
+<div style="display:flex;flex-direction:column;gap:8px"><span style="font:500 10.5px 'IBM Plex Mono';letter-spacing:.08em;color:#7d868f">LANGUES SOURCE PRÉFÉRÉES</span>
+<div style="display:flex;flex-wrap:wrap;gap:6px"><sc-for list="{{ srcChips }}" as="c" hint-placeholder-count="6"><div onClick="{{ c.fn }}" style="padding:5px 11px;border-radius:5px;border:1px solid {{ c.border }};background:{{ c.bg }};font:500 12px 'IBM Plex Mono';color:{{ c.color }};cursor:pointer">{{ c.label }}</div></sc-for></div>
+<span style="font:400 11.5px/1.5 'IBM Plex Sans';color:#5c646c">Détection automatique restreinte à ces langues lorsque le message est court.</span></div>
+<div style="display:flex;justify-content:space-between;align-items:center;gap:12px"><div style="display:flex;flex-direction:column;gap:3px"><span style="font:500 13px 'IBM Plex Sans';color:#e6e8ea">Ignorer le français</span><span style="font:400 11.5px 'IBM Plex Sans';color:#7d868f">Affiche l'original sans appel au moteur</span></div>
+<div onClick="{{ t.skipFr.fn }}" style="width:36px;height:20px;border-radius:10px;background:{{ t.skipFr.bg }};position:relative;cursor:pointer;flex:none"><div style="position:absolute;top:2px;left:{{ t.skipFr.x }};width:16px;height:16px;border-radius:8px;background:#fff"></div></div></div>
+</div>
+<div style="background:#16191d;border:1px solid #23282e;border-radius:8px;display:flex;flex-direction:column">
+<div style="display:flex;justify-content:space-between;align-items:center;padding:14px 18px;border-bottom:1px solid #23282e"><span style="font:600 14px 'IBM Plex Sans';color:#e6e8ea">Glossaire Counter-Strike</span><span style="font:400 11.5px 'IBM Plex Mono';color:#5c646c">{{ glossCount }} termes</span></div>
+<div style="display:grid;grid-template-columns:150px 120px minmax(0,1fr) 28px;gap:12px;padding:9px 18px;font:500 10.5px 'IBM Plex Mono';letter-spacing:.06em;color:#5c646c;border-bottom:1px solid #1e2226"><span>TERME</span><span>TRAITEMENT</span><span>RENDU FRANÇAIS</span><span></span></div>
+<sc-for list="{{ glossRows }}" as="g" hint-placeholder-count="10">
+<div style="display:grid;grid-template-columns:150px 120px minmax(0,1fr) 28px;gap:12px;padding:9px 18px;align-items:center;border-bottom:1px solid #1e2226">
+<span style="font:500 13px 'IBM Plex Mono';color:#e6e8ea">{{ g.t }}</span>
+<span style="font:500 11.5px 'IBM Plex Sans';color:{{ g.mColor }}">{{ g.m }}</span>
+<span style="font:400 13px 'IBM Plex Sans';color:#8b939b">{{ g.fr }}</span>
+<span onClick="{{ g.del }}" style="font:400 14px 'IBM Plex Mono';color:#5c646c;cursor:pointer;text-align:center" style-hover="color:#ef8a8a">×</span>
+</div>
+</sc-for>
+<div style="display:flex;gap:8px;padding:12px 18px">
+<input value="{{ newTerm }}" onChange="{{ setNewTerm }}" placeholder="Ajouter un terme (ex. « boost »)" style="flex:1;padding:8px 12px;border-radius:6px;background:#0f1113;border:1px solid #2a2f35;font:400 13px 'IBM Plex Mono';color:#e6e8ea;outline:none">
+<div onClick="{{ addTerm }}" style="padding:8px 14px;border-radius:6px;background:#22272c;font:500 13px 'IBM Plex Sans';color:#e6e8ea;cursor:pointer" style-hover="background:#2a3036">Ajouter</div>
+</div>
+</div>
+</div>
+</sc-if>
+
+<sc-if value="{{ isHist }}" hint-placeholder-val="{{ false }}">
+<div style="display:flex;flex-direction:column;gap:14px">
+<div style="background:#16191d;border:1px solid #23282e;border-radius:8px;padding:16px 18px;display:flex;justify-content:space-between;align-items:center;gap:16px">
+<div style="display:flex;flex-direction:column;gap:3px"><span style="font:500 14px 'IBM Plex Sans';color:#e6e8ea">Historique local</span><span style="font:400 12px/1.5 'IBM Plex Sans';color:#7d868f">Désactivé par défaut. Texte uniquement (jamais d'audio), stocké en SQLite sur ce PC, purge après 7 jours.</span></div>
+<div onClick="{{ t.hist.fn }}" style="width:36px;height:20px;border-radius:10px;background:{{ t.hist.bg }};position:relative;cursor:pointer;flex:none"><div style="position:absolute;top:2px;left:{{ t.hist.x }};width:16px;height:16px;border-radius:8px;background:#fff"></div></div>
+</div>
+<sc-if value="{{ t.hist.on }}" hint-placeholder-val="{{ false }}">
+<div style="background:#16191d;border:1px solid #23282e;border-radius:8px;display:flex;flex-direction:column">
+<div style="display:flex;gap:8px;padding:12px 18px;border-bottom:1px solid #23282e">
+<div style="flex:1;padding:8px 12px;border-radius:6px;background:#0f1113;border:1px solid #2a2f35;font:400 13px 'IBM Plex Sans';color:#5c646c">Rechercher dans l'historique…</div>
+<div style="padding:8px 12px;border-radius:6px;border:1px solid #2a2f35;font:500 12.5px 'IBM Plex Sans';color:#c3c8cd">Export TXT</div>
+<div style="padding:8px 12px;border-radius:6px;border:1px solid #2a2f35;font:500 12.5px 'IBM Plex Sans';color:#c3c8cd">Export JSON</div>
+<div onClick="{{ clearFeed }}" style="padding:8px 12px;border-radius:6px;border:1px solid #3a2226;font:500 12.5px 'IBM Plex Sans';color:#ef8a8a;cursor:pointer">Effacer</div>
+</div>
+<sc-if value="{{ feedEmpty }}" hint-placeholder-val="{{ true }}"><div style="padding:36px;text-align:center;font:400 13px 'IBM Plex Sans';color:#7d868f">Aucune entrée. Les traductions de la prochaine session apparaîtront ici.</div></sc-if>
+<sc-for list="{{ feedRows }}" as="e" hint-placeholder-count="0">
+<div style="display:grid;grid-template-columns:70px 96px minmax(0,1fr) minmax(0,1fr);gap:14px;padding:10px 18px;border-bottom:1px solid #1e2226;align-items:baseline">
+<span style="font:400 11.5px 'IBM Plex Mono';color:#5c646c">{{ e.time }}</span>
+<span style="font:600 10.5px 'IBM Plex Mono';color:{{ e.color }}">{{ e.tag }}</span>
+<span style="font:400 13px 'IBM Plex Sans';color:#8b939b">{{ e.orig }}</span>
+<span style="font:500 13px 'IBM Plex Sans';color:#e6e8ea">{{ e.shown }}</span>
+</div>
+</sc-for>
+</div>
+</sc-if>
+</div>
+</sc-if>
+
+<sc-if value="{{ isDiag }}" hint-placeholder-val="{{ false }}">
+<div style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px;align-items:start">
+<div style="background:#16191d;border:1px solid #23282e;border-radius:8px;display:flex;flex-direction:column">
+<div style="display:flex;justify-content:space-between;align-items:center;padding:14px 18px;border-bottom:1px solid #23282e"><span style="font:600 14px 'IBM Plex Sans';color:#e6e8ea">Tests intégrés</span>
+<div onClick="{{ runDiag }}" style="padding:7px 14px;border-radius:6px;background:#22272c;font:500 12.5px 'IBM Plex Sans';color:#e6e8ea;cursor:pointer" style-hover="background:#2a3036">{{ diagBtn }}</div></div>
+<sc-for list="{{ diagRows }}" as="d" hint-placeholder-count="7">
+<div style="display:grid;grid-template-columns:12px minmax(0,1fr) auto;gap:12px;padding:11px 18px;align-items:center;border-bottom:1px solid #1e2226">
+<div style="width:8px;height:8px;border-radius:4px;background:{{ d.c }}"></div>
+<div style="display:flex;flex-direction:column;gap:2px;min-width:0"><span style="font:500 13px 'IBM Plex Sans';color:#e6e8ea">{{ d.name }}</span><span style="font:400 11.5px 'IBM Plex Mono';color:#7d868f;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ d.detail }}</span></div>
+<span style="font:600 10.5px 'IBM Plex Mono';color:{{ d.c }}">{{ d.st }}</span>
+</div>
+</sc-for>
+</div>
+<div style="display:flex;flex-direction:column;gap:12px">
+<div style="background:#0b0d0f;border:1px solid #23282e;border-radius:8px;padding:14px 16px;display:flex;flex-direction:column;gap:5px;font:400 11.5px/1.5 'IBM Plex Mono';color:#7d868f">
+<div style="display:flex;justify-content:space-between;color:#5c646c;padding-bottom:6px"><span>JOURNAL TECHNIQUE · EXPURGÉ</span><span>tracing · info</span></div>
+<sc-for list="{{ logs }}" as="l" hint-placeholder-count="9"><div><span style="color:#4a5158">{{ l.t }}</span> <span style="color:{{ l.c }}">{{ l.lv }}</span> {{ l.m }}</div></sc-for>
+</div>
+<div style="display:flex;gap:8px">
+<div style="padding:8px 12px;border-radius:6px;border:1px solid #2a2f35;font:500 12.5px 'IBM Plex Sans';color:#c3c8cd">Copier le rapport</div>
+<div style="padding:8px 12px;border-radius:6px;border:1px solid #2a2f35;font:500 12.5px 'IBM Plex Sans';color:#c3c8cd">Réinitialiser les paramètres</div>
+<div style="padding:8px 12px;border-radius:6px;border:1px solid #3a2226;font:500 12.5px 'IBM Plex Sans';color:#ef8a8a">Effacer toutes les données</div>
+</div>
+</div>
+</div>
+</sc-if>
+
+<sc-if value="{{ isAbout }}" hint-placeholder-val="{{ false }}">
+<div style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px;align-items:start">
+<div style="background:#16191d;border:1px solid #23282e;border-radius:8px;padding:20px 22px;display:flex;flex-direction:column;gap:14px">
+<div style="font:600 18px 'IBM Plex Sans';color:#e6e8ea">Ce que l'application ne fait jamais</div>
+<sc-for list="{{ nevers }}" as="n" hint-placeholder-count="5"><div style="display:flex;gap:12px;font:400 13.5px/1.5 'IBM Plex Sans';color:#c3c8cd"><span style="font:600 12px/20px 'IBM Plex Mono';color:#ef8a8a">✕</span><span>{{ n }}</span></div></sc-for>
+<div style="font:400 12px/1.55 'IBM Plex Sans';color:#7d868f;padding-top:6px;border-top:1px solid #23282e">Aucune garantie « VAC safe » n'est revendiquée. Les interactions externes sont documentées et revues après chaque mise à jour de CS2.</div>
+</div>
+<div style="background:#16191d;border:1px solid #23282e;border-radius:8px;padding:20px 22px;display:flex;flex-direction:column;gap:10px">
+<div style="font:500 10.5px 'IBM Plex Mono';letter-spacing:.08em;color:#7d868f">LICENCES TIERCES</div>
+<sc-for list="{{ licenses }}" as="l" hint-placeholder-count="6"><div style="display:flex;justify-content:space-between;font:400 13px 'IBM Plex Mono';color:#c3c8cd;padding:4px 0;border-bottom:1px solid #1e2226"><span>{{ l.n }}</span><span style="color:#7d868f">{{ l.l }}</span></div></sc-for>
+<div style="font:400 12px 'IBM Plex Mono';color:#5c646c;padding-top:6px">v0.1.0 · build 2026-10-11 · Windows x64</div>
+</div>
+</div>
+</sc-if>
+
+</div>
+</div>
+</div>
+
+<sc-if value="{{ toast }}" hint-placeholder-val="{{ false }}">
+<div style="position:absolute;bottom:22px;left:50%;transform:translateX(-50%);padding:11px 18px;border-radius:7px;background:#e6e8ea;color:#0d0f11;font:500 13px 'IBM Plex Sans';box-shadow:0 10px 30px rgba(0,0,0,.5)">{{ toast }}</div>
+</sc-if>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;startPage&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;dash&quot;,&quot;overlay&quot;,&quot;audio&quot;,&quot;lang&quot;,&quot;hist&quot;,&quot;diag&quot;,&quot;about&quot;],&quot;default&quot;:&quot;dash&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;autoStart&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;},&quot;win10Fallback&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Simuler&quot;},&quot;translatorDown&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Simuler&quot;}}">
+const EV=[
+{kind:'voice',src:'ru',orig:'Двое идут на B, двое на B',prov:'Deux joueurs arrivent sur…',tr:'Deux joueurs arrivent sur B, deux sur B'},
+{kind:'chat',ch:'CT',sender:'Player123',src:'en',orig:'gonna smoke mid, wait for my flash',tr:'Je vais poser une smoke au mid, attendez ma flash'},
+{kind:'voice',src:'en',orig:'one low, he is lit, eighty HP',prov:'Un en bas, il est…',tr:'Un en bas, il est touché, 80 PV'},
+{kind:'chat',ch:'ALL',sender:'Дима',src:'ru',orig:'гг, хорошая игра',tr:'gg, bonne partie'},
+{kind:'voice',src:'ru',orig:'Сейвим, не покупайте, эко раунд',prov:'On save, n’achetez…',tr:'On save, n’achetez rien, round eco'},
+{kind:'chat',ch:'T',sender:'mira: the ghost',src:'en',orig:'drop AWP pls',tr:'Drop l’AWP stp'},
+{kind:'voice',src:'ru',orig:'Бомба на A, ротейт быстро',prov:'Bombe sur A…',tr:'Bombe sur A, rotate vite'},
+{kind:'chat',ch:'CT',sender:'Lucas',src:'fr',orig:'je prends B avec toi',tr:null}];
+const LN={ru:'RUSSE',en:'ANGLAIS',fr:'FRANÇAIS'};
+const CH={CT:'ÉQUIPE CT',T:'ÉQUIPE T',ALL:'TOUS'};
+const NAV=[['dash','Accueil','État de la session et flux de traductions en direct'],['overlay','Overlay','Surface externe, transparente, au-dessus du jeu'],['audio','Audio & IA','Capture, détection de parole et moteurs'],['lang','Langues & glossaire','Langue cible, détection et vocabulaire du jeu'],['hist','Historique','Facultatif, local, effaçable'],['diag','Diagnostic','Tests du journal, de l\u2019audio, des modèles et du réseau'],['about','À propos','Version, licences et confidentialité']];
+const MODELS=[['tiny','75 Mo','Très rapide · précision faible',true],['base','142 Mo','Rapide · CPU seul possible',true],['small','466 Mo','Équilibré — recommandé',true],['medium','1,5 Go','Précis · GPU conseillé',false],['large-v3-turbo','1,6 Go','Le plus précis · GPU requis',false]];
+const GLOSS=[['rush B','Conserver','rush B'],['mid','Conserver','mid'],['smoke','Conserver','smoke'],['flash','Conserver','flash'],['eco','Conserver','eco'],['plant','Conserver','plant'],['defuse','Conserver','defuse'],['AWP','Conserver','AWP'],['rotate','Conserver','rotate'],['save','Conserver','save'],['CT / T','Conserver','CT / T'],['one low','Traduire','un en bas (PV faibles)'],['lit','Traduire','touché']];
+const fmtS=ms=>(ms/1000).toFixed(2).replace('.',',')+' s';
+const ON='#f2a93b',OFF='#2f353b';
+class Component extends DCLogic{
+state={page:(this.props&&this.props.startPage)||'dash',session:'IDLE',paused:false,feed:[],idx:0,levels:Array(40).fill(0),speaking:false,stage:0,mode:'mixed',fmt:'bilingue',corner:'tr',opacity:78,textSize:18,duration:6,maxBlocks:3,overlayOn:true,repos:false,
+tg:{click:true,noise:false,cloud:false,hist:false,skipFr:true},capture:'process',vad:55,model:'small',accel:'cuda',engine:'DeepL',src:{ru:true,en:true,de:false,es:false,pt:false,pl:false},gloss:GLOSS,newTerm:'',test:0,testDone:false,diag:'done',seg:0,drop:0,toast:null,dl:{}};
+ts=[];
+componentDidMount(){
+this.meter=setInterval(()=>{const s=this.state;const run=this.live()&&!s.paused;if(!run&&s.levels.every(v=>v===0))return;
+const r=Math.random();const v=!run?0:s.speaking?.45+r*.55:(r<.07?.5+Math.random()*.35:r*.14);
+this.setState({levels:[...s.levels.slice(1),v]});},90);
+this.key=e=>{if(!(e.ctrlKey&&e.altKey))return;if(e.key==='F8'){e.preventDefault();this.setState(s=>({overlayOn:!s.overlayOn}));}if(e.key==='F9'){e.preventDefault();this.togglePause();}if(e.key==='F10'){e.preventDefault();this.emergency();}};
+window.addEventListener('keydown',this.key);
+if(this.props&&this.props.autoStart)this.toggleSession();}
+componentWillUnmount(){clearInterval(this.meter);this.clearT();window.removeEventListener('keydown',this.key);}
+clearT(){this.ts.forEach(clearTimeout);this.ts=[];}
+later(fn,ms){this.ts.push(setTimeout(fn,ms));}
+live(){return this.state.session==='LISTENING'||this.state.session==='DEGRADED';}
+flash(msg){clearTimeout(this.tt);this.setState({toast:msg});this.tt=setTimeout(()=>this.setState({toast:null}),2600);}
+schedule(ms){this.later(()=>this.tick(),ms??2200);}
+tick(){const s=this.state;if(!this.live()||s.paused)return;
+let i=s.idx,e=EV[i%EV.length],guard=0;
+while(((s.mode==='text'&&e.kind==='voice')||(s.mode==='voice'&&e.kind==='chat'))&&guard<10){i++;e=EV[i%EV.length];guard++;}
+const id=Date.now()+Math.random(),time=new Date().toLocaleTimeString('fr-FR');
+this.setState({idx:i+1});
+const down=this.props&&this.props.translatorDown;
+if(e.kind==='voice'){
+this.setState({speaking:true,stage:1});
+this.later(()=>this.setState({stage:2}),600);
+this.later(()=>this.setState(st=>({speaking:false,stage:3,feed:[{...e,id,time,status:'provisoire',shown:e.prov,lat:null,err:false},...st.feed].slice(0,40)})),1300);
+this.later(()=>this.setState(st=>({stage:4,seg:st.seg+1,feed:st.feed.map(f=>f.id===id?{...f,status:down?'erreur':'final',shown:down?null:e.tr,err:down,lat:1150+Math.round(Math.random()*1500)}:f)})),2100);
+this.later(()=>{this.setState({stage:0});if(Math.random()<.3)this.setState(st=>({drop:st.drop+1}));this.schedule();},2700);
+}else{
+const fr=e.src==='fr'&&s.tg.skipFr;
+this.setState(st=>({feed:[{...e,id,time,status:fr?'original':down?'erreur':'final',shown:fr||down?null:e.tr,err:down&&!fr,lat:fr?0:280+Math.round(Math.random()*600)},...st.feed].slice(0,40)}));
+this.schedule(2600);}}
+toggleSession=()=>{const s=this.state;
+if(this.live()||s.session==='INITIALIZING'||s.session==='PAUSED'){this.clearT();this.setState({session:'STOPPING',speaking:false,stage:0,paused:false});this.later(()=>this.setState({session:'STOPPED'}),500);return;}
+this.setState({session:'INITIALIZING',paused:false});
+this.later(()=>{this.setState({session:this.props&&this.props.win10Fallback?'DEGRADED':'LISTENING'});this.schedule(900);},1300);};
+togglePause=()=>{if(!this.live()&&this.state.session!=='PAUSED')return;
+if(this.state.paused){this.setState({paused:false,session:this.props&&this.props.win10Fallback?'DEGRADED':'LISTENING'},()=>this.schedule(800));}
+else{this.clearT();this.setState({paused:true,session:'PAUSED',speaking:false,stage:0});}};
+emergency=()=>{this.clearT();this.setState({session:'STOPPED',paused:false,speaking:false,stage:0,levels:Array(40).fill(0)});this.flash('Toutes les captures arrêtées · tampons audio purgés');};
+tog(k){const on=this.state.tg[k];return{on,bg:on?ON:OFF,x:on?'18px':'2px',fn:()=>this.setState(s=>({tg:{...s.tg,[k]:!s.tg[k]}}))};}
+seg(list,cur,key){return list.map(([v,l])=>({label:l,bg:cur===v?'#2a3036':'transparent',color:cur===v?'#e6e8ea':'#7d868f',fn:()=>this.setState({[key]:v})}));}
+runTest=()=>{if(this.state.test>0&&this.state.test<100)return;this.setState({test:1,testDone:false});const iv=setInterval(()=>{this.setState(s=>{const n=Math.min(100,s.test+5);if(n>=100){clearInterval(iv);return{test:100,testDone:true};}return{test:n};});},250);};
+runDiag=()=>{this.setState({diag:'running'});setTimeout(()=>this.setState({diag:'done'}),1600);};
+renderVals(){
+const s=this.state,p=this.props||{},live=this.live(),fb=!!p.win10Fallback;
+const page=NAV.find(n=>n[0]===s.page)||NAV[0];
+const B={IDLE:['INACTIF','#7d868f','#1a1e22'],INITIALIZING:['INITIALISATION','#4cc3d9','rgba(76,195,217,.1)'],LISTENING:['EN ÉCOUTE','#5fd38d','rgba(95,211,141,.1)'],DEGRADED:['DÉGRADÉ','#f2a93b','rgba(242,169,59,.12)'],PAUSED:['EN PAUSE','#f2a93b','rgba(242,169,59,.12)'],STOPPING:['ARRÊT…','#7d868f','#1a1e22'],STOPPED:['ARRÊTÉ','#7d868f','#1a1e22']}[s.session];
+const running=live||s.session==='INITIALIZING'||s.session==='PAUSED';
+const vl=s.feed.filter(f=>f.kind==='voice'&&f.lat).map(f=>f.lat).sort((a,b)=>a-b);
+const pct=q=>vl[Math.min(vl.length-1,Math.floor(q*vl.length))];
+const feedRows=s.feed.map(f=>{const v=f.kind==='voice',fr=f.status==='original';return{
+tag:v?'VOIX':'CHAT · '+f.ch,color:v?'#f2a93b':'#4cc3d9',tagBg:v?'rgba(242,169,59,.12)':'rgba(76,195,217,.12)',time:f.time,
+langs:f.src.toUpperCase()+(fr?'':' → FR'),sender:f.sender||'',orig:fr||f.err?'':f.orig,
+shown:f.shown||f.orig,trColor:f.status==='provisoire'?'#a7aeb5':'#e9ecef',italic:f.status==='provisoire'?'italic':'normal',
+note:fr?'Déjà en français — non traduit':f.err?'Moteur de traduction indisponible — original affiché':'',noteColor:f.err?'#ef8a8a':'#5c646c',
+status:f.status,statusColor:{provisoire:'#f2a93b',final:'#5fd38d',original:'#7d868f',erreur:'#ef8a8a'}[f.status],lat:f.lat?fmtS(f.lat):''};});
+const sample=[{kind:'voice',src:'ru',orig:'Двое идут на B',shown:'Deux joueurs arrivent sur B.'},{kind:'chat',ch:'CT',src:'en',sender:'Player123',orig:'gonna smoke mid',shown:'Je vais poser une smoke au mid.'},{kind:'voice',src:'en',orig:'one low, he is lit',shown:'Un en bas, il est touché.'}];
+const src=s.feed.length?s.feed:sample;
+const ovBlocks=src.slice(0,s.maxBlocks).map((f,i)=>{const v=f.kind==='voice';const t=f.shown||f.orig;return{
+color:v?'#f2a93b':'#4cc3d9',head:v?`VOIX • ${LN[f.src]} → FRANÇAIS`:`CHAT • ${CH[f.ch]} • ${LN[f.src]} → FRANÇAIS`,orig:f.orig,
+line:f.sender?`${f.sender} : « ${t} »`:`« ${t} »`,op:i===s.maxBlocks-1&&s.maxBlocks>2?.55:1};});
+const c=s.corner,pad='20px';
+const corners=[['tl','Haut gauche'],['tr','Haut droite'],['bl','Bas gauche'],['br','Bas droite']];
+const srcOn=Object.keys(s.src).filter(k=>s.src[k]);
+const diagDone=s.diag==='done';
+const D=(name,detail,st)=>({name,detail,st:diagDone?st:'…',c:!diagDone?'#5c646c':st==='OK'?'#5fd38d':st==='AVERT.'?'#f2a93b':'#ef8a8a'});
+return{
+nav:NAV.map(([id,l],i)=>({label:l,num:String(i+1).padStart(2,'0'),bg:s.page===id?'#1c2024':'transparent',color:s.page===id?'#e6e8ea':'#8b939b',numColor:s.page===id?'#f2a93b':'#4a5158',go:()=>this.setState({page:id})})),
+pageTitle:page[1],pageSub:page[2],
+isDash:s.page==='dash',isOverlay:s.page==='overlay',isAudio:s.page==='audio',isLang:s.page==='lang',isHist:s.page==='hist',isDiag:s.page==='diag',isAbout:s.page==='about',
+badgeLabel:B[0],badgeColor:B[1],badgeBg:B[2],
+startLabel:running?'Arrêter':'Démarrer',startBg:running?'#22272c':'#f2a93b',startColor:running?'#e6e8ea':'#0d0f11',
+pauseLabel:s.paused?'Reprendre':'Pause',pauseColor:running?'#e6e8ea':'#4a5158',
+togglePause:this.togglePause,emergency:this.emergency,toggleSession:this.toggleSession,fallback:fb,
+statusCards:[
+{label:'COUNTER-STRIKE 2',value:live?'En cours · cs2.exe':'Détecté',sub:'console.log surveillé · -condebug actif',dot:'#5fd38d'},
+{label:'CAPTURE AUDIO',value:fb?'Loopback système':'Process loopback',sub:fb?'Repli — tout le périphérique':'Son de cs2.exe uniquement',dot:fb?'#f2a93b':'#5fd38d'},
+{label:'MOTEURS',value:`Whisper ${s.model} · ${s.accel.toUpperCase()}`,sub:`Traduction : ${s.engine}${p.translatorDown?' (indisponible)':''}`,dot:p.translatorDown?'#ef8a8a':'#5fd38d'},
+{label:'LATENCE VOIX',value:vl.length?`p50 ${fmtS(pct(.5))}`:'—',sub:vl.length?`p95 ${fmtS(pct(.95))} · ${vl.length} phrases`:'Objectif p50 ≤ 2,0 s · p95 ≤ 4,0 s',dot:vl.length?'#5fd38d':'#3a4047'}],
+modes:this.seg([['text','Texte'],['voice','Voix'],['mixed','Voix + Chat']],s.mode,'mode'),
+feedRows,feedEmpty:!s.feed.length,feedCount:s.feed.length?`${s.feed.length} événements`:'',
+emptyTitle:live?'En écoute…':s.session==='PAUSED'?'Capture en pause':'Aucune session active',
+emptySub:live?'Les traductions apparaîtront ici et dans l\u2019overlay dès qu\u2019une phrase ou un message est détecté.':'Démarrez la session pour recevoir les traductions des voix et du chat. Ctrl+Alt+F9 met en pause, Ctrl+Alt+F10 coupe toutes les captures.',
+bars:s.levels.map(v=>({h:Math.max(2,Math.round(v*56))+'px',c:v*100>=s.vad?'#f2a93b':'#3a4047'})),
+vad:s.vad,vadLabel:!live?'—':s.speaking?'PAROLE DÉTECTÉE':'bruit · ignoré',vadColor:s.speaking?'#f2a93b':'#5c646c',
+stages:[['Capture',fb?'loopback système':'WASAPI · cs2.exe'],['VAD',`seuil ${s.vad} %`],['Transcription',`whisper ${s.model}`],['Traduction',`${s.engine} → fr`],['Overlay',s.fmt]].map(([n,sub],i)=>{const a=live&&!s.paused&&(i===0||s.stage===i);return{name:n,sub,dot:a?(i===0?'#5fd38d':'#f2a93b'):'#2f353b',color:a?'#e6e8ea':'#8b939b'};}),
+segLabel:`${s.seg} segments`,dropLabel:`${s.drop} abandonnés (périmés)`,
+srcLabel:`Auto (${srcOn.join(', ')})`,glossCount:s.gloss.length,
+privacyTag:s.tg.cloud?'CLOUD':'LOCAL',privacyText:s.tg.cloud?'Transcription cloud activée — les segments vocaux sont envoyés au fournisseur.':'Aucune voix transmise à un tiers. Aucun audio brut conservé. Micro désactivé.',
+overlayOn:s.overlayOn,toggleOverlay:()=>this.setState(st=>({overlayOn:!st.overlayOn})),ovTg:{bg:s.overlayOn?ON:OFF,x:s.overlayOn?'18px':'2px'},
+ov:{top:c[0]==='t'?pad:'auto',bottom:c[0]==='b'?pad:'auto',left:c[1]==='l'?pad:'auto',right:c[1]==='r'?pad:'auto',outline:s.repos?'1px dashed #f2a93b':'none'},
+ovBlocks,ovBg:`rgba(8,10,12,${(s.opacity/100).toFixed(2)})`,ovSize:(s.fmt==='accessible'?s.textSize+6:s.textSize)+'px',
+showHead:s.fmt!=='minimal',showOrig:s.fmt==='bilingue',ovHint:s.feed.length?'traductions en direct':'exemples',
+fmts:this.seg([['minimal','Minimal'],['bilingue','Bilingue'],['accessible','Accessible']],s.fmt,'fmt'),
+corners:corners.map(([id])=>({bg:s.corner===id?'#f2a93b':'#22272c',fn:()=>this.setState({corner:id})})),cornerLabel:corners.find(k=>k[0]===s.corner)[1],
+opacity:s.opacity,textSize:s.textSize,duration:s.duration,
+setOpacity:e=>this.setState({opacity:+e.target.value}),setTextSize:e=>this.setState({textSize:+e.target.value}),setDuration:e=>this.setState({duration:+e.target.value}),setVad:e=>this.setState({vad:+e.target.value}),
+blockOpts:this.seg([[2,'2'],[3,'3']],s.maxBlocks,'maxBlocks'),
+t:{click:this.tog('click'),noise:this.tog('noise'),cloud:this.tog('cloud'),hist:this.tog('hist'),skipFr:this.tog('skipFr')},
+reposLabel:s.repos?'Terminer le repositionnement':'Repositionner l\u2019overlay',reposBg:s.repos?'#2a2418':'transparent',toggleReposition:()=>this.setState(st=>({repos:!st.repos})),
+captureOpts:[['process','Audio de CS2 uniquement','Process loopback WASAPI ciblant cs2.exe. Sans injection.',fb?'INDISPONIBLE':'RECOMMANDÉ',fb],['device','Périphérique de sortie','Loopback du casque choisi — capte aussi Discord, navigateur…','REPLI',false],['wav','Fichier WAV de démonstration','Tester la chaîne sans lancer CS2','TEST',false]].map(([id,name,sub,tag,dis])=>{const on=s.capture===id&&!dis;return{name,sub,tag,tagColor:tag==='RECOMMANDÉ'?'#5fd38d':tag==='INDISPONIBLE'?'#ef8a8a':'#7d868f',border:on?'#5a4824':'#23282e',bg:on?'#1d1a14':'transparent',ring:on?'#f2a93b':'#3a4047',fill:on?'#f2a93b':'transparent',op:dis?.5:1,cursor:dis?'not-allowed':'pointer',fn:()=>{if(!dis)this.setState({capture:id});}};}),
+deviceWarn:s.capture==='device'||fb,
+testBtn:s.test>0&&s.test<100?'Test en cours…':'Test audio 10 s',testPct:s.test+'%',
+testMsg:s.testDone?'Voix détectée · ~1,3 s de traitement par segment de 4 s':s.test>0?`Écoute… ${Math.round(s.test/10)} / 10 s`:'Valide l\u2019entrée, la détection de voix et le temps de traitement',runTest:this.runTest,
+accels:this.seg([['cpu','CPU'],['cuda','CUDA']],s.accel,'accel'),
+models:MODELS.map(([id,size,desc,inst])=>{const on=s.model===id,d=s.dl[id];const ok=inst||d===100;return{name:'whisper-'+id,size,desc,st:on?'Actif':ok?'Installé':d?`${d} %`:'Télécharger',stColor:on?'#f2a93b':ok?'#5fd38d':'#4cc3d9',border:on?'#5a4824':'#23282e',bg:on?'#1d1a14':'transparent',ring:on?'#f2a93b':'#3a4047',fill:on?'#f2a93b':'transparent',
+fn:()=>{if(ok){this.setState({model:id});return;}if(d)return;const iv=setInterval(()=>this.setState(st=>{const n=Math.min(100,(st.dl[id]||0)+7);if(n>=100)clearInterval(iv);return{dl:{...st.dl,[id]:n}};}),180);}};}),
+engines:this.seg([['DeepL','DeepL'],['Azure','Azure'],['Local','Local (bêta)']],s.engine,'engine'),
+srcChips:Object.keys(s.src).map(k=>({label:k,border:s.src[k]?'#5a4824':'#2a2f35',bg:s.src[k]?'#1d1a14':'transparent',color:s.src[k]?'#f2a93b':'#7d868f',fn:()=>this.setState(st=>({src:{...st.src,[k]:!st.src[k]}}))})),
+glossRows:s.gloss.map(([t,m,fr],i)=>({t,m,fr,mColor:m==='Conserver'?'#8b939b':'#4cc3d9',del:()=>this.setState(st=>({gloss:st.gloss.filter((_,j)=>j!==i)}))})),
+newTerm:s.newTerm,setNewTerm:e=>this.setState({newTerm:e.target.value}),addTerm:()=>{const v=s.newTerm.trim();if(v)this.setState(st=>({gloss:[...st.gloss,[v,'Conserver',v]],newTerm:''}));},
+clearFeed:()=>this.setState({feed:[]}),
+diagBtn:diagDone?'Relancer les tests':'Tests en cours…',runDiag:this.runDiag,
+diagRows:[D('Journal console.log','D:\\SteamLibrary\\steamapps\\common\\Counter-Strike Global Offensive\\game\\csgo\\console.log','OK'),D('Option de lancement -condebug','Détectée dans les options Steam','OK'),D('Parseur de chat','cs2-2026.09 · 42 fixtures validées','OK'),D('Process loopback',fb?'Build Windows 19045 < 20348 — repli système':'Build 26100 · cs2.exe ciblé','OK'.replace('OK',fb?'AVERT.':'OK')),D('Modèle whisper-'+s.model,'Chargé en 1,8 s · '+s.accel.toUpperCase(),'OK'),D('Moteur de traduction · '+s.engine,p.translatorDown?'Délai dépassé (5 s) — repli sur l\u2019original':'Réponse en 210 ms',p.translatorDown?'ÉCHEC':'OK'),D('Raccourcis globaux','Ctrl+Alt+F8 / F9 / F10 · aucun conflit','OK')],
+logs:[['14:02:11','INFO','app-shell: instance unique acquise'],['14:02:11','INFO','cs2-detect: 2 bibliothèques Steam trouvées'],['14:02:12','INFO','chat-ingest: suivi depuis offset 1 284 330'],[fb?'14:02:12':'14:02:12',fb?'WARN':'INFO',fb?'audio-win: process loopback indisponible, repli endpoint':'audio-win: process loopback actif pid=18244'],['14:02:13','INFO','asr: whisper-small chargé (CUDA)'],['14:02:13','INFO','translation: provider=DeepL key=[expurgée]'],['14:03:40','DEBUG','audio-pipeline: segment 3,1 s → asr'],['14:03:41','WARN','audio-pipeline: segment périmé abandonné (age 4,2 s)'],['14:03:44','INFO','overlay: 2 blocs affichés']].map(([t,lv,m])=>({t,lv,m,c:lv==='WARN'?'#f2a93b':lv==='DEBUG'?'#4a5158':'#5fd38d'})),
+nevers:['Injecter une DLL dans cs2.exe','Lire ou écrire la mémoire du jeu','Intercepter ou modifier les paquets réseau','Contourner VAC ou le mode approuvé','Envoyer un message dans le chat sans action de votre part'],
+licenses:[['eframe / egui','MIT / Apache-2.0'],['whisper.cpp','MIT'],['whisper-rs','Unlicense'],['tokio','MIT'],['windows-rs','MIT / Apache-2.0'],['rubato','MIT']].map(([n,l])=>({n,l})),
+toast:s.toast};}}
+</script>
+</body>
+</html>

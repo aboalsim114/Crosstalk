@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<script src="./doc-page.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+doc-page:not(:defined){visibility:hidden}
+body{margin:0;font-family:'Geist',system-ui,sans-serif;color:#1b1916;-webkit-font-smoothing:antialiased}
+a{color:#b4570f;text-decoration:none}a:hover{color:#7a3a08;text-decoration:underline}
+</style>
+</helmet>
+<doc-page size="a4" margin="0.8in">
+<div slot="footer" style="display:flex;justify-content:space-between;font:500 8pt 'JetBrains Mono';letter-spacing:.08em;color:#8a847a;padding-top:10px;border-top:1px solid #e4dfd6"><span>CS2 LIVE TRANSLATOR · CAHIER DES CHARGES</span><span>V1.0 · OCTOBRE 2026</span></div>
+
+<h1 style="font:400 44pt/1 'Instrument Serif';letter-spacing:-.01em;margin:0 0 6px">Cahier des charges</h1>
+<div style="font:400 italic 22pt/1.1 'Instrument Serif';color:#b4570f;margin:0 0 22px">CS2 Live Translator</div>
+<p style="font:400 12pt/1.6 'Geist';color:#4a463f;margin:0 0 20px;max-width:560px">Application de bureau Windows, écrite en Rust, qui traduit en français et en temps réel le chat écrit et le chat vocal de Counter-Strike 2, puis affiche les traductions dans un overlay transparent au-dessus du jeu.</p>
+<table style="width:100%;border-collapse:collapse;font:400 10pt/1.5 'Geist';margin:0 0 28px">
+<tbody>
+<tr><td style="padding:6px 0;border-top:1px solid #e4dfd6;color:#8a847a;width:34%">Version du document</td><td style="padding:6px 0;border-top:1px solid #e4dfd6">1.0 — 11 octobre 2026</td></tr>
+<tr><td style="padding:6px 0;border-top:1px solid #e4dfd6;color:#8a847a">Statut</td><td style="padding:6px 0;border-top:1px solid #e4dfd6">Proposition, à valider</td></tr>
+<tr><td style="padding:6px 0;border-top:1px solid #e4dfd6;color:#8a847a">Plateforme</td><td style="padding:6px 0;border-top:1px solid #e4dfd6">Windows 10 (22H2) et Windows 11, x64</td></tr>
+<tr><td style="padding:6px 0;border-top:1px solid #e4dfd6;border-bottom:1px solid #e4dfd6;color:#8a847a">Langage</td><td style="padding:6px 0;border-top:1px solid #e4dfd6;border-bottom:1px solid #e4dfd6">Rust (édition 2021, toolchain stable)</td></tr>
+</tbody>
+</table>
+
+<h2 style="font:400 24pt/1.1 'Instrument Serif';margin:28px 0 10px">1. Contexte et objectifs</h2>
+<h3 style="font:600 11pt 'Geist';margin:16px 0 6px">1.1 Contexte</h3>
+<p style="font:400 10.5pt/1.65 'Geist';margin:0 0 10px">En matchmaking européen sur CS2, les joueurs francophones se retrouvent souvent avec des coéquipiers russophones ou anglophones. Les annonces vocales (« callouts ») et les messages du chat sont alors incompréhensibles, ce qui nuit à la coordination de l'équipe.</p>
+<h3 style="font:600 11pt 'Geist';margin:16px 0 6px">1.2 Objectifs</h3>
+<ul style="font:400 10.5pt/1.65 'Geist';margin:0 0 10px;padding-left:20px">
+<li>Traduire en français les messages du chat écrit en moins d'une seconde.</li>
+<li>Transcrire puis traduire le chat vocal avec un délai médian de 1,5 seconde au plus (référence marché : ~1 s).</li>
+<li>Afficher les traductions sans gêner la partie : overlay transparent, qui laisse passer les clics et ne prend jamais le focus clavier.</li>
+<li>Ne jamais interagir avec le processus du jeu d'une manière susceptible de déclencher l'anti-triche VAC.</li>
+<li>Garder la voix en local par défaut : aucune transmission d'audio sans accord explicite.</li>
+</ul>
+<h3 style="font:600 11pt 'Geist';margin:16px 0 6px">1.3 Indicateurs de réussite</h3>
+<table style="width:100%;border-collapse:collapse;font:400 10pt/1.5 'Geist';margin:4px 0 14px">
+<thead><tr><th style="text-align:left;padding:7px 8px;border-bottom:1.5px solid #1b1916;font:600 9pt 'Geist'">Indicateur</th><th style="text-align:left;padding:7px 8px;border-bottom:1.5px solid #1b1916;font:600 9pt 'Geist'">Cible</th></tr></thead>
+<tbody>
+<tr><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6">Latence chat (lecture → affichage)</td><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6">p50 ≤ 0,6 s · p95 ≤ 1,2 s</td></tr>
+<tr><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6">Latence voix (fin de parole → affichage final)</td><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6">p50 ≤ 1,5 s · p95 ≤ 3 s (GPU) ; p50 ≤ 3 s (CPU)</td></tr>
+<tr><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6">Taux d'erreur de transcription (WER) sur le corpus de test CS2</td><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6">≤ 25 % en russe, ≤ 18 % en anglais</td></tr>
+<tr><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6">Perte de FPS dans le jeu</td><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6">≤ 3 % (mesuré sur une configuration de référence)</td></tr>
+<tr><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6">Plantages par heure de session</td><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6">0 sur la campagne de test de 20 h</td></tr>
+</tbody>
+</table>
+
+<h2 style="font:400 24pt/1.1 'Instrument Serif';margin:28px 0 10px">1 bis. Référence du marché : Unitra AI</h2>
+<p style="font:400 10.5pt/1.65 'Geist';margin:0 0 10px"><a href="https://unitra.ai/games/cs2/">Unitra AI</a> propose déjà un traducteur vocal pour CS2 (Windows 10/11, macOS). Ses choix valident l'approche et servent de point de comparaison, sans reprendre son identité ni ses contenus.</p>
+<table style="width:100%;border-collapse:collapse;font:400 10pt/1.5 'Geist';margin:4px 0 14px">
+<thead><tr><th style="text-align:left;padding:7px 8px;border-bottom:1.5px solid #1b1916;font:600 9pt 'Geist';width:30%">Leur choix</th><th style="text-align:left;padding:7px 8px;border-bottom:1.5px solid #1b1916;font:600 9pt 'Geist'">Ce que l'on retient</th></tr></thead>
+<tbody>
+<tr><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6">Capture audio au niveau du système (son du PC + micro), sans intégration au jeu</td><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6">Même principe externe. On ajoute une option « tout le son du PC » pour traduire aussi Discord et TeamSpeak (F-21), en gardant la capture ciblée sur cs2.exe par défaut.</td></tr>
+<tr><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6">Reconnaissance vocale sur l'appareil, audio non envoyé sans opt-in</td><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6">Confirme notre choix Whisper local + cloud en option (F-24, F-28).</td></tr>
+<tr><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6">Overlay click-through en fenêtré sans bordures ; widget Xbox Game Bar en plein écran exclusif</td><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6">On ajoute un widget Game Bar pour couvrir le plein écran exclusif sans injection (F-47).</td></tr>
+<tr><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6">Modèles adaptés au vocabulaire CS : callouts de cartes, économie, utilitaires, argot traduits comme des annonces</td><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6">On étend le glossaire aux callouts de cartes et on ajoute une normalisation des annonces (F-36).</td></tr>
+<tr><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6">Latence annoncée d'environ 1 s</td><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6">Notre cible voix p50 passe à 1,5 s sur GPU (section 1.3).</td></tr>
+<tr><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6">Traduction dans les deux sens</td><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6">Traduction de ses propres annonces ajoutée en option P2 (F-50).</td></tr>
+<tr><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6">35 langues, offre gratuite d'environ 2 h/jour</td><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6">On reste centré sur ru/en → fr pour la 1.0. Notre différence : gratuit, open source, 100 % local possible, sans compte.</td></tr>
+</tbody>
+</table>
+
+<h2 style="font:400 24pt/1.1 'Instrument Serif';margin:28px 0 10px">2. Utilisateurs et cas d'usage</h2>
+<p style="font:400 10.5pt/1.65 'Geist';margin:0 0 10px"><strong>Persona principal :</strong> joueur francophone de CS2, de niveau intermédiaire à confirmé, qui joue en matchmaking ou sur Premier avec des inconnus. À l'aise avec un PC gaming, mais pas forcément technicien.</p>
+<table style="width:100%;border-collapse:collapse;font:400 10pt/1.5 'Geist';margin:4px 0 14px">
+<thead><tr><th style="text-align:left;padding:7px 8px;border-bottom:1.5px solid #1b1916;font:600 9pt 'Geist';width:12%">ID</th><th style="text-align:left;padding:7px 8px;border-bottom:1.5px solid #1b1916;font:600 9pt 'Geist'">Cas d'usage</th></tr></thead>
+<tbody>
+<tr><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6;font:500 9pt 'JetBrains Mono'">UC-01</td><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6">Premier lancement : l'application détecte CS2, vérifie l'option <code style="font:400 9pt 'JetBrains Mono'">-condebug</code>, télécharge un modèle Whisper et lance un test audio.</td></tr>
+<tr><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6;font:500 9pt 'JetBrains Mono'">UC-02</td><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6">Pendant la partie, un coéquipier écrit en russe : la traduction apparaît dans l'overlay en moins d'une seconde.</td></tr>
+<tr><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6;font:500 9pt 'JetBrains Mono'">UC-03</td><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6">Un coéquipier fait une annonce vocale : une transcription provisoire s'affiche, puis la traduction finale la remplace.</td></tr>
+<tr><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6;font:500 9pt 'JetBrains Mono'">UC-04</td><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6">Le joueur masque l'overlay (Ctrl+Alt+F8) ou coupe toutes les captures d'urgence (Ctrl+Alt+F10) sans quitter le jeu.</td></tr>
+<tr><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6;font:500 9pt 'JetBrains Mono'">UC-05</td><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6">Le joueur ajoute un terme au glossaire (par ex. « boost ») pour qu'il reste tel quel dans la traduction.</td></tr>
+<tr><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6;font:500 9pt 'JetBrains Mono'">UC-06</td><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6">Après une mise à jour de CS2, le chat n'est plus reconnu : l'écran Diagnostic l'indique et propose de signaler le problème.</td></tr>
+</tbody>
+</table>
+
+<h2 style="font:400 24pt/1.1 'Instrument Serif';margin:28px 0 10px">3. Contraintes et principes non négociables</h2>
+<div style="break-inside:avoid;padding:14px 16px;border:1px solid #e9c9a8;background:#fbf4ec;border-radius:6px;margin:6px 0 14px">
+<div style="font:600 10pt 'Geist';color:#7a3a08;margin-bottom:6px">L'application ne doit jamais :</div>
+<ul style="font:400 10.5pt/1.6 'Geist';margin:0;padding-left:20px">
+<li>injecter de DLL ni de code dans <code style="font:400 9pt 'JetBrains Mono'">cs2.exe</code> ;</li>
+<li>lire ou écrire dans la mémoire du jeu ;</li>
+<li>intercepter, déchiffrer ou modifier le trafic réseau du jeu ;</li>
+<li>s'accrocher au rendu du jeu (hooks DirectX/Vulkan) ;</li>
+<li>envoyer des messages ou des commandes dans le jeu à la place du joueur ;</li>
+<li>contourner VAC, le mode approuvé (trusted mode) ou toute autre protection.</li>
+</ul>
+</div>
+<p style="font:400 10.5pt/1.65 'Geist';margin:0 0 10px">Les seules interactions autorisées avec le jeu sont : la lecture du fichier <code style="font:400 9pt 'JetBrains Mono'">console.log</code> écrit par le jeu lui-même, la capture audio via les API publiques de Windows, et l'affichage d'une fenêtre séparée au premier plan. Aucune garantie « VAC safe » ne sera revendiquée publiquement ; les interactions seront documentées dans l'écran À propos.</p>
+<p style="font:400 10.5pt/1.65 'Geist';margin:0 0 10px"><strong>Conformité :</strong> RGPD (la voix de tiers est une donnée personnelle — traitement local par défaut, pas de conservation de l'audio, historique texte désactivé par défaut) et respect des conditions d'utilisation de Steam et de Valve.</p>
+
+<h2 style="font:400 24pt/1.1 'Instrument Serif';margin:28px 0 10px">4. Exigences fonctionnelles</h2>
+<p style="font:400 10.5pt/1.65 'Geist';margin:0 0 10px">Priorités : <strong>P0</strong> indispensable au MVP · <strong>P1</strong> version 1.0 · <strong>P2</strong> souhaitable.</p>
+
+<h3 style="font:600 11pt 'Geist';margin:16px 0 6px">4.1 Détection du jeu</h3>
+<table style="width:100%;border-collapse:collapse;font:400 10pt/1.5 'Geist';margin:4px 0 14px">
+<thead><tr><th style="text-align:left;padding:7px 8px;border-bottom:1.5px solid #1b1916;font:600 9pt 'Geist';width:11%">ID</th><th style="text-align:left;padding:7px 8px;border-bottom:1.5px solid #1b1916;font:600 9pt 'Geist'">Exigence</th><th style="text-align:left;padding:7px 8px;border-bottom:1.5px solid #1b1916;font:600 9pt 'Geist';width:8%">Prio.</th></tr></thead>
+<tbody>
+<tr><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6;font:500 9pt 'JetBrains Mono'">F-01</td><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6">Localiser les bibliothèques Steam (registre + <code style="font:400 9pt 'JetBrains Mono'">libraryfolders.vdf</code>) et le dossier d'installation de CS2.</td><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6">P0</td></tr>
+<tr><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6;font:500 9pt 'JetBrains Mono'">F-02</td><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6">Détecter le lancement et la fermeture de <code style="font:400 9pt 'JetBrains Mono'">cs2.exe</code> (énumération des processus toutes les 2 s).</td><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6">P0</td></tr>
+<tr><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6;font:500 9pt 'JetBrains Mono'">F-03</td><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6">Vérifier la présence de <code style="font:400 9pt 'JetBrains Mono'">-condebug</code> dans les options de lancement (<code style="font:400 9pt 'JetBrains Mono'">localconfig.vdf</code>) et guider l'utilisateur pour l'ajouter. Aucune modification automatique.</td><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6">P0</td></tr>
+<tr><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6;font:500 9pt 'JetBrains Mono'">F-04</td><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6">Chemin de CS2 saisissable manuellement si la détection échoue.</td><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6">P1</td></tr>
+</tbody>
+</table>
+
+<h3 style="font:600 11pt 'Geist';margin:16px 0 6px">4.2 Chat écrit</h3>
+<table style="width:100%;border-collapse:collapse;font:400 10pt/1.5 'Geist';margin:4px 0 14px">
+<thead><tr><th style="text-align:left;padding:7px 8px;border-bottom:1.5px solid #1b1916;font:600 9pt 'Geist';width:11%">ID</th><th style="text-align:left;padding:7px 8px;border-bottom:1.5px solid #1b1916;font:600 9pt 'Geist'">Exigence</th><th style="text-align:left;padding:7px 8px;border-bottom:1.5px solid #1b1916;font:600 9pt 'Geist';width:8%">Prio.</th></tr></thead>
+<tbody>
+<tr><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6;font:500 9pt 'JetBrains Mono'">F-10</td><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6">Suivre <code style="font:400 9pt 'JetBrains Mono'">console.log</code> en continu (« tail ») à partir de la fin du fichier ; gérer la troncature et la recréation du fichier.</td><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6">P0</td></tr>
+<tr><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6;font:500 9pt 'JetBrains Mono'">F-11</td><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6">Extraire le canal (Tous, CT, T), l'expéditeur et le message. Parseur versionné, défini par des expressions régulières dans un fichier de règles mis à jour sans recompiler.</td><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6">P0</td></tr>
+<tr><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6;font:500 9pt 'JetBrains Mono'">F-12</td><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6">Ignorer les lignes système, les messages vides et les doublons (fenêtre de 2 s).</td><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6">P0</td></tr>
+<tr><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6;font:500 9pt 'JetBrains Mono'">F-13</td><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6">Option : ignorer ses propres messages (pseudo Steam configurable).</td><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6">P1</td></tr>
+</tbody>
+</table>
+
+<h3 style="font:600 11pt 'Geist';margin:16px 0 6px">4.3 Chat vocal</h3>
+<table style="width:100%;border-collapse:collapse;font:400 10pt/1.5 'Geist';margin:4px 0 14px">
+<thead><tr><th style="text-align:left;padding:7px 8px;border-bottom:1.5px solid #1b1916;font:600 9pt 'Geist';width:11%">ID</th><th style="text-align:left;padding:7px 8px;border-bottom:1.5px solid #1b1916;font:600 9pt 'Geist'">Exigence</th><th style="text-align:left;padding:7px 8px;border-bottom:1.5px solid #1b1916;font:600 9pt 'Geist';width:8%">Prio.</th></tr></thead>
+<tbody>
+<tr><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6;font:500 9pt 'JetBrains Mono'">F-20</td><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6">Capturer uniquement l'audio de <code style="font:400 9pt 'JetBrains Mono'">cs2.exe</code> par process loopback WASAPI (<code style="font:400 9pt 'JetBrains Mono'">ActivateAudioInterfaceAsync</code>, Windows 10 build 20348+ / Windows 11).</td><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6">P0</td></tr>
+<tr><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6;font:500 9pt 'JetBrains Mono'">F-21</td><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6">Mode « tout le son du PC » (loopback du périphérique de sortie) : repli quand le process loopback est indisponible, et mode volontaire pour traduire aussi Discord ou TeamSpeak. Avertissement explicite : capte aussi le navigateur et les autres applications.</td><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6">P0</td></tr>
+<tr><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6;font:500 9pt 'JetBrains Mono'">F-22</td><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6">Ne jamais capturer le microphone de l'utilisateur sans activation explicite (voir F-50).</td><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6">P0</td></tr>
+<tr><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6;font:500 9pt 'JetBrains Mono'">F-23</td><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6">Rééchantillonner en 16 kHz mono ; détection de voix (VAD Silero via ONNX) avec seuil réglable, pré-roll 250 ms, post-roll 400 ms, segment maximal de 8 s.</td><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6">P0</td></tr>
+<tr><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6;font:500 9pt 'JetBrains Mono'">F-24</td><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6">Transcription locale avec whisper.cpp (crate <code style="font:400 9pt 'JetBrains Mono'">whisper-rs</code>), modèles tiny à large-v3-turbo, accélération CUDA ou Vulkan si disponible, sinon CPU.</td><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6">P0</td></tr>
+<tr><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6;font:500 9pt 'JetBrains Mono'">F-25</td><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6">Transcription provisoire affichée pendant la parole (fenêtre glissante), puis remplacée par la version finale.</td><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6">P1</td></tr>
+<tr><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6;font:500 9pt 'JetBrains Mono'">F-26</td><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6">Prompt initial Whisper alimenté par le glossaire CS pour améliorer la reconnaissance des termes de jeu.</td><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6">P1</td></tr>
+<tr><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6;font:500 9pt 'JetBrains Mono'">F-27</td><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6">Abandonner les segments périmés (plus de 6 s d'attente) pour éviter l'accumulation de retard.</td><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6">P0</td></tr>
+<tr><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6;font:500 9pt 'JetBrains Mono'">F-28</td><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6">Transcription cloud en option (opt-in), avec le coût estimé affiché, pour les machines insuffisantes.</td><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6">P2</td></tr>
+<tr><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6;font:500 9pt 'JetBrains Mono'">F-29</td><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6">Chaîne de nettoyage audio avant la VAD (filtre passe-bande, réduction de bruit DeepFilterNet). Détails en section 4.3 bis.</td><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6">P0</td></tr>
+</tbody>
+</table>
+<p style="font:400 italic 10pt/1.6 'Geist';color:#6b665d;margin:0 0 10px">Limite assumée : le locuteur d'une phrase vocale ne peut pas être identifié sans lire la mémoire du jeu. Les sous-titres vocaux restent anonymes.</p>
+
+<h3 style="font:600 11pt 'Geist';margin:16px 0 6px">4.3 bis Séparation de la voix et des bruits de jeu</h3>
+<p style="font:400 10.5pt/1.65 'Geist';margin:0 0 10px">La voix des coéquipiers arrive mélangée aux tirs, explosions et pas. C'est le principal risque qualité du projet. La stratégie combine un nettoyage du signal (MVP) et un modèle de transcription habitué au bruit (version 2).</p>
+<div style="break-inside:avoid;padding:14px 16px;background:#f5f2ec;border-radius:6px;font:400 9.5pt/1.7 'JetBrains Mono';margin:6px 0 4px;white-space:pre-wrap">audio 48 kHz stéréo
+  ─► [A1] extraction mid/side      (voix = centre, bruit = côtés)
+  ─► [A2] passe-bande 200–4 000 Hz  (retire basses d'explosion, sifflements)
+  ─► [A3] DeepFilterNet 3           (réduction de bruit neuronale, temps réel)
+  ─► [A4] rééchantillonnage 16 kHz mono
+  ─► [A5] Silero VAD + garde anti-transitoires
+  ─► [A6] Whisper + prompt glossaire CS
+  ─► [A7] filtre post-transcription  (hallucinations, confiance)</div>
+<p style="font:400 italic 9pt 'Geist';color:#8a847a;margin:0 0 12px">Figure 2 — Chaîne de traitement audio. Chaque étape est désactivable et mesurable dans l'écran Diagnostic.</p>
+<table style="width:100%;border-collapse:collapse;font:400 10pt/1.5 'Geist';margin:4px 0 14px">
+<thead><tr><th style="text-align:left;padding:7px 8px;border-bottom:1.5px solid #1b1916;font:600 9pt 'Geist';width:11%">ID</th><th style="text-align:left;padding:7px 8px;border-bottom:1.5px solid #1b1916;font:600 9pt 'Geist'">Exigence</th><th style="text-align:left;padding:7px 8px;border-bottom:1.5px solid #1b1916;font:600 9pt 'Geist';width:8%">Prio.</th></tr></thead>
+<tbody>
+<tr><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6;font:500 9pt 'JetBrains Mono'">A-01</td><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6"><strong>Mid/side.</strong> Le chat vocal de CS2 n'est pas spatialisé (identique à gauche et à droite), contrairement aux sons de jeu. Calculer mid = (G+D)/2 et side = (G−D)/2 ; utiliser side comme référence de bruit pour une soustraction adaptative (filtre NLMS) sur mid. Désactivé automatiquement si la source est mono. <em>Hypothèse à valider en L0.</em></td><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6">P1</td></tr>
+<tr><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6;font:500 9pt 'JetBrains Mono'">A-02</td><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6"><strong>Passe-bande</strong> 200–4 000 Hz (biquads Butterworth d'ordre 4), le chat vocal Steam étant compressé dans cette bande.</td><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6">P0</td></tr>
+<tr><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6;font:500 9pt 'JetBrains Mono'">A-03</td><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6"><strong>Réduction de bruit neuronale</strong> DeepFilterNet 3 (crate Rust <code style="font:400 9pt 'JetBrains Mono'">deep_filter</code>, licence MIT/Apache-2.0), atténuation réglable de 0 à 100 %. Budget : ≤ 10 ms par trame de 10 ms sur un cœur CPU.</td><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6">P0</td></tr>
+<tr><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6;font:500 9pt 'JetBrains Mono'">A-04</td><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6">Repli <strong>RNNoise</strong> (crate <code style="font:400 9pt 'JetBrains Mono'">nnnoiseless</code>) sur les machines trop faibles pour DeepFilterNet.</td><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6">P1</td></tr>
+<tr><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6;font:500 9pt 'JetBrains Mono'">A-05</td><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6"><strong>Garde anti-transitoires</strong> : un pic d'énergie bref (&lt; 150 ms, montée &gt; 20 dB) ne peut pas ouvrir un segment de parole à lui seul. Évite qu'une rafale ou une grenade déclenche Whisper.</td><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6">P0</td></tr>
+<tr><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6;font:500 9pt 'JetBrains Mono'">A-06</td><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6"><strong>Prompt glossaire</strong> : les termes CS et les callouts de la carte en cours sont passés à Whisper comme texte initial (<code style="font:400 9pt 'JetBrains Mono'">initial_prompt</code>).</td><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6">P0</td></tr>
+<tr><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6;font:500 9pt 'JetBrains Mono'">A-07</td><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6"><strong>Filtre anti-hallucinations</strong> : rejeter les sorties à faible confiance (<code style="font:400 9pt 'JetBrains Mono'">avg_logprob</code> &lt; −1,0 ou <code style="font:400 9pt 'JetBrains Mono'">no_speech_prob</code> &gt; 0,6), les répétitions et les phrases typiques d'hallucination (« Merci d'avoir regardé », « Sous-titres réalisés par… »).</td><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6">P0</td></tr>
+<tr><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6;font:500 9pt 'JetBrains Mono'">A-08</td><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6"><strong>Capture Discord dédiée</strong> : process loopback sur <code style="font:400 9pt 'JetBrains Mono'">discord.exe</code> en parallèle de <code style="font:400 9pt 'JetBrains Mono'">cs2.exe</code>. La voix Discord arrive sans bruit de jeu et passe directement en A4.</td><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6">P1</td></tr>
+<tr><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6;font:500 9pt 'JetBrains Mono'">A-09</td><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6"><strong>Assistant de réglage du jeu</strong> : recommander de baisser le volume principal du jeu et de monter celui du chat vocal (rapport voix/jeu), avec un test avant/après.</td><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6">P1</td></tr>
+<tr><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6;font:500 9pt 'JetBrains Mono'">A-10</td><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6"><strong>Whisper affiné pour CS2</strong> (version 2) : fine-tuning LoRA de whisper-small/medium sur un corpus d'annonces ru/en mélangées à des sons de CS2 (AK-47, AWP, grenades, molotovs, pas, musique de round) à des rapports signal/bruit de −5 à +20 dB, avec simulation du codec voix Steam. Export GGML pour whisper.cpp.</td><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6">P2</td></tr>
+<tr><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6;font:500 9pt 'JetBrains Mono'">A-11</td><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6"><strong>Mesure continue</strong> : chaque version est évaluée sur le corpus de test, avec et sans chaque étape (A1 à A7), pour mesurer le WER, la latence ajoutée et les faux déclenchements.</td><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6">P0</td></tr>
+</tbody>
+</table>
+<table style="width:100%;border-collapse:collapse;font:400 10pt/1.5 'Geist';margin:4px 0 14px">
+<thead><tr><th style="text-align:left;padding:7px 8px;border-bottom:1.5px solid #1b1916;font:600 9pt 'Geist';width:40%">Budget de latence (GPU)</th><th style="text-align:left;padding:7px 8px;border-bottom:1.5px solid #1b1916;font:600 9pt 'Geist'">Cible</th></tr></thead>
+<tbody>
+<tr><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6">A1 + A2 + A3 (nettoyage)</td><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6">≤ 30 ms</td></tr>
+<tr><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6">A5 post-roll (fin de parole)</td><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6">400 ms</td></tr>
+<tr><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6">A6 Whisper small, segment de 3 s</td><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6">≤ 500 ms</td></tr>
+<tr><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6">Traduction + affichage</td><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6">≤ 400 ms</td></tr>
+<tr><td style="padding:6px 8px;border-bottom:1.5px solid #1b1916;font-weight:600">Total</td><td style="padding:6px 8px;border-bottom:1.5px solid #1b1916;font-weight:600">≈ 1,3 s (cible p50 ≤ 1,5 s)</td></tr>
+</tbody>
+</table>
+<h3 style="font:600 11pt 'Geist';margin:16px 0 6px">Corpus de bruit et d'entraînement</h3>
+<ul style="font:400 10.5pt/1.65 'Geist';margin:0 0 10px;padding-left:20px">
+<li><strong>Voix :</strong> annonces enregistrées avec l'accord des joueurs (objectif 20 h, ru et en), plus des corpus libres (Common Voice ru/en).</li>
+<li><strong>Bruits :</strong> sons de jeu enregistrés en partie privée ou sur serveur local, sans voix. Ne pas redistribuer les fichiers audio du jeu (propriété de Valve) : ils servent uniquement à l'entraînement interne.</li>
+<li><strong>Test :</strong> 2 h de parties réelles annotées à la main, jamais utilisées pour l'entraînement.</li>
+</ul>
+
+<h3 style="font:600 11pt 'Geist';margin:16px 0 6px">4.4 Traduction</h3>
+<table style="width:100%;border-collapse:collapse;font:400 10pt/1.5 'Geist';margin:4px 0 14px">
+<thead><tr><th style="text-align:left;padding:7px 8px;border-bottom:1.5px solid #1b1916;font:600 9pt 'Geist';width:11%">ID</th><th style="text-align:left;padding:7px 8px;border-bottom:1.5px solid #1b1916;font:600 9pt 'Geist'">Exigence</th><th style="text-align:left;padding:7px 8px;border-bottom:1.5px solid #1b1916;font:600 9pt 'Geist';width:8%">Prio.</th></tr></thead>
+<tbody>
+<tr><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6;font:500 9pt 'JetBrains Mono'">F-30</td><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6">Moteurs interchangeables derrière un trait <code style="font:400 9pt 'JetBrains Mono'">Translator</code> : DeepL (par défaut), Azure Translator, moteur local (bêta, par ex. NLLB/Opus-MT via CTranslate2).</td><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6">P0</td></tr>
+<tr><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6;font:500 9pt 'JetBrains Mono'">F-31</td><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6">Détection de langue restreinte aux langues sources préférées (ru, en par défaut) pour les messages courts.</td><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6">P0</td></tr>
+<tr><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6;font:500 9pt 'JetBrains Mono'">F-32</td><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6">Ne pas traduire les messages déjà en français : l'original est affiché et aucun appel n'est fait.</td><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6">P0</td></tr>
+<tr><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6;font:500 9pt 'JetBrains Mono'">F-33</td><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6">Glossaire CS : termes conservés (smoke, flash, eco, rush B…) protégés par balises avant traduction, et termes traduits avec un rendu imposé. Modifiable par l'utilisateur.</td><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6">P0</td></tr>
+<tr><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6;font:500 9pt 'JetBrains Mono'">F-34</td><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6">Délai maximal de 5 s, 1 nouvelle tentative, puis affichage de l'original avec la mention « moteur indisponible ».</td><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6">P0</td></tr>
+<tr><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6;font:500 9pt 'JetBrains Mono'">F-36</td><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6">Normalisation des annonces : callouts de cartes (banana, long, short, connector, apps…), économie et utilitaires traduits comme des annonces courtes, pas mot à mot (« б раш дым » → « rush B, smoke »). Glossaire par carte.</td><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6">P1</td></tr>
+<tr><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6;font:500 9pt 'JetBrains Mono'">F-35</td><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6">Cache LRU des traductions (1 000 entrées) pour les messages répétés (« gg », « nt »…).</td><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6">P1</td></tr>
+</tbody>
+</table>
+
+<h3 style="font:600 11pt 'Geist';margin:16px 0 6px">4.5 Overlay en jeu</h3>
+<table style="width:100%;border-collapse:collapse;font:400 10pt/1.5 'Geist';margin:4px 0 14px">
+<thead><tr><th style="text-align:left;padding:7px 8px;border-bottom:1.5px solid #1b1916;font:600 9pt 'Geist';width:11%">ID</th><th style="text-align:left;padding:7px 8px;border-bottom:1.5px solid #1b1916;font:600 9pt 'Geist'">Exigence</th><th style="text-align:left;padding:7px 8px;border-bottom:1.5px solid #1b1916;font:600 9pt 'Geist';width:8%">Prio.</th></tr></thead>
+<tbody>
+<tr><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6;font:500 9pt 'JetBrains Mono'">F-40</td><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6">Fenêtre séparée, transparente, toujours au premier plan, sans bordure, absente de la barre des tâches (<code style="font:400 9pt 'JetBrains Mono'">WS_EX_LAYERED | WS_EX_TRANSPARENT | WS_EX_TOPMOST | WS_EX_NOACTIVATE | WS_EX_TOOLWINDOW</code>).</td><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6">P0</td></tr>
+<tr><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6;font:500 9pt 'JetBrains Mono'">F-41</td><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6">Clics transmis au jeu et aucun vol de focus clavier, en permanence.</td><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6">P0</td></tr>
+<tr><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6;font:500 9pt 'JetBrains Mono'">F-42</td><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6">Fonctionne en mode « fenêtré sans bordures ». En plein écran exclusif, Windows masque les overlays classiques : bascule sur le widget Game Bar (F-47).</td><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6">P0</td></tr>
+<tr><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6;font:500 9pt 'JetBrains Mono'">F-43</td><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6">Trois formats : Minimal (traduction seule), Bilingue (en-tête + original + traduction), Accessible (texte agrandi, contraste renforcé).</td><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6">P1</td></tr>
+<tr><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6;font:500 9pt 'JetBrains Mono'">F-44</td><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6">Réglages : coin d'ancrage, opacité du fond (0–100 %), taille du texte (14–28 px), durée d'affichage (4–8 s), 2 ou 3 blocs visibles.</td><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6">P0</td></tr>
+<tr><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6;font:500 9pt 'JetBrains Mono'">F-45</td><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6">Mode de repositionnement temporaire (clics capturés), position libre enregistrée par écran.</td><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6">P1</td></tr>
+<tr><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6;font:500 9pt 'JetBrains Mono'">F-46</td><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6">Prise en charge du multi-écran et des mises à l'échelle DPI de 100 à 200 %.</td><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6">P1</td></tr>
+<tr><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6;font:500 9pt 'JetBrains Mono'">F-47</td><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6">Widget Xbox Game Bar (UWP, communication locale avec l'application) qui affiche les mêmes sous-titres en plein écran exclusif.</td><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6">P1</td></tr>
+<tr><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6;font:500 9pt 'JetBrains Mono'">F-50</td><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6">Traduction de ses propres annonces (micro) vers la langue des coéquipiers, affichée en texte pour être relue ou tapée. Opt-in, désactivé par défaut.</td><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6">P2</td></tr>
+</tbody>
+</table>
+
+<h3 style="font:600 11pt 'Geist';margin:16px 0 6px">4.6 Fenêtre principale</h3>
+<p style="font:400 10.5pt/1.65 'Geist';margin:0 0 10px">Sept écrans, conformes à la maquette <a href="CS2%20Live%20Translator%20v2%20Cinematic.dc.html">CS2 Live Translator v2 Cinematic</a> :</p>
+<table style="width:100%;border-collapse:collapse;font:400 10pt/1.5 'Geist';margin:4px 0 14px">
+<thead><tr><th style="text-align:left;padding:7px 8px;border-bottom:1.5px solid #1b1916;font:600 9pt 'Geist';width:24%">Écran</th><th style="text-align:left;padding:7px 8px;border-bottom:1.5px solid #1b1916;font:600 9pt 'Geist'">Contenu</th></tr></thead>
+<tbody>
+<tr><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6;font-weight:500">Accueil</td><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6">État de la session, dernier sous-titre, progression du pipeline vocal, statut CS2 / capture / moteurs / latence, flux « Script » filtrable (Texte, Voix, Mixte).</td></tr>
+<tr><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6;font-weight:500">Overlay</td><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6">Aperçu à l'échelle et tous les réglages F-43 à F-45.</td></tr>
+<tr><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6;font-weight:500">Audio &amp; IA</td><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6">Source de capture, test audio de 10 s, seuil VAD, choix et téléchargement des modèles Whisper, CPU/GPU, moteur de traduction, clé API.</td></tr>
+<tr><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6;font-weight:500">Langues &amp; glossaire</td><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6">Langue cible, langues sources préférées, option « ignorer le français », édition du glossaire.</td></tr>
+<tr><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6;font-weight:500">Historique</td><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6">Désactivé par défaut ; recherche, export TXT/JSON, effacement.</td></tr>
+<tr><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6;font-weight:500">Diagnostic</td><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6">Tests intégrés (journal, -condebug, parseur, capture, modèle, traduction, raccourcis), journal expurgé, export d'un rapport.</td></tr>
+<tr><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6;font-weight:500">À propos</td><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6">Ce que l'application ne fait jamais, licences tierces, version.</td></tr>
+</tbody>
+</table>
+
+<h3 style="font:600 11pt 'Geist';margin:16px 0 6px">4.7 Session et raccourcis</h3>
+<p style="font:400 10.5pt/1.65 'Geist';margin:0 0 8px">Machine à états de la session : <code style="font:400 9pt 'JetBrains Mono'">IDLE → INITIALIZING → LISTENING ⇄ PAUSED → STOPPING → STOPPED</code>, avec un état <code style="font:400 9pt 'JetBrains Mono'">DEGRADED</code> en cas de capture de repli ou de moteur indisponible.</p>
+<table style="width:100%;border-collapse:collapse;font:400 10pt/1.5 'Geist';margin:4px 0 14px">
+<thead><tr><th style="text-align:left;padding:7px 8px;border-bottom:1.5px solid #1b1916;font:600 9pt 'Geist';width:24%">Raccourci global</th><th style="text-align:left;padding:7px 8px;border-bottom:1.5px solid #1b1916;font:600 9pt 'Geist'">Action</th></tr></thead>
+<tbody>
+<tr><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6;font:500 9.5pt 'JetBrains Mono'">Ctrl+Alt+F8</td><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6">Afficher / masquer l'overlay</td></tr>
+<tr><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6;font:500 9.5pt 'JetBrains Mono'">Ctrl+Alt+F9</td><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6">Pause / reprise de la session</td></tr>
+<tr><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6;font:500 9.5pt 'JetBrains Mono'">Ctrl+Alt+F10</td><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6">Arrêt d'urgence : toutes les captures sont arrêtées et les tampons audio purgés en moins de 200 ms</td></tr>
+</tbody>
+</table>
+<p style="font:400 10.5pt/1.65 'Geist';margin:0 0 10px">Raccourcis via <code style="font:400 9pt 'JetBrains Mono'">RegisterHotKey</code> (pas de hook clavier bas niveau), reconfigurables, avec détection des conflits. Instance unique, icône dans la zone de notification et lancement au démarrage de Windows en option.</p>
+
+<h2 style="font:400 24pt/1.1 'Instrument Serif';margin:28px 0 10px">5. Exigences non fonctionnelles</h2>
+<table style="width:100%;border-collapse:collapse;font:400 10pt/1.5 'Geist';margin:4px 0 14px">
+<thead><tr><th style="text-align:left;padding:7px 8px;border-bottom:1.5px solid #1b1916;font:600 9pt 'Geist';width:22%">Domaine</th><th style="text-align:left;padding:7px 8px;border-bottom:1.5px solid #1b1916;font:600 9pt 'Geist'">Exigence</th></tr></thead>
+<tbody>
+<tr><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6;font-weight:500">Performance</td><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6">Latences de la section 1.3. Inférence Whisper en priorité de thread inférieure au jeu. Overlay redessiné uniquement en cas de changement.</td></tr>
+<tr><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6;font-weight:500">Ressources</td><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6">RAM ≤ 300 Mo hors modèle ; CPU au repos ≤ 1 % ; VRAM ≤ 1,2 Go avec whisper-small.</td></tr>
+<tr><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6;font-weight:500">Configuration minimale</td><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6">CPU 6 cœurs (2018+), 16 Go de RAM. Recommandée : GPU NVIDIA 6 Go+ (CUDA) ou AMD/Intel (Vulkan).</td></tr>
+<tr><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6;font-weight:500">Fiabilité</td><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6">Chaque module isolé ; une panne de capture ou de traduction ne doit jamais faire planter l'application. Reconnexion automatique quand CS2 redémarre.</td></tr>
+<tr><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6;font-weight:500">Sécurité</td><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6">Clés API stockées dans le Gestionnaire d'identification Windows (crate <code style="font:400 9pt 'JetBrains Mono'">keyring</code>), jamais dans les fichiers ni les journaux. HTTPS uniquement. Exécutable signé (Authenticode).</td></tr>
+<tr><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6;font-weight:500">Confidentialité</td><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6">Aucun audio écrit sur disque, ni envoyé sans opt-in. Historique désactivé par défaut et purgé après 7 jours. Aucune télémétrie par défaut.</td></tr>
+<tr><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6;font-weight:500">Accessibilité</td><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6">Contraste 4,5:1 minimum, navigation complète au clavier, format d'overlay Accessible, respect du réglage Windows « réduire les animations ».</td></tr>
+<tr><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6;font-weight:500">Localisation</td><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6">Interface en français ; chaînes externalisées (Fluent) pour ajouter d'autres langues.</td></tr>
+<tr><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6;font-weight:500">Maintenabilité</td><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6">Workspace Cargo multi-crates, <code style="font:400 9pt 'JetBrains Mono'">clippy</code> sans avertissement, couverture de tests ≥ 70 % hors interface.</td></tr>
+</tbody>
+</table>
+
+<h2 style="font:400 24pt/1.1 'Instrument Serif';margin:28px 0 10px">6. Architecture technique</h2>
+<h3 style="font:600 11pt 'Geist';margin:16px 0 6px">6.1 Pipeline</h3>
+<div style="break-inside:avoid;padding:14px 16px;background:#f5f2ec;border-radius:6px;font:400 9.5pt/1.7 'JetBrains Mono';margin:6px 0 4px;white-space:pre-wrap">console.log ─► chat-ingest ─► parseur ─┐
+                                        ├─► translation ─► overlay
+cs2.exe audio ─► audio-win ─► audio-clean ─► VAD ─► asr ┘        │
+                                                   └─► historique (opt.)</div>
+<p style="font:400 italic 9pt 'Geist';color:#8a847a;margin:0 0 12px">Figure 1 — Chaîne de traitement. Chaque flèche est un canal asynchrone borné (tokio mpsc).</p>
+<h3 style="font:600 11pt 'Geist';margin:16px 0 6px">6.2 Découpage en crates</h3>
+<table style="width:100%;border-collapse:collapse;font:400 10pt/1.5 'Geist';margin:4px 0 14px">
+<thead><tr><th style="text-align:left;padding:7px 8px;border-bottom:1.5px solid #1b1916;font:600 9pt 'Geist';width:28%">Crate</th><th style="text-align:left;padding:7px 8px;border-bottom:1.5px solid #1b1916;font:600 9pt 'Geist'">Responsabilité</th></tr></thead>
+<tbody>
+<tr><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6;font:500 9pt 'JetBrains Mono'">app-shell</td><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6">Point d'entrée, instance unique, zone de notification, orchestration de la session</td></tr>
+<tr><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6;font:500 9pt 'JetBrains Mono'">cs2-detect</td><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6">Bibliothèques Steam, processus, options de lancement</td></tr>
+<tr><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6;font:500 9pt 'JetBrains Mono'">chat-ingest</td><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6">Suivi du fichier journal et parseur versionné</td></tr>
+<tr><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6;font:500 9pt 'JetBrains Mono'">audio-win</td><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6">Capture WASAPI (process loopback et repli), rééchantillonnage</td></tr>
+<tr><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6;font:500 9pt 'JetBrains Mono'">audio-clean</td><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6">Mid/side, passe-bande, DeepFilterNet / RNNoise, garde anti-transitoires</td></tr>
+<tr><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6;font:500 9pt 'JetBrains Mono'">audio-pipeline</td><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6">VAD, segmentation, abandon des segments périmés</td></tr>
+<tr><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6;font:500 9pt 'JetBrains Mono'">asr</td><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6">Chargement des modèles Whisper, inférence, résultats provisoires et finaux</td></tr>
+<tr><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6;font:500 9pt 'JetBrains Mono'">translation</td><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6">Trait Translator, moteurs, glossaire, cache</td></tr>
+<tr><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6;font:500 9pt 'JetBrains Mono'">overlay</td><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6">Fenêtre Win32 transparente, rendu du texte</td></tr>
+<tr><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6;font:500 9pt 'JetBrains Mono'">ui</td><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6">Fenêtre principale (egui), écrans, animations</td></tr>
+<tr><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6;font:500 9pt 'JetBrains Mono'">storage</td><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6">Configuration, historique SQLite, gestion des modèles</td></tr>
+</tbody>
+</table>
+<h3 style="font:600 11pt 'Geist';margin:16px 0 6px">6.3 Pile technique</h3>
+<table style="width:100%;border-collapse:collapse;font:400 10pt/1.5 'Geist';margin:4px 0 14px">
+<thead><tr><th style="text-align:left;padding:7px 8px;border-bottom:1.5px solid #1b1916;font:600 9pt 'Geist';width:28%">Besoin</th><th style="text-align:left;padding:7px 8px;border-bottom:1.5px solid #1b1916;font:600 9pt 'Geist'">Choix</th></tr></thead>
+<tbody>
+<tr><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6">Interface</td><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6"><code style="font:400 9pt 'JetBrains Mono'">eframe</code> / <code style="font:400 9pt 'JetBrains Mono'">egui</code> + <code style="font:400 9pt 'JetBrains Mono'">wgpu</code> pour les effets</td></tr>
+<tr><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6">API Windows</td><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6"><code style="font:400 9pt 'JetBrains Mono'">windows-rs</code></td></tr>
+<tr><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6">Asynchrone</td><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6"><code style="font:400 9pt 'JetBrains Mono'">tokio</code>, <code style="font:400 9pt 'JetBrains Mono'">reqwest</code> (rustls)</td></tr>
+<tr><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6">Audio</td><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6"><code style="font:400 9pt 'JetBrains Mono'">rubato</code> (rééchantillonnage), <code style="font:400 9pt 'JetBrains Mono'">ort</code> (VAD Silero ONNX), <code style="font:400 9pt 'JetBrains Mono'">deep_filter</code> (DeepFilterNet), <code style="font:400 9pt 'JetBrains Mono'">nnnoiseless</code> (RNNoise), <code style="font:400 9pt 'JetBrains Mono'">biquad</code></td></tr>
+<tr><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6">Reconnaissance vocale</td><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6"><code style="font:400 9pt 'JetBrains Mono'">whisper-rs</code> (whisper.cpp, CUDA / Vulkan)</td></tr>
+<tr><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6">Données</td><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6"><code style="font:400 9pt 'JetBrains Mono'">serde</code> + JSON (config), <code style="font:400 9pt 'JetBrains Mono'">rusqlite</code> (historique), <code style="font:400 9pt 'JetBrains Mono'">keyring</code> (secrets)</td></tr>
+<tr><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6">Journaux</td><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6"><code style="font:400 9pt 'JetBrains Mono'">tracing</code>, rotation quotidienne, expurgation des clés et pseudos</td></tr>
+<tr><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6">Installation / mise à jour</td><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6">MSI via <code style="font:400 9pt 'JetBrains Mono'">cargo-wix</code> ; mise à jour signée (<code style="font:400 9pt 'JetBrains Mono'">self_update</code> ou Velopack)</td></tr>
+</tbody>
+</table>
+<h3 style="font:600 11pt 'Geist';margin:16px 0 6px">6.4 Données et fichiers</h3>
+<ul style="font:400 10.5pt/1.65 'Geist';margin:0 0 10px;padding-left:20px">
+<li><code style="font:400 9pt 'JetBrains Mono'">%APPDATA%\CS2LiveTranslator\config.json</code> — réglages, versionnés avec migration automatique.</li>
+<li><code style="font:400 9pt 'JetBrains Mono'">%APPDATA%\CS2LiveTranslator\glossary.json</code> — glossaire utilisateur.</li>
+<li><code style="font:400 9pt 'JetBrains Mono'">%LOCALAPPDATA%\CS2LiveTranslator\models\</code> — modèles Whisper, avec vérification SHA-256 après téléchargement.</li>
+<li><code style="font:400 9pt 'JetBrains Mono'">%LOCALAPPDATA%\CS2LiveTranslator\history.db</code> — historique texte (si activé).</li>
+<li><code style="font:400 9pt 'JetBrains Mono'">%LOCALAPPDATA%\CS2LiveTranslator\logs\</code> — journaux expurgés, 7 jours.</li>
+</ul>
+
+<h2 style="font:400 24pt/1.1 'Instrument Serif';margin:28px 0 10px">7. Direction artistique</h2>
+<p style="font:400 10.5pt/1.65 'Geist';margin:0 0 10px">Référence : la maquette <a href="CS2%20Live%20Translator%20v2%20Cinematic.dc.html">v2 Cinematic</a>. Ambiance cinéma : fond noir chaud, grain de film, titres en Instrument Serif, texte en Geist, données en JetBrains Mono. Orange <code style="font:400 9pt 'JetBrains Mono'">#ffa24a</code> pour la voix, bleu glacier <code style="font:400 9pt 'JetBrains Mono'">#7fd4ff</code> pour le chat, vert <code style="font:400 9pt 'JetBrains Mono'">#7fe0a8</code> pour les états sains.</p>
+<p style="font:400 10.5pt/1.65 'Geist';margin:0 0 10px">L'objet 3D (casque audio réactif) et le verre dépoli demandent un rendu <code style="font:400 9pt 'JetBrains Mono'">wgpu</code> sur mesure intégré à egui. Ils sont classés <strong>P2</strong> : la version 1.0 livre une interface sobre fidèle à la palette et à la typographie, et les effets arrivent ensuite. Ils doivent rester désactivables et ne jamais tourner pendant qu'une partie est en cours si l'utilisateur choisit le mode « performance ».</p>
+
+<h2 style="font:400 24pt/1.1 'Instrument Serif';margin:28px 0 10px">8. Tests et recette</h2>
+<ul style="font:400 10.5pt/1.65 'Geist';margin:0 0 10px;padding-left:20px">
+<li><strong>Tests unitaires :</strong> parseur de chat (≥ 40 lignes réelles par version de CS2), glossaire, machine à états, cache.</li>
+<li><strong>Tests d'intégration :</strong> pipeline vocal alimenté par des fichiers WAV ; moteurs de traduction simulés (mock HTTP).</li>
+<li><strong>Corpus vocal CS2 :</strong> au moins 2 h d'annonces enregistrées (ru/en) avec transcriptions de référence, pour mesurer le WER et la latence à chaque version.</li>
+<li><strong>Tests manuels :</strong> 20 h de parties réelles réparties sur 3 configurations (GPU NVIDIA, GPU AMD, CPU seul), sous Windows 10 et 11.</li>
+<li><strong>Intégration continue :</strong> GitHub Actions (runner Windows) : build, clippy, tests, MSI signé.</li>
+</ul>
+<h3 style="font:600 11pt 'Geist';margin:16px 0 6px">Critères d'acceptation de la version 1.0</h3>
+<ol style="font:400 10.5pt/1.65 'Geist';margin:0 0 10px;padding-left:20px">
+<li>Toutes les exigences P0 et P1 sont implémentées et testées.</li>
+<li>Les cibles de latence et de WER de la section 1.3 sont atteintes sur le corpus.</li>
+<li>Aucune interaction avec le jeu en dehors de celles autorisées en section 3 (revue de code dédiée).</li>
+<li>L'arrêt d'urgence coupe toutes les captures en moins de 200 ms.</li>
+<li>L'installation, la désinstallation et la mise à jour fonctionnent sans droits administrateur.</li>
+</ol>
+
+<h2 style="font:400 24pt/1.1 'Instrument Serif';margin:28px 0 10px">9. Planning et lots</h2>
+<table style="width:100%;border-collapse:collapse;font:400 10pt/1.5 'Geist';margin:4px 0 14px">
+<thead><tr><th style="text-align:left;padding:7px 8px;border-bottom:1.5px solid #1b1916;font:600 9pt 'Geist';width:18%">Lot</th><th style="text-align:left;padding:7px 8px;border-bottom:1.5px solid #1b1916;font:600 9pt 'Geist'">Contenu</th><th style="text-align:left;padding:7px 8px;border-bottom:1.5px solid #1b1916;font:600 9pt 'Geist';width:18%">Durée (1 dév.)</th></tr></thead>
+<tbody>
+<tr><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6;font-weight:500">L0 · Cadrage</td><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6">Prototype de capture process loopback, collecte de lignes de chat réelles, enregistrement du corpus vocal</td><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6">1 semaine</td></tr>
+<tr><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6;font-weight:500">L1 · MVP chat</td><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6">Détection CS2, chat-ingest, DeepL, glossaire, overlay de base, raccourcis</td><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6">2 semaines</td></tr>
+<tr><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6;font-weight:500">L2 · Voix</td><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6">Capture, nettoyage audio (A1–A9), VAD, Whisper, résultats provisoires, réglage sur le corpus</td><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6">6 semaines</td></tr>
+<tr><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6;font-weight:500">L3 · Interface 1.0</td><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6">Sept écrans, réglages complets, diagnostic, historique, widget Game Bar</td><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6">4 semaines</td></tr>
+<tr><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6;font-weight:500">L4 · Industrialisation</td><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6">MSI signé, mises à jour, CI, tests 20 h, bêta fermée</td><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6">3 semaines</td></tr>
+<tr><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6;font-weight:500">L5 · Cinématique</td><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6">Objet 3D wgpu, verre dépoli, animations (P2)</td><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6">4 semaines</td></tr>
+<tr><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6;font-weight:500">V2 · Modèle CS2</td><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6">Corpus bruité, fine-tuning Whisper (A-10), évaluation</td><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6">6 à 8 semaines</td></tr>
+<tr><td style="padding:6px 8px;border-bottom:1.5px solid #1b1916;font-weight:600">Total</td><td style="padding:6px 8px;border-bottom:1.5px solid #1b1916">Version 1.0 à la fin de L4 (~16 semaines), version cinématique à la fin de L5</td><td style="padding:6px 8px;border-bottom:1.5px solid #1b1916;font-weight:600">~20 semaines</td></tr>
+</tbody>
+</table>
+
+<h2 style="font:400 24pt/1.1 'Instrument Serif';margin:28px 0 10px">10. Risques</h2>
+<table style="width:100%;border-collapse:collapse;font:400 10pt/1.5 'Geist';margin:4px 0 14px">
+<thead><tr><th style="text-align:left;padding:7px 8px;border-bottom:1.5px solid #1b1916;font:600 9pt 'Geist';width:30%">Risque</th><th style="text-align:left;padding:7px 8px;border-bottom:1.5px solid #1b1916;font:600 9pt 'Geist';width:12%">Niveau</th><th style="text-align:left;padding:7px 8px;border-bottom:1.5px solid #1b1916;font:600 9pt 'Geist'">Parade</th></tr></thead>
+<tbody>
+<tr><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6">Transcription médiocre (voix compressée, bruit de jeu, argot)</td><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6;color:#b4320f;font-weight:600">Élevé</td><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6">Chaîne de nettoyage A1–A7, corpus réel dès L0, prompt glossaire, Whisper affiné CS2 en V2 (A-10), option cloud</td></tr>
+<tr><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6">Changement du format du chat après une mise à jour CS2</td><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6;color:#b4570f;font-weight:600">Moyen</td><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6">Règles du parseur téléchargeables sans nouvelle version, détection dans Diagnostic</td></tr>
+<tr><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6">Overlay invisible en plein écran exclusif</td><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6;color:#b4570f;font-weight:600">Moyen</td><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6">Recommander le fenêtré sans bordures, widget Xbox Game Bar en plein écran exclusif</td></tr>
+<tr><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6">Faux positif VAC ou des antivirus</td><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6;color:#b4570f;font-weight:600">Faible à moyen</td><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6">Aucune interaction interdite, exécutable signé, soumission aux éditeurs d'antivirus</td></tr>
+<tr><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6">Impact sur les FPS</td><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6;color:#b4570f;font-weight:600">Moyen</td><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6">Priorité basse, modèle adapté au matériel, mode performance</td></tr>
+<tr><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6">Concurrent déjà installé (Unitra AI)</td><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6;color:#b4570f;font-weight:600">Moyen</td><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6">Se différencier : gratuit, open source, local, sans compte, spécialisé CS2 → français</td></tr>
+<tr><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6">Coût des API de traduction</td><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6;color:#4a7a3a;font-weight:600">Faible</td><td style="padding:6px 8px;border-bottom:1px solid #e4dfd6">Cache, offre gratuite DeepL (500 000 caractères/mois), moteur local</td></tr>
+</tbody>
+</table>
+
+<h2 style="font:400 24pt/1.1 'Instrument Serif';margin:28px 0 10px">11. Hors périmètre</h2>
+<ul style="font:400 10.5pt/1.65 'Geist';margin:0 0 10px;padding-left:20px">
+<li>macOS, Linux et autres jeux que CS2 (l'architecture doit cependant permettre d'ajouter d'autres jeux).</li>
+<li>Synthèse vocale de ses annonces vers les coéquipiers (voice-to-voice).</li>
+<li>Identification du locuteur vocal.</li>
+<li>Comptes utilisateurs, synchronisation cloud, monétisation.</li>
+</ul>
+
+<h2 style="font:400 24pt/1.1 'Instrument Serif';margin:28px 0 10px">12. Glossaire</h2>
+<table style="width:100%;border-collapse:collapse;font:400 10pt/1.5 'Geist';margin:4px 0 14px">
+<tbody>
+<tr><td style="padding:6px 8px;border-top:1px solid #e4dfd6;font-weight:500;width:26%">VAC</td><td style="padding:6px 8px;border-top:1px solid #e4dfd6">Valve Anti-Cheat, l'anti-triche de Steam.</td></tr>
+<tr><td style="padding:6px 8px;border-top:1px solid #e4dfd6;font-weight:500">-condebug</td><td style="padding:6px 8px;border-top:1px solid #e4dfd6">Option de lancement de CS2 qui écrit la console du jeu dans <code style="font:400 9pt 'JetBrains Mono'">console.log</code>.</td></tr>
+<tr><td style="padding:6px 8px;border-top:1px solid #e4dfd6;font-weight:500">WASAPI</td><td style="padding:6px 8px;border-top:1px solid #e4dfd6">API audio de Windows ; le « loopback » permet d'enregistrer ce qui est joué.</td></tr>
+<tr><td style="padding:6px 8px;border-top:1px solid #e4dfd6;font-weight:500">VAD</td><td style="padding:6px 8px;border-top:1px solid #e4dfd6">Voice Activity Detection : repère les moments où quelqu'un parle.</td></tr>
+<tr><td style="padding:6px 8px;border-top:1px solid #e4dfd6;font-weight:500">Whisper</td><td style="padding:6px 8px;border-top:1px solid #e4dfd6">Modèle open source de reconnaissance vocale (OpenAI, licence MIT).</td></tr>
+<tr><td style="padding:6px 8px;border-top:1px solid #e4dfd6;font-weight:500">DeepFilterNet</td><td style="padding:6px 8px;border-top:1px solid #e4dfd6">Modèle open source de réduction de bruit en temps réel, écrit en Rust.</td></tr>
+<tr><td style="padding:6px 8px;border-top:1px solid #e4dfd6;font-weight:500">Mid / side</td><td style="padding:6px 8px;border-top:1px solid #e4dfd6">Décomposition stéréo : le centre (mid) contient ce qui est identique à gauche et à droite, les côtés (side) ce qui diffère.</td></tr>
+<tr><td style="padding:6px 8px;border-top:1px solid #e4dfd6;font-weight:500">Fine-tuning / LoRA</td><td style="padding:6px 8px;border-top:1px solid #e4dfd6">Ré-entraînement léger d'un modèle existant sur des données spécifiques.</td></tr>
+<tr><td style="padding:6px 8px;border-top:1px solid #e4dfd6;font-weight:500">WER</td><td style="padding:6px 8px;border-top:1px solid #e4dfd6">Word Error Rate : pourcentage de mots mal transcrits.</td></tr>
+<tr><td style="padding:6px 8px;border-top:1px solid #e4dfd6;border-bottom:1px solid #e4dfd6;font-weight:500">p50 / p95</td><td style="padding:6px 8px;border-top:1px solid #e4dfd6;border-bottom:1px solid #e4dfd6">Valeur sous laquelle se trouvent 50 % / 95 % des mesures.</td></tr>
+</tbody>
+</table>
+</doc-page>
+</x-dc>
+</body>
+</html>

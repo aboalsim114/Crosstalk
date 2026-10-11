@@ -1,0 +1,576 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#020203;font-family:'Geist',system-ui,sans-serif;color:#ece6dc;-webkit-font-smoothing:antialiased}
+a{color:#ffa24a;text-decoration:none}a:hover{color:#ffc68a}
+input[type=range]{accent-color:#ffa24a;width:100%}
+*{box-sizing:border-box}
+::-webkit-scrollbar{width:6px}::-webkit-scrollbar-thumb{background:rgba(255,255,255,.08);border-radius:3px}
+@keyframes grain{0%{transform:translate(0,0)}25%{transform:translate(-3%,2%)}50%{transform:translate(2%,-3%)}75%{transform:translate(-2%,-1%)}100%{transform:translate(0,0)}}
+@keyframes breathe{0%,100%{opacity:.35}50%{opacity:1}}
+</style>
+</helmet>
+<div style="min-height:100vh;display:flex;align-items:safe center;justify-content:safe center;padding:32px;width:max-content;min-width:100%">
+<div data-screen-label="App window" style="width:1320px;height:840px;flex:none;display:flex;flex-direction:column;background:radial-gradient(120% 90% at 38% 38%,#141113 0%,#08080a 55%,#030304 100%);border:1px solid rgba(255,255,255,.06);border-radius:12px;overflow:hidden;box-shadow:0 40px 120px rgba(0,0,0,.8),0 0 0 1px rgba(0,0,0,.6);position:relative">
+
+<div style="height:36px;flex:none;display:flex;align-items:center;justify-content:space-between;padding:0 0 0 16px;position:relative;z-index:6;border-bottom:1px solid rgba(255,255,255,.04)">
+<div style="display:flex;align-items:center;gap:12px;font:500 10.5px 'JetBrains Mono';letter-spacing:.14em;color:#6e6961">
+<div style="width:7px;height:7px;border-radius:4px;background:#ffa24a;box-shadow:0 0 10px #ffa24a"></div>
+<span>CS2 LIVE TRANSLATOR</span><span style="color:#3d3a36">—</span><span style="color:#8f8a83">{{ timecode }}</span>
+</div>
+<div style="display:flex;height:36px;font:400 12px/36px 'JetBrains Mono';color:#6e6961">
+<div style="width:46px;text-align:center">—</div><div style="width:46px;text-align:center">▢</div><div style="width:46px;text-align:center" style-hover="background:#c42b1c;color:#fff">✕</div>
+</div>
+</div>
+
+<div style="flex:1;position:relative;min-height:0">
+<div ref="{{ stageRef }}" style="position:absolute;inset:0;z-index:0"></div>
+<div style="position:absolute;inset:0;z-index:1;pointer-events:none;background:radial-gradient(ellipse 75% 70% at 45% 42%,transparent 40%,rgba(0,0,0,.7) 100%)"></div>
+
+<div style="position:absolute;inset:0;z-index:2;display:flex;opacity:{{ uiOp }};transform:translateY({{ uiY }});transition:opacity 1.1s ease .35s,transform 1.4s cubic-bezier(.2,.7,.1,1) .35s">
+
+<div style="width:232px;flex:none;display:flex;flex-direction:column;padding:28px 18px 18px;border-right:1px solid rgba(255,255,255,.05);background:linear-gradient(90deg,rgba(4,4,5,.75),rgba(4,4,5,.35))">
+<div style="display:flex;flex-direction:column;gap:6px;padding:0 8px 34px">
+<div style="font:400 30px/0.95 'Instrument Serif';color:#ece6dc;letter-spacing:-.01em">Live<br><span style="font-style:italic;color:#ffa24a">Translator</span></div>
+<div style="font:500 9.5px 'JetBrains Mono';letter-spacing:.18em;color:#5a5650">POUR COUNTER-STRIKE 2</div>
+</div>
+<div style="display:flex;flex-direction:column;gap:2px">
+<sc-for list="{{ nav }}" as="n" hint-placeholder-count="7">
+<div onClick="{{ n.go }}" style="display:flex;align-items:center;gap:14px;padding:10px 10px;border-radius:8px;cursor:pointer;background:{{ n.bg }};transition:background .3s" style-hover="background:rgba(255,255,255,.03)">
+<span style="font:500 10px 'JetBrains Mono';color:{{ n.numColor }};width:18px;transition:color .3s">{{ n.num }}</span>
+<span style="font:400 13.5px 'Geist';color:{{ n.color }};flex:1;transition:color .3s">{{ n.label }}</span>
+<div style="width:4px;height:4px;border-radius:2px;background:#ffa24a;opacity:{{ n.dot }};box-shadow:0 0 8px #ffa24a"></div>
+</div>
+</sc-for>
+</div>
+<div style="flex:1"></div>
+<div style="display:flex;flex-direction:column;gap:9px;padding:16px 10px 4px;border-top:1px solid rgba(255,255,255,.05)">
+<div style="display:flex;justify-content:space-between;font:400 11.5px 'Geist';color:#8f8a83"><span>Overlay</span><span style="font:500 10px 'JetBrains Mono';color:#bdb6ab">⌃⌥F8</span></div>
+<div style="display:flex;justify-content:space-between;font:400 11.5px 'Geist';color:#8f8a83"><span>Pause</span><span style="font:500 10px 'JetBrains Mono';color:#bdb6ab">⌃⌥F9</span></div>
+<div style="display:flex;justify-content:space-between;font:400 11.5px 'Geist';color:#8f8a83"><span>Arrêt d'urgence</span><span style="font:500 10px 'JetBrains Mono';color:#ff8a7a">⌃⌥F10</span></div>
+</div>
+</div>
+
+<div style="flex:1;display:flex;flex-direction:column;min-width:0">
+<div style="height:96px;flex:none;display:flex;align-items:flex-end;justify-content:space-between;padding:0 32px 18px">
+<div style="display:flex;flex-direction:column;gap:6px">
+<div style="font:500 10px 'JetBrains Mono';letter-spacing:.2em;color:#6e6961">{{ chapter }}</div>
+<div style="font:400 36px/1 'Instrument Serif';color:#ece6dc;letter-spacing:-.01em">{{ pageTitle }}</div>
+</div>
+<div style="display:flex;align-items:center;gap:10px">
+<div style="display:flex;align-items:center;gap:9px;padding:8px 14px;border-radius:999px;border:1px solid rgba(255,255,255,.07);background:rgba(10,10,12,.5);font:500 10.5px 'JetBrains Mono';letter-spacing:.14em;color:{{ badgeColor }}">
+<div style="width:6px;height:6px;border-radius:3px;background:{{ badgeColor }};box-shadow:0 0 10px {{ badgeColor }}"></div>{{ badgeLabel }}
+</div>
+<div onClick="{{ togglePause }}" style="padding:10px 16px;border-radius:999px;border:1px solid rgba(255,255,255,.08);font:500 12.5px 'Geist';color:{{ pauseColor }};cursor:pointer;transition:background .25s" style-hover="background:rgba(255,255,255,.05)">{{ pauseLabel }}</div>
+<div onClick="{{ emergency }}" style="padding:10px 16px;border-radius:999px;border:1px solid rgba(255,107,107,.25);font:500 12.5px 'Geist';color:#ff8a7a;cursor:pointer;transition:background .25s" style-hover="background:rgba(255,107,107,.08)">Arrêt d'urgence</div>
+<div onClick="{{ toggleSession }}" style="padding:10px 22px;border-radius:999px;background:{{ startBg }};box-shadow:{{ startGlow }};font:600 12.5px 'Geist';color:{{ startColor }};cursor:pointer;min-width:120px;text-align:center;transition:all .4s">{{ startLabel }}</div>
+</div>
+</div>
+
+<div ref="{{ pageRef }}" style="flex:1;min-height:0;overflow:auto;padding:4px 32px 26px">
+
+<sc-if value="{{ isDash }}" hint-placeholder-val="{{ true }}">
+<div style="height:100%;display:grid;grid-template-columns:minmax(0,1fr) 372px;gap:20px">
+<div style="display:flex;flex-direction:column;min-width:0">
+<div style="display:flex;justify-content:space-between;font:500 10px 'JetBrains Mono';letter-spacing:.16em;color:#5a5650"><span>{{ sceneLabel }}</span><span style="color:{{ vadColor }}">{{ vadLabel }}</span></div>
+<div style="flex:1"></div>
+<div ref="{{ subRef }}" style="display:flex;flex-direction:column;align-items:center;text-align:center;gap:12px;padding:0 20px 26px">
+<div style="display:flex;gap:10px;align-items:center;font:500 10.5px 'JetBrains Mono';letter-spacing:.16em;color:{{ sub.color }}"><span>{{ sub.tag }}</span><span style="color:#5a5650">{{ sub.sender }}</span></div>
+<div style="font:400 13.5px/1.5 'JetBrains Mono';color:#8f8a83;max-width:560px">{{ sub.orig }}</div>
+<div style="font:400 44px/1.12 'Instrument Serif';font-style:{{ sub.italic }};color:{{ sub.trColor }};max-width:600px;text-wrap:balance;text-shadow:0 2px 30px rgba(0,0,0,.9);transition:color .6s">{{ sub.text }}</div>
+<div style="font:400 11.5px 'Geist';color:{{ sub.noteColor }}">{{ sub.note }}</div>
+</div>
+<div style="display:flex;align-items:center;gap:0;padding:0 8px 22px">
+<sc-for list="{{ stages }}" as="s" hint-placeholder-count="5">
+<div style="flex:1;display:flex;flex-direction:column;gap:8px">
+<div style="height:2px;border-radius:1px;background:{{ s.bar }};box-shadow:{{ s.glow }};margin-right:6px;transition:all .35s"></div>
+<div style="display:flex;flex-direction:column;gap:2px"><span style="font:500 11.5px 'Geist';color:{{ s.color }};transition:color .35s">{{ s.name }}</span><span style="font:400 10px 'JetBrains Mono';color:#5a5650">{{ s.sub }}</span></div>
+</div>
+</sc-for>
+</div>
+<div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));border-top:1px solid rgba(255,255,255,.07);padding-top:16px">
+<sc-for list="{{ statusCards }}" as="c" hint-placeholder-count="4">
+<div style="display:flex;flex-direction:column;gap:6px;padding-right:14px">
+<div style="display:flex;align-items:center;gap:7px;font:500 9.5px 'JetBrains Mono';letter-spacing:.16em;color:#6e6961"><div style="width:5px;height:5px;border-radius:3px;background:{{ c.dot }}"></div>{{ c.label }}</div>
+<div style="font:400 21px/1.1 'Instrument Serif';color:#ece6dc">{{ c.value }}</div>
+<div style="font:400 11px/1.35 'Geist';color:#6e6961">{{ c.sub }}</div>
+</div>
+</sc-for>
+</div>
+</div>
+
+<div style="display:flex;flex-direction:column;min-height:0;background:rgba(10,10,12,.55);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);border:1px solid rgba(255,255,255,.07);border-radius:16px;overflow:hidden">
+<div style="display:flex;align-items:center;justify-content:space-between;padding:16px 18px 14px;border-bottom:1px solid rgba(255,255,255,.05)">
+<div style="display:flex;align-items:baseline;gap:10px"><span style="font:400 22px 'Instrument Serif';color:#ece6dc">Script</span><span style="font:400 10.5px 'JetBrains Mono';color:#5a5650">{{ feedCount }}</span></div>
+<div style="display:flex;gap:2px;padding:3px;border-radius:999px;border:1px solid rgba(255,255,255,.06)">
+<sc-for list="{{ modes }}" as="m" hint-placeholder-count="3"><div onClick="{{ m.fn }}" style="padding:4px 10px;border-radius:999px;font:500 11px 'Geist';cursor:pointer;background:{{ m.bg }};color:{{ m.color }};transition:all .25s">{{ m.label }}</div></sc-for>
+</div>
+</div>
+<div ref="{{ feedRef }}" style="flex:1;overflow:auto">
+<sc-if value="{{ feedEmpty }}" hint-placeholder-val="{{ true }}">
+<div style="height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;padding:40px 30px;text-align:center">
+<div style="font:400 italic 22px 'Instrument Serif';color:#bdb6ab">{{ emptyTitle }}</div>
+<div style="font:400 12px/1.6 'Geist';color:#6e6961">{{ emptySub }}</div>
+</div>
+</sc-if>
+<sc-for list="{{ feedRows }}" as="e" hint-placeholder-count="0">
+<div style="display:flex;flex-direction:column;gap:6px;padding:14px 18px;border-bottom:1px solid rgba(255,255,255,.04)">
+<div style="display:flex;justify-content:space-between;align-items:center;font:500 9.5px 'JetBrains Mono';letter-spacing:.12em">
+<span style="color:{{ e.color }}">{{ e.tag }} <span style="color:#5a5650">· {{ e.langs }}</span></span>
+<span style="color:{{ e.statusColor }}">{{ e.status }} <span style="color:#5a5650">{{ e.lat }}</span></span>
+</div>
+<div style="font:400 14.5px/1.4 'Geist';color:{{ e.trColor }};font-style:{{ e.italic }};text-wrap:pretty">{{ e.lead }}{{ e.shown }}</div>
+<div style="font:400 11.5px/1.45 'JetBrains Mono';color:#6e6961">{{ e.orig }}</div>
+<div style="font:400 10.5px 'Geist';color:{{ e.noteColor }}">{{ e.note }}</div>
+</div>
+</sc-for>
+</div>
+<div style="display:flex;gap:10px;align-items:center;padding:12px 18px;border-top:1px solid rgba(255,255,255,.05);font:400 11px/1.45 'Geist';color:#8f8a83">
+<span style="font:600 9.5px 'JetBrains Mono';letter-spacing:.14em;color:{{ privacyColor }}">{{ privacyTag }}</span><span>{{ privacyText }}</span>
+</div>
+</div>
+</div>
+</sc-if>
+
+<sc-if value="{{ isOverlay }}" hint-placeholder-val="{{ false }}">
+<div style="display:grid;grid-template-columns:minmax(0,1fr) 330px;gap:20px;align-items:start">
+<div style="display:flex;flex-direction:column;gap:12px">
+<div style="position:relative;aspect-ratio:16/9;border-radius:14px;overflow:hidden;border:1px solid rgba(255,255,255,.07);background:radial-gradient(90% 80% at 60% 40%,#2a2620 0%,#121114 55%,#08080a 100%)">
+<div style="position:absolute;inset:0;background:repeating-linear-gradient(135deg,rgba(255,255,255,.018) 0 2px,transparent 2px 22px)"></div>
+<div style="position:absolute;left:0;right:0;bottom:22px;text-align:center;font:500 10px 'JetBrains Mono';letter-spacing:.2em;color:#4a4640">CAPTURE DU JEU · FENÊTRÉ SANS BORDURES</div>
+<div style="position:absolute;top:50%;left:50%;width:14px;height:14px;transform:translate(-50%,-50%)"><div style="position:absolute;left:6px;top:0;width:2px;height:14px;background:rgba(127,224,168,.7)"></div><div style="position:absolute;top:6px;left:0;width:14px;height:2px;background:rgba(127,224,168,.7)"></div></div>
+<sc-if value="{{ overlayOn }}" hint-placeholder-val="{{ true }}">
+<div style="position:absolute;top:{{ ov.top }};bottom:{{ ov.bottom }};left:{{ ov.left }};right:{{ ov.right }};width:380px;display:flex;flex-direction:column;gap:8px;outline:{{ ov.outline }};outline-offset:8px;border-radius:4px;transition:all .6s cubic-bezier(.2,.7,.1,1)">
+<sc-for list="{{ ovBlocks }}" as="o" hint-placeholder-count="2">
+<div style="background:{{ ovBg }};border-radius:10px;padding:11px 15px;display:flex;flex-direction:column;gap:5px;opacity:{{ o.op }};border:1px solid rgba(255,255,255,.05)">
+<sc-if value="{{ showHead }}" hint-placeholder-val="{{ true }}"><div style="font:600 9.5px 'JetBrains Mono';letter-spacing:.14em;color:{{ o.color }}">{{ o.head }}</div></sc-if>
+<sc-if value="{{ showOrig }}" hint-placeholder-val="{{ true }}"><div style="font:400 11.5px/1.4 'JetBrains Mono';color:#a49d92;text-shadow:0 1px 2px #000">{{ o.orig }}</div></sc-if>
+<div style="font-weight:500;font-family:'Geist';font-size:{{ ovSize }};line-height:1.32;color:#fff;text-shadow:0 1px 2px #000,0 0 10px rgba(0,0,0,.85)">{{ o.line }}</div>
+</div>
+</sc-for>
+</div>
+</sc-if>
+</div>
+<div style="display:flex;justify-content:space-between;font:400 11.5px 'Geist';color:#6e6961"><span>Aperçu à l'échelle · {{ ovHint }}</span><span>Plein écran exclusif : expérimental, non garanti</span></div>
+</div>
+<div style="display:flex;flex-direction:column;gap:14px;padding:20px;background:rgba(10,10,12,.55);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);border:1px solid rgba(255,255,255,.07);border-radius:16px">
+<div style="display:flex;flex-direction:column;gap:9px"><div style="font:500 9.5px 'JetBrains Mono';letter-spacing:.16em;color:#6e6961">FORMAT</div>
+<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:2px;padding:3px;border-radius:999px;border:1px solid rgba(255,255,255,.06)"><sc-for list="{{ fmts }}" as="m" hint-placeholder-count="3"><div onClick="{{ m.fn }}" style="padding:6px 0;text-align:center;border-radius:999px;font:500 11.5px 'Geist';cursor:pointer;background:{{ m.bg }};color:{{ m.color }};transition:all .25s">{{ m.label }}</div></sc-for></div></div>
+<div style="display:flex;gap:16px;align-items:center">
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;width:88px;height:52px;padding:4px;border:1px solid rgba(255,255,255,.08);border-radius:8px;flex:none"><sc-for list="{{ corners }}" as="k" hint-placeholder-count="4"><div onClick="{{ k.fn }}" style="border-radius:3px;cursor:pointer;background:{{ k.bg }};box-shadow:{{ k.glow }};transition:all .3s"></div></sc-for></div>
+<div style="display:flex;flex-direction:column;gap:4px"><div style="font:500 9.5px 'JetBrains Mono';letter-spacing:.16em;color:#6e6961">POSITION</div><div style="font:400 20px 'Instrument Serif';color:#ece6dc">{{ cornerLabel }}</div></div>
+</div>
+<div style="display:flex;flex-direction:column;gap:6px"><div style="display:flex;justify-content:space-between;font:400 12.5px 'Geist';color:#bdb6ab"><span>Opacité du fond</span><span style="font:500 11px 'JetBrains Mono';color:#6e6961">{{ opacity }} %</span></div><input type="range" min="0" max="100" value="{{ opacity }}" onChange="{{ setOpacity }}"></div>
+<div style="display:flex;flex-direction:column;gap:6px"><div style="display:flex;justify-content:space-between;font:400 12.5px 'Geist';color:#bdb6ab"><span>Taille du texte</span><span style="font:500 11px 'JetBrains Mono';color:#6e6961">{{ textSize }} px</span></div><input type="range" min="14" max="28" value="{{ textSize }}" onChange="{{ setTextSize }}"></div>
+<div style="display:flex;flex-direction:column;gap:6px"><div style="display:flex;justify-content:space-between;font:400 12.5px 'Geist';color:#bdb6ab"><span>Fondu après</span><span style="font:500 11px 'JetBrains Mono';color:#6e6961">{{ duration }} s</span></div><input type="range" min="4" max="8" value="{{ duration }}" onChange="{{ setDuration }}"></div>
+<div style="display:flex;justify-content:space-between;align-items:center"><span style="font:400 12.5px 'Geist';color:#bdb6ab">Blocs visibles</span><div style="display:flex;gap:2px;padding:3px;border-radius:999px;border:1px solid rgba(255,255,255,.06)"><sc-for list="{{ blockOpts }}" as="m" hint-placeholder-count="2"><div onClick="{{ m.fn }}" style="padding:3px 12px;border-radius:999px;font:500 11px 'JetBrains Mono';cursor:pointer;background:{{ m.bg }};color:{{ m.color }}">{{ m.label }}</div></sc-for></div></div>
+<div style="height:1px;background:rgba(255,255,255,.06)"></div>
+<div style="display:flex;justify-content:space-between;align-items:center;gap:12px"><div style="display:flex;flex-direction:column;gap:3px"><span style="font:500 13px 'Geist';color:#ece6dc">Click-through en jeu</span><span style="font:400 11px 'Geist';color:#6e6961">Aucun vol de focus clavier</span></div>
+<div onClick="{{ t.click.fn }}" style="width:36px;height:20px;border-radius:10px;background:{{ t.click.bg }};position:relative;cursor:pointer;flex:none;transition:background .3s"><div style="position:absolute;top:2px;left:{{ t.click.x }};width:16px;height:16px;border-radius:8px;background:#fff;transition:left .3s cubic-bezier(.2,.7,.1,1)"></div></div></div>
+<div style="display:flex;justify-content:space-between;align-items:center;gap:12px"><div style="display:flex;flex-direction:column;gap:3px"><span style="font:500 13px 'Geist';color:#ece6dc">Overlay affiché</span><span style="font:400 11px 'JetBrains Mono';color:#6e6961">⌃⌥F8</span></div>
+<div onClick="{{ toggleOverlay }}" style="width:36px;height:20px;border-radius:10px;background:{{ ovTg.bg }};position:relative;cursor:pointer;flex:none;transition:background .3s"><div style="position:absolute;top:2px;left:{{ ovTg.x }};width:16px;height:16px;border-radius:8px;background:#fff;transition:left .3s cubic-bezier(.2,.7,.1,1)"></div></div></div>
+<div onClick="{{ toggleReposition }}" style="padding:10px 0;text-align:center;border-radius:999px;border:1px solid rgba(255,255,255,.1);font:500 12.5px 'Geist';color:#ece6dc;cursor:pointer;background:{{ reposBg }};transition:background .3s">{{ reposLabel }}</div>
+</div>
+</div>
+</sc-if>
+
+<sc-if value="{{ isAudio }}" hint-placeholder-val="{{ false }}">
+<div style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px;align-items:start">
+<div style="display:flex;flex-direction:column;gap:16px">
+<div style="display:flex;flex-direction:column;gap:10px;padding:20px;background:rgba(10,10,12,.55);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);border:1px solid rgba(255,255,255,.07);border-radius:16px">
+<div style="font:500 9.5px 'JetBrains Mono';letter-spacing:.16em;color:#6e6961">SOURCE DE CAPTURE</div>
+<sc-for list="{{ captureOpts }}" as="o" hint-placeholder-count="3">
+<div onClick="{{ o.fn }}" style="display:flex;gap:12px;padding:13px 14px;border-radius:12px;border:1px solid {{ o.border }};background:{{ o.bg }};cursor:{{ o.cursor }};opacity:{{ o.op }};transition:all .3s">
+<div style="width:15px;height:15px;border-radius:8px;border:1.5px solid {{ o.ring }};flex:none;margin-top:2px;display:flex;align-items:center;justify-content:center"><div style="width:6px;height:6px;border-radius:3px;background:{{ o.fill }};box-shadow:{{ o.glow }}"></div></div>
+<div style="display:flex;flex-direction:column;gap:3px;flex:1"><div style="display:flex;justify-content:space-between;gap:8px"><span style="font:500 13px 'Geist';color:#ece6dc">{{ o.name }}</span><span style="font:500 9.5px 'JetBrains Mono';letter-spacing:.12em;color:{{ o.tagColor }}">{{ o.tag }}</span></div><span style="font:400 11.5px/1.45 'Geist';color:#6e6961">{{ o.sub }}</span></div>
+</div>
+</sc-for>
+<sc-if value="{{ deviceWarn }}" hint-placeholder-val="{{ false }}"><div style="padding:10px 12px;border-radius:10px;background:rgba(255,162,74,.07);border:1px solid rgba(255,162,74,.2);font:400 11.5px/1.5 'Geist';color:#f0cfa6">Le loopback système capte tout le son du périphérique — y compris des conversations privées d'autres applications.</div></sc-if>
+<div style="display:flex;align-items:center;gap:14px;padding-top:6px">
+<div onClick="{{ runTest }}" style="padding:9px 16px;border-radius:999px;border:1px solid rgba(255,162,74,.4);font:500 12.5px 'Geist';color:#ffc68a;cursor:pointer;flex:none" style-hover="background:rgba(255,162,74,.08)">{{ testBtn }}</div>
+<div style="flex:1;display:flex;flex-direction:column;gap:6px"><div style="height:2px;border-radius:1px;background:rgba(255,255,255,.07);overflow:hidden"><div style="height:2px;width:{{ testPct }};background:#ffa24a;box-shadow:0 0 10px #ffa24a;transition:width .25s linear"></div></div><span style="font:400 11px 'Geist';color:#6e6961">{{ testMsg }}</span></div>
+</div>
+</div>
+<div style="display:flex;flex-direction:column;gap:14px;padding:20px;background:rgba(10,10,12,.55);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);border:1px solid rgba(255,255,255,.07);border-radius:16px">
+<div style="font:500 9.5px 'JetBrains Mono';letter-spacing:.16em;color:#6e6961">DÉTECTION DE PAROLE · VAD</div>
+<div style="display:flex;flex-direction:column;gap:6px"><div style="display:flex;justify-content:space-between;font:400 12.5px 'Geist';color:#bdb6ab"><span>Seuil de détection</span><span style="font:500 11px 'JetBrains Mono';color:#6e6961">{{ vad }} %</span></div><input type="range" min="20" max="90" value="{{ vad }}" onChange="{{ setVad }}"><span style="font:400 11px 'Geist';color:#5a5650">Plus haut = ignore davantage les tirs et bruitages</span></div>
+<div style="display:flex;justify-content:space-between;align-items:center;gap:12px"><div style="display:flex;flex-direction:column;gap:3px"><span style="font:500 13px 'Geist';color:#ece6dc">Suppression de bruit <span style="font:500 9px 'JetBrains Mono';letter-spacing:.12em;color:#ffa24a;margin-left:6px">EXPÉRIMENTAL</span></span><span style="font:400 11px 'Geist';color:#6e6961">Pré-roll 250 ms · post-roll 400 ms</span></div>
+<div onClick="{{ t.noise.fn }}" style="width:36px;height:20px;border-radius:10px;background:{{ t.noise.bg }};position:relative;cursor:pointer;flex:none;transition:background .3s"><div style="position:absolute;top:2px;left:{{ t.noise.x }};width:16px;height:16px;border-radius:8px;background:#fff;transition:left .3s cubic-bezier(.2,.7,.1,1)"></div></div></div>
+</div>
+</div>
+<div style="display:flex;flex-direction:column;gap:16px">
+<div style="display:flex;flex-direction:column;gap:8px;padding:20px;background:rgba(10,10,12,.55);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);border:1px solid rgba(255,255,255,.07);border-radius:16px">
+<div style="display:flex;justify-content:space-between;align-items:center;padding-bottom:4px"><span style="font:500 9.5px 'JetBrains Mono';letter-spacing:.16em;color:#6e6961">MODÈLE LOCAL · WHISPER</span>
+<div style="display:flex;gap:2px;padding:3px;border-radius:999px;border:1px solid rgba(255,255,255,.06)"><sc-for list="{{ accels }}" as="m" hint-placeholder-count="2"><div onClick="{{ m.fn }}" style="padding:3px 11px;border-radius:999px;font:500 10.5px 'JetBrains Mono';cursor:pointer;background:{{ m.bg }};color:{{ m.color }}">{{ m.label }}</div></sc-for></div></div>
+<sc-for list="{{ models }}" as="m" hint-placeholder-count="5">
+<div onClick="{{ m.fn }}" style="display:grid;grid-template-columns:15px minmax(0,1fr) auto;gap:12px;align-items:center;padding:10px 12px;border-radius:10px;border:1px solid {{ m.border }};background:{{ m.bg }};cursor:pointer;transition:all .3s">
+<div style="width:13px;height:13px;border-radius:7px;border:1.5px solid {{ m.ring }};display:flex;align-items:center;justify-content:center"><div style="width:5px;height:5px;border-radius:3px;background:{{ m.fill }}"></div></div>
+<div style="display:flex;flex-direction:column;gap:2px;min-width:0"><span style="font:500 12.5px 'JetBrains Mono';color:#ece6dc">{{ m.name }}</span><span style="font:400 11px 'Geist';color:#6e6961">{{ m.desc }}</span></div>
+<div style="display:flex;flex-direction:column;align-items:flex-end;gap:2px"><span style="font:400 11px 'JetBrains Mono';color:#8f8a83">{{ m.size }}</span><span style="font:500 10.5px 'Geist';color:{{ m.stColor }}">{{ m.st }}</span></div>
+</div>
+</sc-for>
+<div style="font:400 10.5px/1.5 'Geist';color:#5a5650;padding-top:4px">whisper.cpp via whisper-rs · licence MIT · %LOCALAPPDATA%\CS2LiveTranslator\models</div>
+</div>
+<div style="display:flex;flex-direction:column;gap:12px;padding:20px;background:rgba(10,10,12,.55);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);border:1px solid rgba(255,255,255,.07);border-radius:16px">
+<div style="font:500 9.5px 'JetBrains Mono';letter-spacing:.16em;color:#6e6961">MOTEUR DE TRADUCTION</div>
+<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:2px;padding:3px;border-radius:999px;border:1px solid rgba(255,255,255,.06)"><sc-for list="{{ engines }}" as="m" hint-placeholder-count="3"><div onClick="{{ m.fn }}" style="padding:6px 0;text-align:center;border-radius:999px;font:500 11.5px 'Geist';cursor:pointer;background:{{ m.bg }};color:{{ m.color }}">{{ m.label }}</div></sc-for></div>
+<div style="font:400 11px/1.5 'Geist';color:#6e6961">Clé API dans le Gestionnaire d'identification Windows — jamais dans config.json ni dans les journaux.</div>
+<div style="display:flex;justify-content:space-between;align-items:center;gap:12px"><div style="display:flex;flex-direction:column;gap:3px"><span style="font:500 13px 'Geist';color:#ece6dc">Transcription cloud (opt-in)</span><span style="font:400 11px 'Geist';color:#6e6961">Pour CPU/GPU insuffisants</span></div>
+<div onClick="{{ t.cloud.fn }}" style="width:36px;height:20px;border-radius:10px;background:{{ t.cloud.bg }};position:relative;cursor:pointer;flex:none;transition:background .3s"><div style="position:absolute;top:2px;left:{{ t.cloud.x }};width:16px;height:16px;border-radius:8px;background:#fff;transition:left .3s cubic-bezier(.2,.7,.1,1)"></div></div></div>
+<sc-if value="{{ t.cloud.on }}" hint-placeholder-val="{{ false }}"><div style="padding:10px 12px;border-radius:10px;background:rgba(255,162,74,.07);border:1px solid rgba(255,162,74,.2);font:400 11.5px/1.5 'Geist';color:#f0cfa6">Les segments vocaux détectés seront envoyés au fournisseur choisi. Coût estimé : ~0,36 € / heure de parole.</div></sc-if>
+</div>
+</div>
+</div>
+</sc-if>
+
+<sc-if value="{{ isLang }}" hint-placeholder-val="{{ false }}">
+<div style="display:grid;grid-template-columns:310px minmax(0,1fr);gap:16px;align-items:start">
+<div style="display:flex;flex-direction:column;gap:18px;padding:20px;background:rgba(10,10,12,.55);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);border:1px solid rgba(255,255,255,.07);border-radius:16px">
+<div style="display:flex;flex-direction:column;gap:6px"><span style="font:500 9.5px 'JetBrains Mono';letter-spacing:.16em;color:#6e6961">LANGUE CIBLE</span><span style="font:400 30px 'Instrument Serif';color:#ece6dc">Français <span style="font-style:italic;color:#ffa24a">fr</span></span></div>
+<div style="display:flex;flex-direction:column;gap:9px"><span style="font:500 9.5px 'JetBrains Mono';letter-spacing:.16em;color:#6e6961">SOURCES PRÉFÉRÉES</span>
+<div style="display:flex;flex-wrap:wrap;gap:6px"><sc-for list="{{ srcChips }}" as="c" hint-placeholder-count="6"><div onClick="{{ c.fn }}" style="padding:5px 12px;border-radius:999px;border:1px solid {{ c.border }};background:{{ c.bg }};font:500 11.5px 'JetBrains Mono';color:{{ c.color }};cursor:pointer;transition:all .25s">{{ c.label }}</div></sc-for></div>
+<span style="font:400 11px/1.5 'Geist';color:#5a5650">Détection restreinte à ces langues pour les messages courts.</span></div>
+<div style="display:flex;justify-content:space-between;align-items:center;gap:12px"><div style="display:flex;flex-direction:column;gap:3px"><span style="font:500 13px 'Geist';color:#ece6dc">Ignorer le français</span><span style="font:400 11px 'Geist';color:#6e6961">Original affiché, aucun appel</span></div>
+<div onClick="{{ t.skipFr.fn }}" style="width:36px;height:20px;border-radius:10px;background:{{ t.skipFr.bg }};position:relative;cursor:pointer;flex:none;transition:background .3s"><div style="position:absolute;top:2px;left:{{ t.skipFr.x }};width:16px;height:16px;border-radius:8px;background:#fff;transition:left .3s cubic-bezier(.2,.7,.1,1)"></div></div></div>
+</div>
+<div style="display:flex;flex-direction:column;background:rgba(10,10,12,.55);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);border:1px solid rgba(255,255,255,.07);border-radius:16px;overflow:hidden">
+<div style="display:flex;justify-content:space-between;align-items:baseline;padding:16px 20px;border-bottom:1px solid rgba(255,255,255,.05)"><span style="font:400 22px 'Instrument Serif';color:#ece6dc">Glossaire Counter-Strike</span><span style="font:400 10.5px 'JetBrains Mono';color:#5a5650">{{ glossCount }} termes</span></div>
+<div style="display:grid;grid-template-columns:140px 110px minmax(0,1fr) 24px;gap:12px;padding:9px 20px;font:500 9.5px 'JetBrains Mono';letter-spacing:.14em;color:#5a5650;border-bottom:1px solid rgba(255,255,255,.04)"><span>TERME</span><span>TRAITEMENT</span><span>RENDU</span><span></span></div>
+<sc-for list="{{ glossRows }}" as="g" hint-placeholder-count="10">
+<div style="display:grid;grid-template-columns:140px 110px minmax(0,1fr) 24px;gap:12px;padding:8px 20px;align-items:center;border-bottom:1px solid rgba(255,255,255,.035)">
+<span style="font:500 12.5px 'JetBrains Mono';color:#ece6dc">{{ g.t }}</span><span style="font:400 11.5px 'Geist';color:{{ g.mColor }}">{{ g.m }}</span><span style="font:400 12.5px 'Geist';color:#8f8a83">{{ g.fr }}</span>
+<span onClick="{{ g.del }}" style="font:400 14px 'JetBrains Mono';color:#5a5650;cursor:pointer;text-align:center" style-hover="color:#ff8a7a">×</span>
+</div>
+</sc-for>
+<div style="display:flex;gap:8px;padding:12px 20px">
+<input value="{{ newTerm }}" onChange="{{ setNewTerm }}" placeholder="Ajouter un terme (ex. « boost »)" style="flex:1;padding:8px 14px;border-radius:999px;background:rgba(0,0,0,.3);border:1px solid rgba(255,255,255,.08);font:400 12.5px 'JetBrains Mono';color:#ece6dc;outline:none">
+<div onClick="{{ addTerm }}" style="padding:8px 16px;border-radius:999px;border:1px solid rgba(255,162,74,.4);font:500 12.5px 'Geist';color:#ffc68a;cursor:pointer">Ajouter</div>
+</div>
+</div>
+</div>
+</sc-if>
+
+<sc-if value="{{ isHist }}" hint-placeholder-val="{{ false }}">
+<div style="display:flex;flex-direction:column;gap:16px;max-width:860px">
+<div style="display:flex;justify-content:space-between;align-items:center;gap:16px;padding:20px;background:rgba(10,10,12,.55);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);border:1px solid rgba(255,255,255,.07);border-radius:16px">
+<div style="display:flex;flex-direction:column;gap:4px"><span style="font:400 22px 'Instrument Serif';color:#ece6dc">Historique local</span><span style="font:400 12px/1.5 'Geist';color:#6e6961">Désactivé par défaut. Texte uniquement, jamais d'audio. SQLite sur ce PC, purge après 7 jours.</span></div>
+<div onClick="{{ t.hist.fn }}" style="width:36px;height:20px;border-radius:10px;background:{{ t.hist.bg }};position:relative;cursor:pointer;flex:none;transition:background .3s"><div style="position:absolute;top:2px;left:{{ t.hist.x }};width:16px;height:16px;border-radius:8px;background:#fff;transition:left .3s cubic-bezier(.2,.7,.1,1)"></div></div>
+</div>
+<sc-if value="{{ t.hist.on }}" hint-placeholder-val="{{ false }}">
+<div style="display:flex;flex-direction:column;background:rgba(10,10,12,.55);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);border:1px solid rgba(255,255,255,.07);border-radius:16px;overflow:hidden">
+<div style="display:flex;gap:8px;padding:14px 20px;border-bottom:1px solid rgba(255,255,255,.05)">
+<div style="flex:1;padding:8px 14px;border-radius:999px;border:1px solid rgba(255,255,255,.08);font:400 12.5px 'Geist';color:#5a5650">Rechercher…</div>
+<div style="padding:8px 14px;border-radius:999px;border:1px solid rgba(255,255,255,.08);font:500 12px 'Geist';color:#bdb6ab">TXT</div>
+<div style="padding:8px 14px;border-radius:999px;border:1px solid rgba(255,255,255,.08);font:500 12px 'Geist';color:#bdb6ab">JSON</div>
+<div onClick="{{ clearFeed }}" style="padding:8px 14px;border-radius:999px;border:1px solid rgba(255,107,107,.25);font:500 12px 'Geist';color:#ff8a7a;cursor:pointer">Effacer</div>
+</div>
+<sc-if value="{{ feedEmpty }}" hint-placeholder-val="{{ true }}"><div style="padding:40px;text-align:center;font:400 italic 18px 'Instrument Serif';color:#6e6961">Aucune entrée pour l'instant.</div></sc-if>
+<sc-for list="{{ feedRows }}" as="e" hint-placeholder-count="0">
+<div style="display:grid;grid-template-columns:70px 90px minmax(0,1fr) minmax(0,1fr);gap:14px;padding:10px 20px;border-bottom:1px solid rgba(255,255,255,.035);align-items:baseline">
+<span style="font:400 11px 'JetBrains Mono';color:#5a5650">{{ e.time }}</span><span style="font:600 9.5px 'JetBrains Mono';letter-spacing:.12em;color:{{ e.color }}">{{ e.tag }}</span><span style="font:400 12px 'JetBrains Mono';color:#6e6961">{{ e.orig }}</span><span style="font:400 13px 'Geist';color:#ece6dc">{{ e.shown }}</span>
+</div>
+</sc-for>
+</div>
+</sc-if>
+</div>
+</sc-if>
+
+<sc-if value="{{ isDiag }}" hint-placeholder-val="{{ false }}">
+<div style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px;align-items:start">
+<div style="display:flex;flex-direction:column;background:rgba(10,10,12,.55);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);border:1px solid rgba(255,255,255,.07);border-radius:16px;overflow:hidden">
+<div style="display:flex;justify-content:space-between;align-items:center;padding:14px 20px;border-bottom:1px solid rgba(255,255,255,.05)"><span style="font:400 22px 'Instrument Serif';color:#ece6dc">Tests intégrés</span>
+<div onClick="{{ runDiag }}" style="padding:7px 16px;border-radius:999px;border:1px solid rgba(255,162,74,.4);font:500 12px 'Geist';color:#ffc68a;cursor:pointer">{{ diagBtn }}</div></div>
+<sc-for list="{{ diagRows }}" as="d" hint-placeholder-count="7">
+<div style="display:grid;grid-template-columns:10px minmax(0,1fr) auto;gap:14px;padding:11px 20px;align-items:center;border-bottom:1px solid rgba(255,255,255,.035)">
+<div style="width:6px;height:6px;border-radius:3px;background:{{ d.c }};box-shadow:0 0 8px {{ d.c }}"></div>
+<div style="display:flex;flex-direction:column;gap:2px;min-width:0"><span style="font:500 12.5px 'Geist';color:#ece6dc">{{ d.name }}</span><span style="font:400 10.5px 'JetBrains Mono';color:#6e6961;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ d.detail }}</span></div>
+<span style="font:600 9.5px 'JetBrains Mono';letter-spacing:.12em;color:{{ d.c }}">{{ d.st }}</span>
+</div>
+</sc-for>
+</div>
+<div style="display:flex;flex-direction:column;gap:5px;padding:16px 18px;border-radius:16px;background:rgba(0,0,0,.55);border:1px solid rgba(255,255,255,.06);font:400 11px/1.55 'JetBrains Mono';color:#8f8a83">
+<div style="display:flex;justify-content:space-between;color:#5a5650;letter-spacing:.14em;font-size:9.5px;padding-bottom:6px"><span>JOURNAL · EXPURGÉ</span><span>TRACING</span></div>
+<sc-for list="{{ logs }}" as="l" hint-placeholder-count="9"><div><span style="color:#4a4640">{{ l.t }}</span> <span style="color:{{ l.c }}">{{ l.lv }}</span> {{ l.m }}</div></sc-for>
+</div>
+</div>
+</sc-if>
+
+<sc-if value="{{ isAbout }}" hint-placeholder-val="{{ false }}">
+<div style="display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,1fr);gap:16px;align-items:start;max-width:980px">
+<div style="display:flex;flex-direction:column;gap:14px;padding:24px;background:rgba(10,10,12,.55);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);border:1px solid rgba(255,255,255,.07);border-radius:16px">
+<div style="font:400 28px/1.1 'Instrument Serif';color:#ece6dc">Ce que l'application <span style="font-style:italic;color:#ff8a7a">ne fait jamais</span></div>
+<sc-for list="{{ nevers }}" as="n" hint-placeholder-count="5"><div style="display:flex;gap:14px;font:400 13px/1.5 'Geist';color:#bdb6ab;padding:6px 0;border-bottom:1px solid rgba(255,255,255,.04)"><span style="font:500 10px/20px 'JetBrains Mono';color:#ff8a7a">✕</span><span>{{ n }}</span></div></sc-for>
+<div style="font:400 11.5px/1.6 'Geist';color:#6e6961">Aucune garantie « VAC safe » n'est revendiquée. Les interactions externes sont documentées et revues après chaque mise à jour de CS2.</div>
+</div>
+<div style="display:flex;flex-direction:column;gap:8px;padding:24px;background:rgba(10,10,12,.55);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);border:1px solid rgba(255,255,255,.07);border-radius:16px">
+<div style="font:500 9.5px 'JetBrains Mono';letter-spacing:.16em;color:#6e6961;padding-bottom:4px">LICENCES TIERCES</div>
+<sc-for list="{{ licenses }}" as="l" hint-placeholder-count="7"><div style="display:flex;justify-content:space-between;font:400 12px 'JetBrains Mono';color:#bdb6ab;padding:5px 0;border-bottom:1px solid rgba(255,255,255,.04)"><span>{{ l.n }}</span><span style="color:#6e6961">{{ l.l }}</span></div></sc-for>
+<div style="font:400 10.5px 'JetBrains Mono';color:#5a5650;padding-top:8px">v0.2.0 · build 2026-10-11 · Windows x64</div>
+</div>
+</div>
+</sc-if>
+
+</div>
+</div>
+</div>
+
+<sc-if value="{{ showIntro }}" hint-placeholder-val="{{ true }}">
+<div ref="{{ introRef }}" style="position:absolute;inset:0;z-index:3;display:flex;flex-direction:column;justify-content:space-between;padding:84px 64px 92px;opacity:{{ introOp }};transition:opacity .9s ease;pointer-events:{{ introPe }}">
+<div style="display:flex;justify-content:space-between;font:500 10px 'JetBrains Mono';letter-spacing:.22em;color:#6e6961">
+<span data-reveal="1">UN OUTIL EXTERNE · AUCUNE INJECTION · AUCUNE LECTURE MÉMOIRE</span><span data-reveal="1">V0.2 — MMXXVI</span>
+</div>
+<div style="display:flex;flex-direction:column;align-items:center;text-align:center;gap:18px">
+<div data-reveal="1" style="font:500 10.5px 'JetBrains Mono';letter-spacing:.3em;color:#ffa24a">CS2 LIVE TRANSLATOR</div>
+<div data-reveal="1" style="font:400 76px/0.98 'Instrument Serif';color:#f3ede3;letter-spacing:-.02em;text-shadow:0 4px 40px rgba(0,0,0,.9)">Chaque call,<br><span style="font-style:italic;color:#ffc68a">en français.</span></div>
+<div data-reveal="1" style="font:300 15px/1.6 'Geist';color:#a49d92;max-width:520px">Les voix et le chat de vos coéquipiers russophones et anglophones, traduits en temps réel dans un overlay discret.</div>
+<div data-reveal="1" style="display:flex;gap:12px;align-items:center;padding-top:10px">
+<div onClick="{{ enter }}" style="padding:13px 30px;border-radius:999px;background:#ffa24a;color:#120c06;font:600 13.5px 'Geist';cursor:pointer;box-shadow:0 0 40px rgba(255,162,74,.45)" style-hover="background:#ffb46a">Entrer</div>
+<div onClick="{{ enterStart }}" style="padding:13px 24px;border-radius:999px;border:1px solid rgba(255,255,255,.14);color:#ece6dc;font:500 13.5px 'Geist';cursor:pointer" style-hover="background:rgba(255,255,255,.05)">Entrer et démarrer la session</div>
+</div>
+</div>
+<div data-reveal="1" style="display:flex;justify-content:center;gap:28px;font:500 10px 'JetBrains Mono';letter-spacing:.18em;color:#5a5650">
+<span>CS2 DÉTECTÉ</span><span>·</span><span>CONSOLE.LOG ACTIF</span><span>·</span><span>WHISPER SMALL PRÊT</span>
+</div>
+</div>
+</sc-if>
+
+<div style="position:absolute;left:0;right:0;top:0;height:{{ lbH }};background:#000;z-index:4;transition:height 1.3s cubic-bezier(.7,0,.2,1);pointer-events:none"></div>
+<div style="position:absolute;left:0;right:0;bottom:0;height:{{ lbH }};background:#000;z-index:4;transition:height 1.3s cubic-bezier(.7,0,.2,1);pointer-events:none"></div>
+</div>
+
+<div style="position:absolute;inset:-50%;z-index:7;pointer-events:none;opacity:.07;mix-blend-mode:overlay;background-image:url(&quot;data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E&quot;);animation:grain .9s steps(4) infinite"></div>
+
+<sc-if value="{{ toast }}" hint-placeholder-val="{{ false }}">
+<div style="position:absolute;bottom:28px;left:50%;transform:translateX(-50%);z-index:8;padding:12px 22px;border-radius:999px;background:rgba(236,230,220,.95);color:#0a0908;font:500 12.5px 'Geist';box-shadow:0 10px 40px rgba(0,0,0,.6)">{{ toast }}</div>
+</sc-if>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;skipIntro&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;},&quot;startPage&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;dash&quot;,&quot;overlay&quot;,&quot;audio&quot;,&quot;lang&quot;,&quot;hist&quot;,&quot;diag&quot;,&quot;about&quot;],&quot;default&quot;:&quot;dash&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;autoStart&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;},&quot;win10Fallback&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Simuler&quot;},&quot;translatorDown&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Simuler&quot;}}">
+const EV=[
+{kind:'voice',src:'ru',orig:'Двое идут на B, двое на B',prov:'Deux joueurs arrivent sur…',tr:'Deux joueurs arrivent sur B, deux sur B.'},
+{kind:'chat',ch:'CT',sender:'Player123',src:'en',orig:'gonna smoke mid, wait for my flash',tr:'Je vais poser une smoke au mid, attendez ma flash.'},
+{kind:'voice',src:'en',orig:'one low, he is lit, eighty HP',prov:'Un en bas, il est…',tr:'Un en bas, il est touché, 80 PV.'},
+{kind:'chat',ch:'ALL',sender:'Дима',src:'ru',orig:'гг, хорошая игра',tr:'gg, bonne partie.'},
+{kind:'voice',src:'ru',orig:'Сейвим, не покупайте, эко раунд',prov:'On save, n’achetez…',tr:'On save, n’achetez rien, round eco.'},
+{kind:'chat',ch:'T',sender:'mira: the ghost',src:'en',orig:'drop AWP pls',tr:'Drop l’AWP stp.'},
+{kind:'voice',src:'ru',orig:'Бомба на A, ротейт быстро',prov:'Bombe sur A…',tr:'Bombe sur A, rotate vite.'},
+{kind:'chat',ch:'CT',sender:'Lucas',src:'fr',orig:'je prends B avec toi',tr:null}];
+const LN={ru:'RUSSE',en:'ANGLAIS',fr:'FRANÇAIS'};
+const CH={CT:'ÉQUIPE CT',T:'ÉQUIPE T',ALL:'TOUS'};
+const NAV=[['dash','Accueil'],['overlay','Overlay'],['audio','Audio & IA'],['lang','Langues & glossaire'],['hist','Historique'],['diag','Diagnostic'],['about','À propos']];
+const MODELS=[['tiny','75 Mo','Très rapide · précision faible',true],['base','142 Mo','Rapide · CPU seul possible',true],['small','466 Mo','Équilibré — recommandé',true],['medium','1,5 Go','Précis · GPU conseillé',false],['large-v3-turbo','1,6 Go','Le plus précis · GPU requis',false]];
+const GLOSS=[['rush B','Conserver','rush B'],['mid','Conserver','mid'],['smoke','Conserver','smoke'],['flash','Conserver','flash'],['eco','Conserver','eco'],['plant','Conserver','plant'],['defuse','Conserver','defuse'],['AWP','Conserver','AWP'],['rotate','Conserver','rotate'],['save','Conserver','save'],['CT / T','Conserver','CT / T'],['one low','Traduire','un en bas (PV faibles)'],['lit','Traduire','touché']];
+const fmtS=ms=>(ms/1000).toFixed(2).replace('.',',')+' s';
+const ON='#ffa24a',OFF='rgba(255,255,255,.12)';
+const EASE='cubic-bezier(.2,.7,.1,1)';
+class Component extends DCLogic{
+state={page:(this.props&&this.props.startPage)||'dash',session:'IDLE',paused:false,feed:[],idx:0,level:0,speaking:false,stage:0,mode:'mixed',fmt:'bilingue',corner:'tr',opacity:70,textSize:18,duration:6,maxBlocks:3,overlayOn:true,repos:false,
+tg:{click:true,noise:false,cloud:false,hist:false,skipFr:true},capture:'process',vad:55,model:'small',accel:'cuda',engine:'DeepL',src:{ru:true,en:true,de:false,es:false,pt:false,pl:false},gloss:GLOSS,newTerm:'',test:0,testDone:false,diag:'done',seg:0,drop:0,toast:null,dl:{},
+entered:!!(this.props&&this.props.skipIntro),showIntro:!(this.props&&this.props.skipIntro),startedAt:0,now:0};
+ts=[];fx=[];
+stageRef=React.createRef();feedRef=React.createRef();subRef=React.createRef();pageRef=React.createRef();introRef=React.createRef();
+componentDidMount(){
+this.meter=setInterval(()=>{const s=this.state;const run=this.live()&&!s.paused;if(!run&&s.level===0)return;
+const r=Math.random();const v=!run?0:s.speaking?.45+r*.55:(r<.07?.5+Math.random()*.35:r*.14);
+this.setState({level:v,now:Date.now()});},90);
+this.key=e=>{if(!(e.ctrlKey&&e.altKey))return;if(e.key==='F8'){e.preventDefault();this.setState(s=>({overlayOn:!s.overlayOn}));}if(e.key==='F9'){e.preventDefault();this.togglePause();}if(e.key==='F10'){e.preventDefault();this.emergency();}};
+window.addEventListener('keydown',this.key);
+this.initThree();
+if(this.state.showIntro)requestAnimationFrame(()=>{const r=this.introRef.current;if(!r)return;r.querySelectorAll('[data-reveal]').forEach((n,i)=>n.animate([{opacity:0,transform:'translateY(18px)',filter:'blur(10px)'},{opacity:1,transform:'none',filter:'blur(0)'}],{duration:1300,delay:500+i*160,easing:EASE,fill:'backwards'}));});
+if(this.props&&this.props.autoStart)setTimeout(()=>this.toggleSession(),400);}
+componentWillUnmount(){this.dead=true;clearInterval(this.meter);this.clearT();window.removeEventListener('keydown',this.key);cancelAnimationFrame(this.raf);if(this.ro)this.ro.disconnect();if(this.R){this.R.dispose();this.R.domElement.remove();}}
+componentDidUpdate(pp,ps){const s=this.state,f0=s.feed[0],p0=ps.feed[0];
+const anim=(el,kf,o)=>{if(el&&el.animate)el.animate(kf,o);};
+if(f0&&(!p0||p0.id!==f0.id)){
+const row=this.feedRef.current&&this.feedRef.current.querySelector(':scope > div');
+anim(row,[{opacity:0,transform:'translateY(-10px)',filter:'blur(6px)'},{opacity:1,transform:'none',filter:'blur(0)'}],{duration:700,easing:EASE});
+anim(this.subRef.current,[{opacity:0,transform:'translateY(16px)',filter:'blur(12px)'},{opacity:1,transform:'none',filter:'blur(0)'}],{duration:900,easing:EASE});
+}else if(f0&&p0&&p0.id===f0.id&&p0.status!==f0.status){
+anim(this.subRef.current,[{filter:'blur(3px)',opacity:.6},{filter:'blur(0)',opacity:1}],{duration:500,easing:EASE});}
+if(ps.page!==s.page)anim(this.pageRef.current,[{opacity:0,transform:'translateY(14px)',filter:'blur(8px)'},{opacity:1,transform:'none',filter:'blur(0)'}],{duration:750,easing:EASE});}
+async initThree(){let T;try{T=await import('https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js');}catch(e){console.warn('three load failed',e);return;}
+const el=this.stageRef.current;if(!el||this.dead)return;
+const R=new T.WebGLRenderer({antialias:true,alpha:true});R.setPixelRatio(Math.min(2,window.devicePixelRatio||1));R.toneMapping=T.ACESFilmicToneMapping;R.toneMappingExposure=1.15;
+R.domElement.style.cssText='position:absolute;inset:0;width:100%;height:100%;display:block';el.appendChild(R.domElement);this.R=R;
+const S=new T.Scene(),C=new T.PerspectiveCamera(32,1,.1,100);C.position.set(0,0,9);
+const root=new T.Group();S.add(root);
+await (document.fonts&&document.fonts.ready);
+const hs=new T.Group();root.add(hs);
+const metal=new T.MeshPhysicalMaterial({color:0x1a171c,metalness:.88,roughness:.28,clearcoat:1,clearcoatRoughness:.14});
+const soft=new T.MeshStandardMaterial({color:0x0e0d10,roughness:.9,metalness:.05});
+const led=new T.MeshStandardMaterial({color:0x120a05,emissive:0xff8a3d,emissiveIntensity:.6});
+const grill=new T.MeshBasicMaterial({color:0xff9a4a,wireframe:true,transparent:true,opacity:.25,blending:T.AdditiveBlending,depthWrite:false});
+const band=new T.Mesh(new T.TorusGeometry(1.12,.055,20,120,Math.PI),metal);band.position.y=-.05;hs.add(band);
+const pad=new T.Mesh(new T.TorusGeometry(1.03,.075,20,96,Math.PI*.62),soft);pad.rotation.z=Math.PI*.19;pad.position.y=-.05;hs.add(pad);
+const ledBand=new T.Mesh(new T.TorusGeometry(1.175,.008,8,120,Math.PI*.5),led);ledBand.rotation.z=Math.PI*.25;ledBand.position.y=-.05;hs.add(ledBand);
+const cups=[];
+[-1,1].forEach(sd=>{const g=new T.Group();g.position.set(sd*1.12,-.66,0);hs.add(g);
+const slider=new T.Mesh(new T.CylinderGeometry(.04,.04,.34,16),metal);slider.position.set(sd*1.12,-.2,0);hs.add(slider);
+const fork=new T.Mesh(new T.TorusGeometry(.56,.03,12,64,Math.PI),metal);fork.rotation.y=Math.PI/2;fork.position.x=sd*.04;g.add(fork);
+const shell=new T.Mesh(new T.CylinderGeometry(.5,.46,.26,64),metal);shell.rotation.z=Math.PI/2;shell.position.x=sd*.06;g.add(shell);
+const cush=new T.Mesh(new T.TorusGeometry(.38,.13,20,64),soft);cush.rotation.y=Math.PI/2;cush.position.x=-sd*.1;g.add(cush);
+const plate=new T.Mesh(new T.CylinderGeometry(.34,.34,.03,64),metal);plate.rotation.z=Math.PI/2;plate.position.x=sd*.205;g.add(plate);
+const mesh=new T.Mesh(new T.CircleGeometry(.3,24),grill);mesh.rotation.y=sd*Math.PI/2;mesh.position.x=sd*.225;g.add(mesh);
+const ring=new T.Mesh(new T.TorusGeometry(.42,.016,8,96),led);ring.rotation.y=Math.PI/2;ring.position.x=sd*.2;g.add(ring);
+cups.push({g,sd});});
+const mkWord=(txt,font,color,h)=>{const cv=document.createElement('canvas'),c0=cv.getContext('2d');c0.font=font;const w=Math.ceil(c0.measureText(txt).width)+60;cv.width=w;cv.height=120;const c=cv.getContext('2d');c.font=font;c.fillStyle=color;c.textBaseline='middle';c.shadowColor=color;c.shadowBlur=22;c.fillText(txt,30,62);const tx=new T.CanvasTexture(cv);tx.colorSpace=T.SRGBColorSpace;const m=new T.SpriteMaterial({map:tx,transparent:true,depthWrite:false,opacity:0});const sp=new T.Sprite(m);sp.scale.set(w/120*h,h,1);root.add(sp);return sp;};
+const PAIRS=[['Двое на B','Deux sur B'],['rush B','rush B'],['one low','un en bas'],['эко раунд','round eco'],['smoke mid','smoke au mid'],['ротейт','rotate'],['he is lit','il est touché'],['бомба на A','bombe sur A']];
+const words=PAIRS.map(([a,b],i)=>({a:mkWord(a,'500 56px "JetBrains Mono", monospace','#9fdcff',.3),b:mkWord(b,'italic 76px "Instrument Serif", serif','#ffc68a',.36),ph:i/PAIRS.length}));
+const gc=document.createElement('canvas');gc.width=gc.height=256;const g=gc.getContext('2d'),gr=g.createRadialGradient(128,128,0,128,128,128);
+gr.addColorStop(0,'rgba(255,170,90,.55)');gr.addColorStop(.3,'rgba(255,120,50,.18)');gr.addColorStop(1,'rgba(0,0,0,0)');g.fillStyle=gr;g.fillRect(0,0,256,256);
+const glowMat=new T.SpriteMaterial({map:new T.CanvasTexture(gc),blending:T.AdditiveBlending,depthWrite:false,transparent:true,opacity:.6});
+const glow=new T.Sprite(glowMat);glow.scale.set(8,8,1);glow.position.z=-.8;root.add(glow);
+const N=256,wg=new T.BufferGeometry(),wp=new Float32Array(N*3);wg.setAttribute('position',new T.BufferAttribute(wp,3));
+const waveMat=new T.LineBasicMaterial({color:0xffc27a,transparent:true,opacity:.8,blending:T.AdditiveBlending});const wave=new T.LineLoop(wg,waveMat);wave.position.z=-.6;root.add(wave);
+const P=1800,pg=new T.BufferGeometry(),pa=new Float32Array(P*3);for(let i=0;i<P;i++){const r=2.6+Math.random()*4,th=Math.random()*Math.PI*2,ph=Math.acos(2*Math.random()-1);pa[i*3]=r*Math.sin(ph)*Math.cos(th);pa[i*3+1]=r*Math.sin(ph)*Math.sin(th)*.6;pa[i*3+2]=r*Math.cos(ph);}
+pg.setAttribute('position',new T.BufferAttribute(pa,3));const dustMat=new T.PointsMaterial({color:0xffd2a0,size:.02,transparent:true,opacity:.5,blending:T.AdditiveBlending,depthWrite:false});const dust=new T.Points(pg,dustMat);root.add(dust);
+S.add(new T.AmbientLight(0xffffff,.06));
+const key=new T.PointLight(0xff8a3d,70,30,1.4);key.position.set(-4,2.5,4);S.add(key);
+const rim=new T.PointLight(0x7fd4ff,55,30,1.4);rim.position.set(4,-1,-2);S.add(rim);
+const top=new T.PointLight(0xffffff,22,30,1.4);top.position.set(1,5,3);S.add(top);
+const bursts=[];
+const size=()=>{const w=el.clientWidth,h=el.clientHeight;if(!w||!h)return;R.setSize(w,h,false);C.aspect=w/h;C.updateProjectionMatrix();};
+this.ro=new ResizeObserver(size);this.ro.observe(el);size();
+let t0=performance.now(),lv=0,spk=0,dim=1;const tg0=this.target();root.position.set(tg0.x,tg0.y,0);root.scale.setScalar(tg0.s*.6);
+const loop=now=>{if(this.dead)return;this.raf=requestAnimationFrame(loop);
+const dt=Math.min(.05,(now-t0)/1000);t0=now;const t=now/1000,s=this.state,tg=this.target(),k=1-Math.exp(-dt*2.4);
+root.position.x+=(tg.x-root.position.x)*k;root.position.y+=(tg.y-root.position.y)*k;root.scale.setScalar(root.scale.x+(tg.s-root.scale.x)*k);dim+=(tg.dim-dim)*k;
+const live=this.live()&&!s.paused;lv+=((s.level||0)-lv)*Math.min(1,dt*10);spk+=((s.speaking?1:0)-spk)*Math.min(1,dt*3);
+hs.rotation.y=Math.sin(t*.35)*.6+.25;hs.rotation.x=.14+Math.sin(t*.27)*.05;hs.position.y=Math.sin(t*.8)*.04;
+led.emissiveIntensity=(.45+spk*2.4+lv*.9)*dim;grill.opacity=(.15+spk*.35)*dim;
+cups.forEach(cp=>cp.g.scale.setScalar(1+lv*.04));
+this.wt=(this.wt||0)-dt;if(live&&spk>.35&&this.wt<=0){this.wt=.2;this.fx.push('pulse');}
+words.forEach((w,i)=>{const a=w.ph*Math.PI*2+t*.11,x=Math.cos(a)*2.45,z=Math.sin(a)*1.3,y=Math.sin(a*2+i)*.35+.15;w.a.position.set(x,y,z);w.b.position.set(x,y,z);
+const p=((t/7)+w.ph)%1,depth=.35+.65*(z/1.3+1)/2,base=.9*dim*depth*(this.state.entered||true?1:1);
+const sa=p<.06?p/.06:p<.4?1:p<.5?1-(p-.4)/.1:0,sb=p<.4?0:p<.5?(p-.4)/.1:p<.9?1:1-(p-.9)/.1;w.a.material.opacity=sa*base*.8;w.b.material.opacity=sb*base;});
+dust.rotation.y+=dt*.018;dustMat.opacity=.5*dim;glowMat.opacity=(.4+spk*.55+lv*.15)*dim;
+for(let i=0;i<N;i++){const a=i/N*Math.PI*2,n=Math.sin(a*6+t*3)*.5+Math.sin(a*11-t*5)*.3+Math.sin(a*23+t*7)*.2,rr=1.62+(live?lv*.24*n+.01*Math.sin(a*40+t*9):.004*Math.sin(a*8+t));wp[i*3]=Math.cos(a)*rr;wp[i*3+1]=Math.sin(a)*rr;wp[i*3+2]=0;}
+wg.attributes.position.needsUpdate=true;waveMat.opacity=(live?.85:.22)*dim;
+while(this.fx.length){const kd=this.fx.shift(),col=kd==='ice'?0x7fd4ff:kd==='pulse'?0xffb36a:0xffa24a,op=kd==='pulse'?.5:.95;cups.forEach(cp=>{const m=new T.Mesh(new T.TorusGeometry(.42,kd==='pulse'?.006:.012,8,96),new T.MeshBasicMaterial({color:col,transparent:true,opacity:op,blending:T.AdditiveBlending,depthWrite:false}));m.rotation.y=Math.PI/2;m.position.set(cp.sd*1.4,-.66,0);hs.add(m);bursts.push({m,age:0,sd:cp.sd,op,life:kd==='pulse'?1.1:1.6});});}
+for(let i=bursts.length-1;i>=0;i--){const b=bursts[i];b.age+=dt;const q=b.age/b.life;b.m.scale.setScalar(1+q*1.6);b.m.position.x=b.sd*(1.4+q*1.1);b.m.material.opacity=b.op*(1-q)*(1-q)*dim;if(q>=1){hs.remove(b.m);b.m.geometry.dispose();b.m.material.dispose();bursts.splice(i,1);}}
+C.position.x=Math.sin(t*.12)*.3;C.position.y=Math.cos(t*.1)*.18;C.lookAt(0,0,0);R.render(S,C);};
+this.raf=requestAnimationFrame(loop);}
+target(){const s=this.state;if(!s.entered)return{x:0,y:.5,s:.82,dim:1};if(s.page==='dash')return{x:-.55,y:.82,s:.6,dim:1};return{x:3.6,y:-1.85,s:.32,dim:.5};}
+clearT(){this.ts.forEach(clearTimeout);this.ts=[];}
+later(fn,ms){this.ts.push(setTimeout(fn,ms));}
+live(){return this.state.session==='LISTENING'||this.state.session==='DEGRADED';}
+flash(msg){clearTimeout(this.tt);this.setState({toast:msg});this.tt=setTimeout(()=>this.setState({toast:null}),2600);}
+schedule(ms){this.later(()=>this.tick(),ms??2400);}
+tick(){const s=this.state;if(!this.live()||s.paused)return;
+let i=s.idx,e=EV[i%EV.length],guard=0;
+while(((s.mode==='text'&&e.kind==='voice')||(s.mode==='voice'&&e.kind==='chat'))&&guard<10){i++;e=EV[i%EV.length];guard++;}
+const id=Date.now()+Math.random(),time=new Date().toLocaleTimeString('fr-FR');this.setState({idx:i+1});
+const down=this.props&&this.props.translatorDown;
+if(e.kind==='voice'){
+this.setState({speaking:true,stage:1});
+this.later(()=>this.setState({stage:2}),700);
+this.later(()=>this.setState(st=>({speaking:false,stage:3,feed:[{...e,id,time,status:'provisoire',shown:e.prov,lat:null,err:false},...st.feed].slice(0,40)})),1500);
+this.later(()=>{this.fx.push('ember');this.setState(st=>({stage:4,seg:st.seg+1,feed:st.feed.map(f=>f.id===id?{...f,status:down?'erreur':'final',shown:down?null:e.tr,err:down,lat:1150+Math.round(Math.random()*1500)}:f)}));},2400);
+this.later(()=>{this.setState({stage:0});if(Math.random()<.3)this.setState(st=>({drop:st.drop+1}));this.schedule();},3100);
+}else{const fr=e.src==='fr'&&s.tg.skipFr;this.fx.push('ice');
+this.setState(st=>({feed:[{...e,id,time,status:fr?'original':down?'erreur':'final',shown:fr||down?null:e.tr,err:down&&!fr,lat:fr?0:280+Math.round(Math.random()*600)},...st.feed].slice(0,40)}));
+this.schedule(3000);}}
+toggleSession=()=>{const s=this.state;
+if(this.live()||s.session==='INITIALIZING'||s.session==='PAUSED'){this.clearT();this.setState({session:'STOPPING',speaking:false,stage:0,paused:false});this.later(()=>this.setState({session:'STOPPED'}),500);return;}
+this.setState({session:'INITIALIZING',paused:false});
+this.later(()=>{this.fx.push('ember');this.setState({session:this.props&&this.props.win10Fallback?'DEGRADED':'LISTENING',startedAt:Date.now(),now:Date.now()});this.schedule(1000);},1400);};
+togglePause=()=>{if(!this.live()&&this.state.session!=='PAUSED')return;
+if(this.state.paused){this.setState({paused:false,session:this.props&&this.props.win10Fallback?'DEGRADED':'LISTENING'},()=>this.schedule(800));}
+else{this.clearT();this.setState({paused:true,session:'PAUSED',speaking:false,stage:0});}};
+emergency=()=>{this.clearT();this.setState({session:'STOPPED',paused:false,speaking:false,stage:0,level:0});this.flash('Toutes les captures arrêtées · tampons audio purgés');};
+enter=()=>{this.setState({entered:true});setTimeout(()=>this.setState({showIntro:false}),1000);};
+enterStart=()=>{this.enter();setTimeout(()=>this.toggleSession(),900);};
+tog(k){const on=this.state.tg[k];return{on,bg:on?ON:OFF,x:on?'18px':'2px',fn:()=>this.setState(s=>({tg:{...s.tg,[k]:!s.tg[k]}}))};}
+seg(list,cur,key){return list.map(([v,l])=>({label:l,bg:cur===v?'rgba(255,255,255,.1)':'transparent',color:cur===v?'#ece6dc':'#6e6961',fn:()=>this.setState({[key]:v})}));}
+runTest=()=>{if(this.state.test>0&&this.state.test<100)return;this.setState({test:1,testDone:false});const iv=setInterval(()=>{this.setState(s=>{const n=Math.min(100,s.test+5);if(n>=100){clearInterval(iv);return{test:100,testDone:true};}return{test:n};});},250);};
+runDiag=()=>{this.setState({diag:'running'});setTimeout(()=>this.setState({diag:'done'}),1600);};
+renderVals(){
+const s=this.state,p=this.props||{},live=this.live(),fb=!!p.win10Fallback;
+const pi=Math.max(0,NAV.findIndex(n=>n[0]===s.page)),page=NAV[pi];
+const B={IDLE:['INACTIF','#8f8a83'],INITIALIZING:['INITIALISATION','#7fd4ff'],LISTENING:['EN ÉCOUTE','#7fe0a8'],DEGRADED:['DÉGRADÉ','#ffa24a'],PAUSED:['EN PAUSE','#ffa24a'],STOPPING:['ARRÊT…','#8f8a83'],STOPPED:['ARRÊTÉ','#8f8a83']}[s.session];
+const running=live||s.session==='INITIALIZING'||s.session==='PAUSED';
+let tc='00:00:00:00';if(s.startedAt&&running){const d=Math.max(0,s.now-s.startedAt),z=n=>String(n).padStart(2,'0');tc=`${z(Math.floor(d/3600000))}:${z(Math.floor(d/60000)%60)}:${z(Math.floor(d/1000)%60)}:${z(Math.floor(d/40)%25)}`;}
+const vl=s.feed.filter(f=>f.kind==='voice'&&f.lat).map(f=>f.lat).sort((a,b)=>a-b);
+const pct=q=>vl[Math.min(vl.length-1,Math.floor(q*vl.length))];
+const feedRows=s.feed.map(f=>{const v=f.kind==='voice',fr=f.status==='original';return{
+tag:v?'VOIX':'CHAT · '+f.ch,color:v?'#ffa24a':'#7fd4ff',time:f.time,langs:f.src.toUpperCase()+(fr?'':' → FR'),
+lead:f.sender?f.sender+' — ':'',orig:fr||f.err?'':f.orig,shown:f.shown||f.orig,
+trColor:f.status==='provisoire'?'#8f8a83':'#ece6dc',italic:f.status==='provisoire'?'italic':'normal',
+note:fr?'Déjà en français — non traduit':f.err?'Moteur indisponible — original affiché':'',noteColor:f.err?'#ff8a7a':'#5a5650',
+status:f.status.toUpperCase(),statusColor:{provisoire:'#ffa24a',final:'#7fe0a8',original:'#8f8a83',erreur:'#ff8a7a'}[f.status],lat:f.lat?fmtS(f.lat):''};});
+const f0=s.feed[0];
+const sub=f0?{tag:(f0.kind==='voice'?'VOIX':'CHAT · '+CH[f0.ch])+' · '+LN[f0.src]+(f0.status==='original'?'':' → FRANÇAIS'),sender:f0.sender||'',color:f0.kind==='voice'?'#ffa24a':'#7fd4ff',orig:f0.status==='original'?'':f0.orig,text:'« '+(f0.shown||f0.orig)+' »',italic:f0.status==='provisoire'?'italic':'normal',trColor:f0.status==='provisoire'?'#a49d92':'#f3ede3',note:f0.status==='provisoire'?'Transcription provisoire — correction en cours':f0.err?'Moteur de traduction indisponible — original affiché':'',noteColor:f0.err?'#ff8a7a':'#6e6961'}
+:{tag:live?'EN ÉCOUTE':'HORS LIGNE',sender:'',color:'#5a5650',orig:'',text:live?'En attente d\u2019une voix…':'Le silence, pour l\u2019instant.',italic:'italic',trColor:'#6e6961',note:live?'':'Démarrez la session pour sous-titrer la partie.',noteColor:'#5a5650'};
+const sample=[{kind:'voice',src:'ru',orig:'Двое идут на B',shown:'Deux joueurs arrivent sur B.'},{kind:'chat',ch:'CT',src:'en',sender:'Player123',orig:'gonna smoke mid',shown:'Je vais poser une smoke au mid.'},{kind:'voice',src:'en',orig:'one low, he is lit',shown:'Un en bas, il est touché.'}];
+const src=s.feed.length?s.feed:sample;
+const ovBlocks=src.slice(0,s.maxBlocks).map((f,i)=>{const v=f.kind==='voice',t=f.shown||f.orig;return{color:v?'#ffa24a':'#7fd4ff',head:v?`VOIX • ${LN[f.src]} → FRANÇAIS`:`CHAT • ${CH[f.ch]} • ${LN[f.src]} → FRANÇAIS`,orig:f.orig,line:f.sender?`${f.sender} : « ${t} »`:`« ${t} »`,op:i===s.maxBlocks-1&&s.maxBlocks>2?.5:1};});
+const c=s.corner,pad='22px',corners=[['tl','Haut gauche'],['tr','Haut droite'],['bl','Bas gauche'],['br','Bas droite']];
+const srcOn=Object.keys(s.src).filter(k=>s.src[k]);
+const diagDone=s.diag==='done';
+const D=(name,detail,st)=>({name,detail,st:diagDone?st:'…',c:!diagDone?'#5a5650':st==='OK'?'#7fe0a8':st==='AVERT.'?'#ffa24a':'#ff8a7a'});
+return{
+stageRef:this.stageRef,feedRef:this.feedRef,subRef:this.subRef,pageRef:this.pageRef,introRef:this.introRef,
+timecode:tc,showIntro:s.showIntro,introOp:s.entered?0:1,introPe:s.entered?'none':'auto',lbH:s.entered?'0px':'58px',uiOp:s.entered?1:0,uiY:s.entered?'0px':'14px',enter:this.enter,enterStart:this.enterStart,
+nav:NAV.map(([id,l],i)=>({label:l,num:String(i+1).padStart(2,'0'),bg:s.page===id?'rgba(255,255,255,.045)':'transparent',color:s.page===id?'#ece6dc':'#8f8a83',numColor:s.page===id?'#ffa24a':'#4a4640',dot:s.page===id?1:0,go:()=>this.setState({page:id})})),
+chapter:`CHAPITRE ${String(pi+1).padStart(2,'0')} / 07`,pageTitle:page[1],
+isDash:s.page==='dash',isOverlay:s.page==='overlay',isAudio:s.page==='audio',isLang:s.page==='lang',isHist:s.page==='hist',isDiag:s.page==='diag',isAbout:s.page==='about',
+badgeLabel:B[0],badgeColor:B[1],
+startLabel:running?'Arrêter':'Démarrer',startBg:running?'rgba(255,255,255,.08)':'#ffa24a',startColor:running?'#ece6dc':'#120c06',startGlow:running?'none':'0 0 30px rgba(255,162,74,.4)',
+pauseLabel:s.paused?'Reprendre':'Pause',pauseColor:running?'#ece6dc':'#4a4640',
+togglePause:this.togglePause,emergency:this.emergency,toggleSession:this.toggleSession,
+sceneLabel:live?(fb?'SCÈNE EN DIRECT · CAPTURE DE REPLI':'SCÈNE EN DIRECT · CS2.EXE'):s.session==='PAUSED'?'SCÈNE EN PAUSE':'AUCUNE SCÈNE',
+vadLabel:!live?'':s.speaking?'● PAROLE DÉTECTÉE':'bruit ignoré',vadColor:s.speaking?'#ffa24a':'#4a4640',
+sub,
+stages:[['Capture',fb?'loopback':'cs2.exe'],['VAD',`seuil ${s.vad} %`],['Transcription',`whisper ${s.model}`],['Traduction',`${s.engine} → fr`],['Overlay',s.fmt]].map(([n,sb],i)=>{const a=live&&!s.paused&&(i===0||s.stage===i),done=live&&!s.paused&&i>0&&s.stage>i;const col=i===0?'#7fe0a8':'#ffa24a';return{name:n,sub:sb,bar:a?col:done?'rgba(255,162,74,.35)':'rgba(255,255,255,.08)',glow:a?`0 0 12px ${col}`:'none',color:a?'#ece6dc':'#6e6961'};}),
+statusCards:[
+{label:'COUNTER-STRIKE 2',value:live?'En cours':'Détecté',sub:'console.log · -condebug actif',dot:'#7fe0a8'},
+{label:'CAPTURE',value:fb?'Loopback système':'Process loopback',sub:fb?'Repli — tout le périphérique':'Son de cs2.exe uniquement',dot:fb?'#ffa24a':'#7fe0a8'},
+{label:'MOTEURS',value:`Whisper ${s.model}`,sub:`${s.accel.toUpperCase()} · ${s.engine}${p.translatorDown?' indisponible':''}`,dot:p.translatorDown?'#ff8a7a':'#7fe0a8'},
+{label:'LATENCE VOIX',value:vl.length?`p50 ${fmtS(pct(.5))}`:'—',sub:vl.length?`p95 ${fmtS(pct(.95))} · ${vl.length} phrases`:'Objectif p50 ≤ 2 s · p95 ≤ 4 s',dot:vl.length?'#7fe0a8':'#3d3a36'}],
+modes:this.seg([['text','Texte'],['voice','Voix'],['mixed','Mixte']],s.mode,'mode'),
+feedRows,feedEmpty:!s.feed.length,feedCount:s.feed.length?`${s.feed.length} répliques`:'',
+emptyTitle:live?'En écoute…':'Rien à l\u2019écran.',emptySub:live?'Chaque réplique traduite s\u2019inscrit ici.':'Ctrl+Alt+F9 met en pause, Ctrl+Alt+F10 coupe toutes les captures.',
+privacyTag:s.tg.cloud?'CLOUD':'LOCAL',privacyColor:s.tg.cloud?'#ffa24a':'#7fe0a8',privacyText:s.tg.cloud?'Segments vocaux envoyés au fournisseur choisi.':'Aucune voix transmise. Aucun audio conservé. Micro coupé.',
+overlayOn:s.overlayOn,toggleOverlay:()=>this.setState(st=>({overlayOn:!st.overlayOn})),ovTg:{bg:s.overlayOn?ON:OFF,x:s.overlayOn?'18px':'2px'},
+ov:{top:c[0]==='t'?pad:'auto',bottom:c[0]==='b'?pad:'auto',left:c[1]==='l'?pad:'auto',right:c[1]==='r'?pad:'auto',outline:s.repos?'1px dashed #ffa24a':'1px solid transparent'},
+ovBlocks,ovBg:`rgba(6,6,8,${(s.opacity/100).toFixed(2)})`,ovSize:(s.fmt==='accessible'?s.textSize+6:s.textSize)+'px',
+showHead:s.fmt!=='minimal',showOrig:s.fmt==='bilingue',ovHint:s.feed.length?'répliques en direct':'exemples',
+fmts:this.seg([['minimal','Minimal'],['bilingue','Bilingue'],['accessible','Accessible']],s.fmt,'fmt'),
+corners:corners.map(([id])=>({bg:s.corner===id?'#ffa24a':'rgba(255,255,255,.07)',glow:s.corner===id?'0 0 12px rgba(255,162,74,.6)':'none',fn:()=>this.setState({corner:id})})),cornerLabel:corners.find(k=>k[0]===s.corner)[1],
+opacity:s.opacity,textSize:s.textSize,duration:s.duration,
+setOpacity:e=>this.setState({opacity:+e.target.value}),setTextSize:e=>this.setState({textSize:+e.target.value}),setDuration:e=>this.setState({duration:+e.target.value}),setVad:e=>this.setState({vad:+e.target.value}),
+blockOpts:this.seg([[2,'2'],[3,'3']],s.maxBlocks,'maxBlocks'),
+t:{click:this.tog('click'),noise:this.tog('noise'),cloud:this.tog('cloud'),hist:this.tog('hist'),skipFr:this.tog('skipFr')},
+reposLabel:s.repos?'Terminer le repositionnement':'Repositionner l\u2019overlay',reposBg:s.repos?'rgba(255,162,74,.1)':'transparent',toggleReposition:()=>this.setState(st=>({repos:!st.repos})),
+captureOpts:[['process','Audio de CS2 uniquement','Process loopback WASAPI ciblant cs2.exe. Sans injection.',fb?'INDISPONIBLE':'RECOMMANDÉ',fb],['device','Périphérique de sortie','Loopback du casque — capte aussi Discord, navigateur…','REPLI',false],['wav','Fichier WAV de démonstration','Tester la chaîne sans lancer CS2','TEST',false]].map(([id,name,sb,tag,dis])=>{const on=s.capture===id&&!dis;return{name,sub:sb,tag,tagColor:tag==='RECOMMANDÉ'?'#7fe0a8':tag==='INDISPONIBLE'?'#ff8a7a':'#6e6961',border:on?'rgba(255,162,74,.35)':'rgba(255,255,255,.06)',bg:on?'rgba(255,162,74,.06)':'transparent',ring:on?'#ffa24a':'#4a4640',fill:on?'#ffa24a':'transparent',glow:on?'0 0 8px #ffa24a':'none',op:dis?.45:1,cursor:dis?'not-allowed':'pointer',fn:()=>{if(!dis)this.setState({capture:id});}};}),
+deviceWarn:s.capture==='device'||fb,
+testBtn:s.test>0&&s.test<100?'Écoute…':'Test audio 10 s',testPct:s.test+'%',
+testMsg:s.testDone?'Voix détectée · ~1,3 s de traitement par segment de 4 s':s.test>0?`${Math.round(s.test/10)} / 10 s`:'Valide l\u2019entrée, la détection de voix et le temps de traitement',runTest:this.runTest,
+accels:this.seg([['cpu','CPU'],['cuda','CUDA']],s.accel,'accel'),
+models:MODELS.map(([id,size,desc,inst])=>{const on=s.model===id,d=s.dl[id],ok=inst||d===100;return{name:'whisper-'+id,size,desc,st:on?'Actif':ok?'Installé':d?`${d} %`:'Télécharger',stColor:on?'#ffa24a':ok?'#7fe0a8':'#7fd4ff',border:on?'rgba(255,162,74,.35)':'rgba(255,255,255,.05)',bg:on?'rgba(255,162,74,.06)':'transparent',ring:on?'#ffa24a':'#4a4640',fill:on?'#ffa24a':'transparent',
+fn:()=>{if(ok){this.setState({model:id});return;}if(d)return;const iv=setInterval(()=>this.setState(st=>{const n=Math.min(100,(st.dl[id]||0)+7);if(n>=100)clearInterval(iv);return{dl:{...st.dl,[id]:n}};}),180);}};}),
+engines:this.seg([['DeepL','DeepL'],['Azure','Azure'],['Local','Local (bêta)']],s.engine,'engine'),
+srcChips:Object.keys(s.src).map(k=>({label:k,border:s.src[k]?'rgba(255,162,74,.4)':'rgba(255,255,255,.08)',bg:s.src[k]?'rgba(255,162,74,.08)':'transparent',color:s.src[k]?'#ffc68a':'#6e6961',fn:()=>this.setState(st=>({src:{...st.src,[k]:!st.src[k]}}))})),
+glossCount:s.gloss.length,glossRows:s.gloss.map(([t,m,fr],i)=>({t,m,fr,mColor:m==='Conserver'?'#8f8a83':'#7fd4ff',del:()=>this.setState(st=>({gloss:st.gloss.filter((_,j)=>j!==i)}))})),
+newTerm:s.newTerm,setNewTerm:e=>this.setState({newTerm:e.target.value}),addTerm:()=>{const v=s.newTerm.trim();if(v)this.setState(st=>({gloss:[...st.gloss,[v,'Conserver',v]],newTerm:''}));},
+clearFeed:()=>this.setState({feed:[]}),
+diagBtn:diagDone?'Relancer':'Tests…',runDiag:this.runDiag,
+diagRows:[D('Journal console.log','D:\\SteamLibrary\\steamapps\\common\\Counter-Strike Global Offensive\\game\\csgo\\console.log','OK'),D('Option -condebug','Détectée dans les options Steam','OK'),D('Parseur de chat','cs2-2026.09 · 42 fixtures validées','OK'),D('Process loopback',fb?'Build 19045 < 20348 — repli système':'Build 26100 · cs2.exe ciblé',fb?'AVERT.':'OK'),D('Modèle whisper-'+s.model,'Chargé en 1,8 s · '+s.accel.toUpperCase(),'OK'),D('Traduction · '+s.engine,p.translatorDown?'Délai dépassé (5 s) — repli sur l\u2019original':'Réponse en 210 ms',p.translatorDown?'ÉCHEC':'OK'),D('Raccourcis globaux','Ctrl+Alt+F8 / F9 / F10 · aucun conflit','OK')],
+logs:[['14:02:11','INFO','app-shell: instance unique acquise'],['14:02:11','INFO','cs2-detect: 2 bibliothèques Steam'],['14:02:12','INFO','chat-ingest: suivi depuis offset 1 284 330'],['14:02:12',fb?'WARN':'INFO',fb?'audio-win: repli endpoint loopback':'audio-win: process loopback pid=18244'],['14:02:13','INFO','asr: whisper-small chargé (CUDA)'],['14:02:13','INFO','translation: DeepL key=[expurgée]'],['14:03:40','DEBUG','audio-pipeline: segment 3,1 s → asr'],['14:03:41','WARN','audio-pipeline: segment périmé abandonné'],['14:03:44','INFO','overlay: 2 blocs affichés']].map(([t,lv,m])=>({t,lv,m,c:lv==='WARN'?'#ffa24a':lv==='DEBUG'?'#4a4640':'#7fe0a8'})),
+nevers:['Injecter une DLL dans cs2.exe','Lire ou écrire la mémoire du jeu','Intercepter ou modifier les paquets réseau','Contourner VAC ou le mode approuvé','Écrire dans le chat sans action de votre part'],
+licenses:[['eframe / egui','MIT / Apache-2.0'],['whisper.cpp','MIT'],['whisper-rs','Unlicense'],['tokio','MIT'],['windows-rs','MIT / Apache-2.0'],['rubato','MIT'],['wgpu (rendu 3D)','MIT / Apache-2.0']].map(([n,l])=>({n,l})),
+toast:s.toast};}}
+</script>
+</body>
+</html>
