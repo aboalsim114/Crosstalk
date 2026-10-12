@@ -794,6 +794,7 @@ dependencies = [
  "candle-core",
  "candle-nn",
  "candle-transformers",
+ "regex",
  "serde",
  "serde_json",
  "sha1_smol",

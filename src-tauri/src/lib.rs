@@ -14,6 +14,7 @@
 
 mod actions;
 pub mod audio;
+pub mod chat;
 mod commands;
 mod download_commands;
 pub mod downloads;
@@ -90,7 +91,12 @@ pub fn run() {
             translation::translation_test,
             download_commands::models_download_status,
             download_commands::models_download_start,
-            download_commands::models_download_cancel
+            download_commands::models_download_cancel,
+            chat::chat_status,
+            chat::chat_configure,
+            chat::chat_rescan,
+            chat::chat_start,
+            chat::chat_stop
         ])
         .setup(|app| {
             let handle = app.handle();
@@ -108,6 +114,10 @@ pub fn run() {
             app.manage(translation.clone());
             let speech = speech::start(handle);
             app.manage(speech.clone());
+            app.manage(chat::ChatService::new(
+                Arc::new(chat::TauriChatEvents(handle.clone())),
+                chat::user_rules_file(),
+            ));
             let audio = Arc::new(audio::AudioService::new(
                 audio::default_backend(),
                 Arc::new(CaptureEvents {

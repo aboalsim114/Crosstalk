@@ -25,7 +25,7 @@ describe('first-run setup', () => {
   });
 
   it('needs the chosen Whisper model, and the translation models only when translation is on', () => {
-    expect(setupNeeds({ model: 'small', tg: { click: true, noise: false, translate: false, hist: false, skipFr: true } })).toEqual({ model: 'small', translation: false });
+    expect(setupNeeds({ model: 'small', tg: { click: true, noise: false, translate: false, hist: false, skipFr: true, ignoreOwn: true } })).toEqual({ model: 'small', translation: false });
     expect(mb(147_951_465)).toBe('148 Mo');
   });
 

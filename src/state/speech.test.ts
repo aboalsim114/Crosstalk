@@ -119,13 +119,11 @@ describe('store with real voices', () => {
     vi.useRealTimers();
   });
 
-  it('no longer simulates voices in the desktop app (chat only)', () => {
+  it('simulates nothing in the desktop app: voices and chat are real', () => {
     useAudio.setState({ native: true });
     useApp.getState().toggleSession();
     vi.advanceTimersByTime(1400 + 30_000);
-    const feed = useApp.getState().feed;
-    expect(feed.length).toBeGreaterThan(0);
-    expect(feed.every((f) => f.kind === 'chat')).toBe(true);
+    expect(useApp.getState().feed).toHaveLength(0);
   });
 
   it('adds real lines, except in text-only mode', () => {

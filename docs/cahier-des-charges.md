@@ -106,19 +106,19 @@ Statut : ✅ réalisé dans le dépôt (interface et données simulées comprise
 
 | ID | Exigence | Prio. | Statut |
 | --- | --- | --- | --- |
-| F-01 | Localiser les bibliothèques Steam (registre + `libraryfolders.vdf`) et le dossier d'installation de CS2. | P0 | — |
-| F-02 | Détecter le lancement et la fermeture de `cs2.exe` (énumération des processus toutes les 2 s) et connaître son PID. | P0 | — |
-| F-03 | Vérifier la présence de `-condebug` dans les options de lancement (`localconfig.vdf`) et guider l'utilisateur pour l'ajouter. Aucune modification automatique. | P0 | — |
-| F-04 | Chemin de CS2 saisissable manuellement si la détection échoue. | P1 | — |
+| F-01 | Localiser les bibliothèques Steam (registre + `libraryfolders.vdf`) et le dossier d'installation de CS2. | P0 | ✅ (à valider sous Windows) |
+| F-02 | Détecter le lancement et la fermeture de `cs2.exe` (énumération des processus toutes les 2 s) et connaître son PID. | P0 | ✅ |
+| F-03 | Vérifier la présence de `-condebug` dans les options de lancement (`localconfig.vdf`) et guider l'utilisateur pour l'ajouter. Aucune modification automatique. | P0 | ✅ (à valider sous Windows) |
+| F-04 | Chemin de CS2 saisissable manuellement si la détection échoue. | P1 | ✅ |
 
 ### 4.2 Chat écrit
 
 | ID | Exigence | Prio. | Statut |
 | --- | --- | --- | --- |
-| F-10 | Suivre `console.log` en continu (« tail ») à partir de la fin du fichier, en gérant la troncature et la recréation du fichier. | P0 | — |
-| F-11 | Extraire le canal (Tous, CT, T), l'expéditeur et le message. Parseur versionné, défini par des expressions régulières dans un fichier de règles mis à jour sans recompiler. | P0 | — |
-| F-12 | Ignorer les lignes système, les messages vides et les doublons (fenêtre de 2 s). | P0 | — |
-| F-13 | Option : ignorer ses propres messages (pseudo Steam configurable). | P1 | — |
+| F-10 | Suivre `console.log` en continu (« tail ») à partir de la fin du fichier, en gérant la troncature et la recréation du fichier. | P0 | ✅ |
+| F-11 | Extraire le canal (Tous, CT, T), l'expéditeur et le message. Parseur versionné, défini par des expressions régulières dans un fichier de règles mis à jour sans recompiler. | P0 | ✅ (format à confirmer sur une vraie partie) |
+| F-12 | Ignorer les lignes système, les messages vides et les doublons (fenêtre de 2 s). | P0 | ✅ |
+| F-13 | Option : ignorer ses propres messages (pseudo Steam configurable). | P1 | ✅ |
 | F-14 | Alimenter la liste des pseudos connus de la session avec les expéditeurs du chat (utilisée par §4.8). | P1 | — |
 
 ### 4.3 Chat vocal
@@ -188,7 +188,7 @@ Chaque étape est désactivable et mesurable dans l'écran Diagnostic.
 | ID | Exigence | Prio. | Statut |
 | --- | --- | --- | --- |
 | F-30 | **Traduction locale uniquement**, sur le CPU du joueur : Helsinki-NLP Opus-MT ru→fr et en→fr (Apache-2.0, utilisable dans un produit vendu), exécuté par candle (Rust). **Aucune clé API, aucun abonnement, aucun envoi en ligne** (décision du 12/10/2026 : l'utilisateur paie l'application et rien d'autre). NLLB est exclu (licence non commerciale). | P0 | ✅ |
-| F-31 | Détection de langue restreinte aux langues sources préférées pour les messages courts. | P0 | — |
+| F-31 | Détection de langue restreinte aux langues sources préférées pour les messages courts. | P0 | ◐ (ru, en, fr ; sinon original affiché) |
 | F-32 | Ne pas traduire les messages déjà en français : l'original est affiché et aucun appel n'est fait. | P0 | ✅ |
 | F-33 | Glossaire CS : termes conservés (smoke, flash, eco, rush B…) remplacés par des repères avant traduction puis restaurés (insensible à la casse, mots entiers), et termes traduits avec un rendu imposé. Si le modèle perd un repère, la phrase est retraduite sans protection. Modifiable par l'utilisateur. | P0 | ✅ (fiabilité à mesurer sur les vrais modèles) |
 | F-34 | Une ligne qui attend plus de 5 s, ou une file pleine, est affichée en original avec la mention « moteur indisponible ». | P0 | ✅ |
