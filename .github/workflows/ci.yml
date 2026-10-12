@@ -136,6 +136,11 @@ jobs:
     env:
       LIBCLANG_PATH: C:\Program Files\LLVM\bin
       CROSSTALK_MODELS_DIR: ${{ github.workspace }}\models
+      # Experiment: whisper.cpp built by clang-cl (ggml's CPU kernels are
+      # markedly slower with MSVC). The installer job still uses MSVC.
+      CC: clang-cl
+      CXX: clang-cl
+      CMAKE_GENERATOR: Ninja
     steps:
       - uses: actions/checkout@v4
 
@@ -191,20 +196,14 @@ jobs:
         shell: bash
         run: scripts/ci-asr-bench.sh base 1080 --model base --manifest corpus/manifest.tsv --scenario clean,combat
 
-      - name: base, short encoder window (clean + combat)
-        timeout-minutes: 15
-        continue-on-error: true
-        shell: bash
-        run: scripts/ci-asr-bench.sh base-fast 780 --model base --fast-encoder --manifest corpus/manifest.tsv --scenario clean,combat
-
-      - name: small, short encoder window (clean)
+      - name: small (clean)
         timeout-minutes: 20
         continue-on-error: true
         shell: bash
-        run: scripts/ci-asr-bench.sh small-fast 1080 --model small --fast-encoder --manifest corpus/manifest.tsv --scenario clean
+        run: scripts/ci-asr-bench.sh small 1080 --model small --manifest corpus/manifest.tsv --scenario clean
 
-      - name: small (clean)
-        timeout-minutes: 25
+      - name: base with Whisper's full 30 s window (clean, for comparison)
+        timeout-minutes: 20
         continue-on-error: true
         shell: bash
-        run: scripts/ci-asr-bench.sh small 1380 --model small --manifest corpus/manifest.tsv --scenario clean
+        run: scripts/ci-asr-bench.sh base-full 1080 --model base --full-encoder --manifest corpus/manifest.tsv --scenario clean
