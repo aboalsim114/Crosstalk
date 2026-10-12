@@ -87,7 +87,7 @@ Après **chaque fusion dans `develop`**, republier la version de test depuis un 
 scripts/publish-dev-build.sh
 ```
 
-Le script construit le paquet portable Windows (`scripts/cross-build-windows-gnu.sh`) et remplace le fichier de la pré-version `develop-latest`. Le lien du README ne change pas ; les notes de la version indiquent le commit, la date et le SHA-256.
+Le script construit le paquet portable Windows (`scripts/cross-build-windows-gnu.sh`) et le publie sur la branche `downloads`, qui ne contient qu'un commit (le zip et `VERSION.md` : commit, date, SHA-256), remplacé à chaque publication. Le lien du README ne change pas et l'historique du dépôt ne grossit pas. Ne fusionnez jamais `downloads` ailleurs.
 
 ### Rapport à joindre à chaque Pull Request
 

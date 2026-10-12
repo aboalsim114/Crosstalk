@@ -13,9 +13,9 @@ Ce n'est pas un site web : l'application se lance depuis un `.exe` et s'installe
 
 ## Télécharger
 
-**[⬇ Télécharger la dernière version de test (Windows x64, portable)](https://github.com/aboalsim114/Crosstalk/releases/download/develop-latest/crosstalk-windows-x64-portable.zip)**
+**[⬇ Télécharger la dernière version de test (Windows x64, portable)](https://github.com/aboalsim114/Crosstalk/raw/downloads/crosstalk-windows-x64-portable.zip)**
 
-- Ce lien ne change jamais : il pointe toujours vers la dernière version de `develop`, republiée après chaque modification. Le commit, la date et l'empreinte SHA-256 du zip sont indiqués sur la [page de la version](https://github.com/aboalsim114/Crosstalk/releases/tag/develop-latest).
+- Ce lien ne change jamais : il pointe toujours vers la dernière version de `develop`, republiée après chaque modification. Le commit, la date et l'empreinte SHA-256 du zip sont indiqués dans la [fiche de la version](https://github.com/aboalsim114/Crosstalk/blob/downloads/VERSION.md).
 - Dézippez, lisez `LISEZMOI-TEST.txt`, installez les modèles (`download-models.ps1 -Models base -Translation`, environ 770 Mo), puis lancez `crosstalk.exe`.
 - Version de test : compilée avec MinGW/gcc, non signée (SmartScreen affiche un avertissement). Les installateurs officiels (MSVC, NSIS et MSI) seront publiés dans les Releases à chaque version stable.
 - Le dépôt est privé : le lien fonctionne pour les comptes GitHub qui y ont accès.
