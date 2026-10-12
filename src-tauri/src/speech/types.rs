@@ -42,9 +42,10 @@ pub struct SpeechConfig {
     /// CS2 vocabulary given to Whisper as initial prompt.
     pub glossary: Vec<String>,
     /// Encode only the segment's duration instead of Whisper's fixed 30 s
-    /// window: several times faster, possibly less accurate. Off until the
-    /// bench says otherwise; not exposed in the UI.
-    #[serde(default)]
+    /// window. On by default: the full window costs ~1.8 s for `tiny` on two
+    /// CPU threads whatever the segment length, which rules out a 2 s latency.
+    /// Not exposed in the UI; the bench compares both (`--full-encoder`).
+    #[serde(default = "default_true")]
     pub fast_encoder: bool,
 }
 
@@ -58,7 +59,7 @@ impl Default for SpeechConfig {
                 .iter()
                 .map(|s| s.to_string())
                 .collect(),
-            fast_encoder: false,
+            fast_encoder: true,
         }
     }
 }
@@ -87,6 +88,10 @@ impl SpeechConfig {
             .collect();
         self
     }
+}
+
+fn default_true() -> bool {
+    true
 }
 
 /// One recognised utterance. This is a transcription in the speaker's

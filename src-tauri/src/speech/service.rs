@@ -739,7 +739,7 @@ mod tests {
             self.calls.fetch_add(1, Ordering::SeqCst);
             std::thread::sleep(self.delay);
             assert!(opts.prompt.contains("rush B"));
-            assert!(!opts.fast_encoder);
+            assert!(opts.fast_encoder);
             Ok(Recognition {
                 text: self.text.clone(),
                 lang: opts.languages[0],

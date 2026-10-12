@@ -13,7 +13,8 @@
 //! crosstalk-asr-bench --live 120 --model base
 //! ```
 //!
-//! `--fast-encoder` encodes only the segment duration (compare with the default).
+//! `--full-encoder` encodes Whisper's full 30 s window instead of the segment
+//! duration (the app's default), to compare speed and accuracy.
 //! `--vad-only` runs the VAD and segmenter without Whisper (no model needed).
 //! Options: `--models-dir DIR` (default: the app's folder), `--threads N`,
 //! `--lang ru,en`, `--vad-threshold 0.55`, `--combat-peak-db -3`, `--markdown out.md`.
@@ -267,7 +268,7 @@ fn main() {
     if let Some(l) = arg(&args, "--lang") {
         config.languages = parse_langs(&l);
     }
-    config.fast_encoder = args.iter().any(|a| a == "--fast-encoder");
+    config.fast_encoder = !args.iter().any(|a| a == "--full-encoder");
     if let Some(v) = arg(&args, "--vad-threshold").and_then(|v| v.parse().ok()) {
         config.vad_threshold = v;
     }
@@ -381,9 +382,9 @@ fn main() {
                     verbose,
                 );
                 let label = if config.fast_encoder {
-                    format!("{model} (enc. court)")
-                } else {
                     model.to_string()
+                } else {
+                    format!("{model} (fenêtre 30 s)")
                 };
                 let r = row(&label, scenario, &t);
                 println!(

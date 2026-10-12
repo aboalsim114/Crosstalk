@@ -109,6 +109,9 @@ mod whisper_impl {
             if langs.len() == 1 {
                 return Ok((langs[0], 1.0));
             }
+            // whisper.cpp encodes with the window of the previous `full` call
+            // here (or 30 s on the first one): at least 2.5 s, enough to tell
+            // Russian from English.
             self.state
                 .pcm_to_mel(samples, threads)
                 .map_err(|e| SpeechError::Inference(format!("mel : {e}")))?;
