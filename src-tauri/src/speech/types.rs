@@ -41,6 +41,11 @@ pub struct SpeechConfig {
     pub vad_threshold: f32,
     /// CS2 vocabulary given to Whisper as initial prompt.
     pub glossary: Vec<String>,
+    /// Encode only the segment's duration instead of Whisper's fixed 30 s
+    /// window: several times faster, possibly less accurate. Off until the
+    /// bench says otherwise; not exposed in the UI.
+    #[serde(default)]
+    pub fast_encoder: bool,
 }
 
 impl Default for SpeechConfig {
@@ -53,6 +58,7 @@ impl Default for SpeechConfig {
                 .iter()
                 .map(|s| s.to_string())
                 .collect(),
+            fast_encoder: false,
         }
     }
 }
@@ -193,6 +199,7 @@ mod tests {
             languages: vec![Lang::En, Lang::En],
             vad_threshold: 2.0,
             glossary: vec!["  rush B ".into(), "".into(), "a\0wp".into()],
+            fast_encoder: false,
         }
         .sanitized();
         assert_eq!(c.vad_threshold, 0.9);

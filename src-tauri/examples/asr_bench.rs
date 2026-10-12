@@ -13,6 +13,7 @@
 //! crosstalk-asr-bench --live 120 --model base
 //! ```
 //!
+//! `--fast-encoder` encodes only the segment duration (compare with the default).
 //! `--vad-only` runs the VAD and segmenter without Whisper (no model needed).
 //! Options: `--models-dir DIR` (default: the app's folder), `--threads N`,
 //! `--lang ru,en`, `--vad-threshold 0.55`, `--combat-peak-db -3`, `--markdown out.md`.
@@ -266,6 +267,7 @@ fn main() {
     if let Some(l) = arg(&args, "--lang") {
         config.languages = parse_langs(&l);
     }
+    config.fast_encoder = args.iter().any(|a| a == "--fast-encoder");
     if let Some(v) = arg(&args, "--vad-threshold").and_then(|v| v.parse().ok()) {
         config.vad_threshold = v;
     }
@@ -297,8 +299,9 @@ fn main() {
 
     let mut md = String::new();
     md.push_str(&format!(
-        "### Banc d'essai ASR\n\nMachine : {} threads logiques, Whisper sur {threads} threads, CPU (AVX2), sans GPU. Bruit de combat **synthétique** (crête {peak_db} dBFS, voix à −6 dBFS).\n\n",
+        "### Banc d'essai ASR\n\nMachine : {} threads logiques, Whisper sur {threads} threads, CPU (AVX2), sans GPU, encodeur {}. Bruit de combat **synthétique** (crête {peak_db} dBFS, voix à −6 dBFS).\n\n",
         std::thread::available_parallelism().map(|n| n.get()).unwrap_or(0),
+        if config.fast_encoder { "réduit à la durée du segment" } else { "fenêtre complète de 30 s" },
     ));
 
     for model in model_list
@@ -377,7 +380,12 @@ fn main() {
                     export.as_deref(),
                     verbose,
                 );
-                let r = row(model, scenario, &t);
+                let label = if config.fast_encoder {
+                    format!("{model} (enc. court)")
+                } else {
+                    model.to_string()
+                };
+                let r = row(&label, scenario, &t);
                 println!(
                     "{HEADER}\n{r}\n  ({:.0} s d'audio traités en {:.0} s)",
                     t.audio_s, t.wall_s

@@ -641,6 +641,7 @@ fn transcribe(inner: &Inner, job: Job) {
             languages: &config.languages,
             prompt: &prompt,
             threads: inner.threads,
+            fast_encoder: config.fast_encoder,
         },
     );
     drop(slot);
@@ -738,6 +739,7 @@ mod tests {
             self.calls.fetch_add(1, Ordering::SeqCst);
             std::thread::sleep(self.delay);
             assert!(opts.prompt.contains("rush B"));
+            assert!(!opts.fast_encoder);
             Ok(Recognition {
                 text: self.text.clone(),
                 lang: opts.languages[0],

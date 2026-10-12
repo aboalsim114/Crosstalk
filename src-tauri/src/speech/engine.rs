@@ -9,6 +9,18 @@ pub struct RecognizeOptions<'a> {
     /// Initial prompt (glossary); empty for none.
     pub prompt: &'a str,
     pub threads: usize,
+    /// See `SpeechConfig::fast_encoder`.
+    pub fast_encoder: bool,
+}
+
+/// Encoder context for `samples` (Whisper: 1500 positions = 30 s), with a
+/// margin of one second. `None`: full window.
+pub fn audio_ctx_for(samples: usize, fast: bool) -> Option<i32> {
+    if !fast {
+        return None;
+    }
+    let secs = samples as f32 / super::dsp::SAMPLE_RATE as f32 + 1.0;
+    Some(((secs * 50.0).ceil() as i32).clamp(128, 1500))
 }
 
 pub trait Recognizer: Send {
@@ -141,6 +153,9 @@ mod whisper_impl {
             p.set_no_speech_thold(super::super::filter::NO_SPEECH_MAX);
             // Callouts are short: cap the output to stop runaway loops early.
             p.set_max_tokens(96);
+            if let Some(ctx) = audio_ctx_for(samples.len(), opts.fast_encoder) {
+                p.set_audio_ctx(ctx);
+            }
             if !opts.prompt.is_empty() {
                 p.set_initial_prompt(opts.prompt);
             }
@@ -203,6 +218,14 @@ mod tests {
         assert!((p - 0.75).abs() < 1e-6);
         assert_eq!(pick_language(&[Lang::En], probs), (Lang::En, 1.0));
         assert_eq!(pick_language(&[Lang::Ru, Lang::En], |_| 0.0).1, 0.5);
+    }
+
+    #[test]
+    fn short_segments_get_a_short_encoder_window() {
+        assert_eq!(audio_ctx_for(32_000, false), None);
+        assert_eq!(audio_ctx_for(32_000, true), Some(150)); // 2 s + 1 s margin
+        assert_eq!(audio_ctx_for(1_000, true), Some(128));
+        assert_eq!(audio_ctx_for(16_000 * 40, true), Some(1500));
     }
 
     #[test]

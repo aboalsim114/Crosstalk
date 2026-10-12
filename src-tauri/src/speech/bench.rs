@@ -88,6 +88,7 @@ pub fn run_pipeline(
                         languages: &config.languages,
                         prompt: &prompt,
                         threads,
+                        fast_encoder: config.fast_encoder,
                     },
                 )?;
                 out.push(SegmentResult {
