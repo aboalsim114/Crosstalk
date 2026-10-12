@@ -21,7 +21,6 @@ use std::sync::{mpsc, Arc, Mutex};
 use serde::Serialize;
 
 use crate::downloads::{self, DownloadEvents, DownloadState, DownloadStatus, Downloader, Fetcher};
-use crate::speech::models as whisper;
 
 /// One embedded application file, deflated (see build.rs).
 pub struct Entry {
@@ -376,6 +375,19 @@ impl Installer {
     }
 }
 
+/// In-app update: Crosstalk quits right after starting the installer; wait
+/// (polling, without touching the process) until its exe can be replaced.
+pub fn wait_until_closed(dir: &Path, timeout: std::time::Duration) -> bool {
+    let end = std::time::Instant::now() + timeout;
+    while ensure_not_running(dir).is_err() {
+        if std::time::Instant::now() > end {
+            return false;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(250));
+    }
+    true
+}
+
 /// A running crosstalk.exe cannot be replaced: say so before copying anything.
 fn ensure_not_running(dir: &Path) -> Result<(), String> {
     let exe = dir.join(APP_EXE);
@@ -392,6 +404,7 @@ fn ensure_not_running(dir: &Path) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::speech::models as whisper;
     use std::sync::atomic::AtomicUsize;
 
     fn pack(data: &[u8]) -> &'static [u8] {

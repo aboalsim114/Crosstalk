@@ -26,6 +26,14 @@ setup="dist-test/Crosstalk-$commit-setup.exe"
 [ -f "$zip" ] && [ -f "$setup" ] || { echo "paquet ou installateur introuvable pour $commit" >&2; exit 1; }
 zip_sha=$(sha256sum "$zip" | cut -d' ' -f1)
 setup_sha=$(sha256sum "$setup" | cut -d' ' -f1)
+setup_bytes=$(stat -c %s "$setup")
+# Same number as the one compiled into the app (src-tauri/build.rs).
+build_no=$(git rev-list --count HEAD)
+version=$(node -p "require('./src-tauri/tauri.conf.json').version")
+# Titles of the last merged pull requests (GitHub puts them in the merge body).
+notes_json=$(git log --first-parent --merges -n 6 --format='%b%x1e' | node -e '
+  const t = require("fs").readFileSync(0, "utf8").split("\x1e").map((b) => b.trim().split("\n")[0]).filter(Boolean);
+  process.stdout.write(JSON.stringify(t));')
 date=$(date -u '+%Y-%m-%d %H:%M UTC')
 
 tmp=$(mktemp -d)
@@ -43,6 +51,7 @@ cp "$root/$setup" "$setup_asset"
   echo
   echo "| | |"
   echo "|---|---|"
+  echo "| Build | $build_no (mise à jour depuis l'application : \`latest.json\`) |"
   echo "| Commit | [\`$commit\`](https://github.com/$repo/commit/$sha) |"
   echo "| Construite le | $date |"
   echo "| SHA-256 de l'installateur | \`$setup_sha\` |"
@@ -52,7 +61,13 @@ cp "$root/$setup" "$setup_asset"
   echo
   echo "Tout est local : aucune clé API, aucun abonnement, aucun envoi en ligne. Le zip contient les outils de test en ligne de commande (\`LISEZMOI-TEST.txt\`)."
 } > VERSION.md
-git add "$asset" "$setup_asset" VERSION.md
+# Update feed read by the app (src-tauri/src/updater.rs).
+node -e '
+  const [build, version, commit, date, sha256, bytes, url, notes] = process.argv.slice(1);
+  const feed = { build: Number(build), version, commit, date, notes: JSON.parse(notes), setup: { url, sha256, bytes: Number(bytes) } };
+  require("fs").writeFileSync("latest.json", JSON.stringify(feed, null, 1) + "\n");
+' "$build_no" "$version" "$commit" "$date" "$setup_sha" "$setup_bytes" "https://raw.githubusercontent.com/$repo/$branch/$setup_asset" "$notes_json"
+git add "$asset" "$setup_asset" VERSION.md latest.json
 git commit -qm "Version de test $commit ($date)"
 git push -qf origin "HEAD:refs/heads/$branch"
 cd "$root"

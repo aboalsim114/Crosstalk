@@ -28,6 +28,7 @@ mod shortcuts;
 pub mod speech;
 pub mod translation;
 mod tray;
+mod updater;
 
 use std::sync::Arc;
 
@@ -99,7 +100,12 @@ pub fn run() {
             chat::chat_start,
             chat::chat_stop,
             settings::settings_load,
-            settings::settings_save
+            settings::settings_save,
+            updater::update_status,
+            updater::update_check,
+            updater::update_download,
+            updater::update_cancel,
+            updater::update_install
         ])
         .setup(|app| {
             let handle = app.handle();
@@ -117,6 +123,12 @@ pub fn run() {
             app.manage(translation.clone());
             let speech = speech::start(handle);
             app.manage(speech.clone());
+            app.manage(updater::Updater::new(
+                Arc::new(downloads::HttpFetcher),
+                Arc::new(updater::TauriUpdateEvents(handle.clone())),
+                std::env::temp_dir().join("Crosstalk-update"),
+                updater::feed_url(),
+            ));
             app.manage(chat::ChatService::new(
                 Arc::new(chat::TauriChatEvents(handle.clone())),
                 chat::user_rules_file(),
