@@ -1,100 +1,207 @@
-# Crosstalk
+<div align="center">
 
-Crosstalk traduit en temps réel, en français, les voix et le chat de vos coéquipiers dans **Counter-Strike 2**. Les sous-titres s'affichent dans un overlay discret.
+<img src="docs/assets/crosstalk-readme-cover.svg" alt="Crosstalk — Comprenez le call. Restez dans le jeu." width="100%" />
 
-Crosstalk est une **application de bureau Windows** (Windows 10 et 11, x64), construite avec **Tauri v2** :
+<br />
 
-- **Cœur applicatif en Rust** : processus, fonctionnalités système, puis la capture audio, la reconnaissance vocale et la traduction.
-- **Interface en React + TypeScript**, affichée par WebView2.
+**La communication n'a pas de frontière. Votre équipe non plus.**
 
-Ce n'est pas un site web : l'application se lance depuis un `.exe` et s'installe avec un installateur `.exe` (NSIS) ou `.msi`.
+Une application Windows pensée pour rendre les annonces vocales de **Counter-Strike 2** compréhensibles en français, sans quitter la partie.
 
-> Crosstalk est un outil externe. Il n'injecte rien dans `cs2.exe`, ne lit pas la mémoire du jeu et n'intercepte pas le trafic réseau.
+<br />
 
-## Télécharger
+[**↓ Télécharger Crosstalk pour Windows**](https://github.com/aboalsim114/Crosstalk/raw/downloads/Crosstalk-setup.exe) · [**Voir la version de test**](https://github.com/aboalsim114/Crosstalk/blob/downloads/VERSION.md) · [**Documentation**](docs/architecture.md)
 
-**[⬇ Télécharger l'installateur de Crosstalk pour Windows (x64)](https://github.com/aboalsim114/Crosstalk/raw/downloads/Crosstalk-setup.exe)**
+<br />
 
-1. Lancez `Crosstalk-setup.exe` : l'installateur de Crosstalk s'ouvre. Choisissez le dossier (par défaut `%LOCALAPPDATA%\Crosstalk`, sans droits administrateur) et les raccourcis, puis **Installer Crosstalk**.
-2. L'installateur copie l'application **et télécharge ses modèles** de reconnaissance vocale et de traduction (environ 780 Mo, une seule fois), avec la progression réelle. À la fin : **Lancer Crosstalk**. Ensuite, tout fonctionne hors ligne : aucune clé API, aucun abonnement.
+<img alt="Windows 10 et 11" src="https://img.shields.io/badge/Windows-10%20%2F%2011-17191E?style=flat-square&labelColor=27282C" /> <img alt="Plateforme x64" src="https://img.shields.io/badge/Architecture-x64-17191E?style=flat-square&labelColor=27282C" /> <img alt="Version en développement" src="https://img.shields.io/badge/Statut-Development%20Preview-D58F57?style=flat-square&labelColor=27282C" /> <img alt="Traitement local" src="https://img.shields.io/badge/IA-Local%20first-17191E?style=flat-square&labelColor=27282C" />
 
-- Ce lien ne change jamais : il pointe toujours vers la dernière version de `develop`, republiée après chaque modification. Le commit, la date et les empreintes SHA-256 sont indiqués dans la [fiche de la version](https://github.com/aboalsim114/Crosstalk/blob/downloads/VERSION.md).
-- Version de test : non signée, Windows SmartScreen affiche un avertissement (« Informations complémentaires » > « Exécuter quand même »). WebView2, présent sur tout Windows 11, est installé automatiquement s'il manque.
-- Désinstallation : *Paramètres Windows › Applications › Crosstalk* (ou `uninstall.exe` dans le dossier d'installation). Les modèles sont conservés, sauf si vous demandez leur suppression.
-- Pour les tests avancés : [outils en ligne de commande](https://github.com/aboalsim114/Crosstalk/raw/downloads/crosstalk-windows-x64-portable.zip) (banc d'essai, sonde audio, test de traduction).
-- Le dépôt est privé : les liens fonctionnent pour les comptes GitHub qui y ont accès.
+</div>
 
-## État du projet
+---
 
-- **Voix réelles** : capture du son de CS2 (WASAPI process loopback), détection de parole (Silero VAD), transcription russe/anglaise (whisper.cpp), puis **traduction en français sur le PC** (Opus-MT). Tout est local : aucune clé API, aucun abonnement, aucun envoi en ligne. Les modèles se téléchargent automatiquement au premier lancement.
-- **Chat écrit** : encore simulé dans l'interface (lignes d'exemple).
+## Comprenez l'essentiel. Concentrez-vous sur le round.
 
-## Dépôt
+Une annonce en russe. Un *callout* en anglais. Une information décisive que vous n'avez pas comprise.
 
-| Dossier | Contenu |
+**Crosstalk transforme la parole détectée dans l'audio de CS2 en sous-titres français**, affichés dans un overlay discret. L'objectif : réduire la barrière de la langue, préserver votre attention et vous laisser jouer.
+
+<table>
+<tr>
+<td width="33%" valign="top">
+
+### 01 / Écouter
+Capture audio Windows ciblée sur le processus CS2, sans intégration intrusive dans le jeu.
+
+</td>
+<td width="33%" valign="top">
+
+### 02 / Comprendre
+Détection de parole, transcription puis traduction vers le français, directement sur votre PC.
+
+</td>
+<td width="33%" valign="top">
+
+### 03 / Continuer à jouer
+Un overlay transparent conçu pour afficher les sous-titres sans prendre le contrôle des clics.
+
+</td>
+</tr>
+</table>
+
+> **État actuel — version de développement.** Le pipeline vocal fonctionne avec des sources audio réelles, mais peut aussi détecter les tirs, effets sonores et autres bruits du jeu. L'isolation fiable des voix, la précision des traductions et la latence en conditions réelles sont encore en cours de validation. Le chat écrit est pour l'instant simulé dans l'interface. Ne considérez pas ce build comme une version stable.
+
+## Une expérience de bureau, pensée pour le jeu
+
+| | Expérience |
 | --- | --- |
-| `src-tauri/` | Cœur Rust : application Tauri v2, commandes natives. |
-| `src-installer/` | Installateur Windows (Tauri, design « Crosstalk Installer ») : copie de l'application, téléchargement des modèles, raccourcis ; son interface est dans `src/installer/`. |
-| `src/` | Interface React + TypeScript (Tailwind CSS, Motion, Three.js), embarquée dans l'exécutable. |
-| `docs/` | **Cahier des charges v2.0** ([cahier-des-charges.md](docs/cahier-des-charges.md)) et **architecture** ([architecture.md](docs/architecture.md)) : les documents de référence. |
-| `design/` | Maquette d'origine (Claude Design), cahier des charges v1.0 et transcriptions de conception. Référence historique. |
-| `scripts/` | Outillage local : `validate.ps1` (validation complète sous Windows), garde anti-triche, modèles Whisper, banc d'essai. |
+| **Overlay en jeu** | Fenêtre transparente, repositionnable, avec clics traversants par défaut. Fonctionne avec CS2 en mode fenêtré sans bordures. |
+| **Contrôle immédiat** | Affichez ou masquez l'overlay, mettez en pause ou déclenchez l'arrêt d'urgence via des raccourcis globaux. |
+| **Discret par conception** | Crosstalk peut continuer à fonctionner dans la zone de notification lorsque sa fenêtre principale est masquée. |
+| **Reconnaissance et traduction locales** | Pipeline WASAPI → Silero VAD → whisper.cpp → Opus-MT. Aucun compte, aucune clé API ni abonnement requis pour ce traitement. |
+| **Vraie application Windows** | Interface React + TypeScript intégrée dans Tauri v2, cœur natif Rust, rendu via WebView2. Ce n'est pas un site web. |
 
-## Intégration Windows
+### Le respect du jeu fait partie du produit
 
-| Fonction | Comportement |
+Crosstalk est un outil **externe**. Il n'injecte pas de code dans `cs2.exe`, ne lit pas la mémoire du jeu et n'intercepte pas son trafic réseau. La capture audio s'appuie sur des interfaces Windows documentées. Cela ne constitue **pas** une garantie d'approbation officielle par Valve ou d'absence de risque avec les règles et systèmes anti-triche : utilisez-le en connaissance de cause.
+
+---
+
+## Télécharger Crosstalk
+
+### Windows · x64 · Development preview
+
+**[↓ Télécharger l'installateur Crosstalk-setup.exe](https://github.com/aboalsim114/Crosstalk/raw/downloads/Crosstalk-setup.exe)**
+
+1. **Téléchargez** `Crosstalk-setup.exe` depuis la branche de distribution `downloads`.
+2. **Installez** Crosstalk dans le dossier proposé ou celui de votre choix. L'installateur personnalisé gère la mise en place de l'application, les raccourcis et les modèles nécessaires.
+3. **Lancez** Crosstalk puis ouvrez CS2. Les modèles de reconnaissance et de traduction représentent environ **780 Mo** à télécharger une fois. Une fois installés, le pipeline de transcription/traduction peut fonctionner hors ligne.
+
+**Avant l'installation :** ce build de test n'est pas signé numériquement et peut déclencher un avertissement SmartScreen. Vérifiez la provenance et, si nécessaire, comparez son empreinte SHA-256 avec la [fiche de distribution](https://github.com/aboalsim114/Crosstalk/blob/downloads/VERSION.md) avant de décider de l'exécuter.
+
+| Distribution | Usage |
 | --- | --- |
-| Fenêtre | Fenêtre native sans bordures, redimensionnable, avec la barre de titre de la maquette. Apparaît dans la barre des tâches. |
-| Zone de notification | Icône avec menu : afficher, démarrer/arrêter, overlay, pause, arrêt d'urgence, quitter. Fermer la fenêtre la masque, l'application continue de tourner. |
-| Raccourcis globaux | `Ctrl+Alt+F8` overlay, `Ctrl+Alt+F9` pause, `Ctrl+Alt+F10` arrêt d'urgence. Actifs même quand CS2 a le focus (`RegisterHotKey`, sans hook clavier). Les conflits avec d'autres applications sont signalés dans *Diagnostic*. |
-| Overlay en jeu | Seconde fenêtre transparente, toujours au premier plan, absente de la barre des tâches et click-through par défaut. Elle s'ancre dans le coin choisi et peut être repositionnée. Fonctionne avec CS2 en mode fenêtré sans bordures. |
-| Démarrage avec Windows | Option dans *À propos* : lance Crosstalk réduit dans la zone de notification (`--minimized`). |
-| Instance unique | Un second lancement remet la fenêtre existante au premier plan. |
+| [**Installateur de développement**](https://github.com/aboalsim114/Crosstalk/raw/downloads/Crosstalk-setup.exe) | Tester l'expérience Windows et la capture/traduction actuelle. |
+| [**Fiche du build et SHA-256**](https://github.com/aboalsim114/Crosstalk/blob/downloads/VERSION.md) | Identifier le commit, la date de compilation et contrôler les téléchargements. |
+| [**Outils Windows portables**](https://github.com/aboalsim114/Crosstalk/raw/downloads/crosstalk-windows-x64-portable.zip) | Diagnostics audio, banc d'essai ASR et tests de traduction. |
+| [**Releases GitHub**](https://github.com/aboalsim114/Crosstalk/releases) | Versions publiées depuis la branche de production, lorsqu'elles sont disponibles. |
 
-## Installation (utilisateurs)
+**À noter :** le dépôt est actuellement privé. Les liens GitHub nécessitent un compte disposant des droits d'accès. La branche `downloads` peut être en retard sur `develop` : consultez `VERSION.md` pour connaître le commit exact du build. Le runtime WebView2 est pris en charge par les installateurs Windows si nécessaire.
 
-Pour une version stable, téléchargez l'installateur depuis une Release GitHub (la version de développement est décrite plus haut, dans « Télécharger ») :
+### Commandes essentielles en jeu
 
-- `Crosstalk_x.y.z_x64-setup.exe` (NSIS) : installation pour l'utilisateur courant, sans droits administrateur ;
-- `Crosstalk_x.y.z_x64_fr-FR.msi` (WiX) : pour un déploiement géré.
+| Raccourci | Action |
+| :--- | :--- |
+| `Ctrl + Alt + F8` | Afficher / masquer l'overlay |
+| `Ctrl + Alt + F9` | Mettre en pause / reprendre |
+| `Ctrl + Alt + F10` | Arrêt d'urgence des captures |
 
-Il n'y a rien d'autre à installer, ni Rust ni Node.js. Si le runtime WebView2 manque (rare sous Windows 10, toujours présent sous Windows 11), l'installateur l'installe automatiquement.
+Ces raccourcis utilisent `RegisterHotKey`, sans hook clavier. Un éventuel conflit de raccourcis peut être consulté dans **Diagnostic**.
 
-## Développement
+---
 
-Prérequis sous Windows 10/11 x64 :
+## Ce qui fonctionne et ce qui arrive
 
-- [Rust](https://rustup.rs) stable (toolchain MSVC) ;
-- Node.js 22 ;
-- les *Build Tools* de Visual Studio, avec la charge de travail « Développement desktop en C++ » ;
-- LLVM (bindgen de whisper.cpp) et CMake.
+| Capacité | Statut | Détail |
+| --- | --- | --- |
+| Détection de `cs2.exe` et capture audio de processus | **Implémenté · en test** | WASAPI process loopback, Windows compatibles. |
+| Détection de parole et transcription RU / EN | **Implémenté · en test** | Silero VAD et whisper.cpp ; séparation parole / sons du jeu encore imparfaite. |
+| Traduction vocale vers le français | **Implémenté · en test** | Opus-MT local ; qualité et délais à mesurer sur des matchs réels. |
+| Overlay Windows et commandes rapides | **Implémenté** | Fenêtre transparente et raccourcis globaux. |
+| Identification fiable du joueur qui parle | **Expérimental / à valider** | Approche HUD et OCR prévue ; ne pas présumer qu'un pseudo est correctement identifié. |
+| Capture du chat écrit et traduction | **En développement** | Les messages montrés actuellement dans l'interface sont simulés. |
+| Version Windows stable et signée | **Non disponible** | Builds de test uniquement à ce stade. |
+
+Le cap produit est simple : **moins de bruit, des traductions utiles, et un minimum d'interruption pendant le jeu.** Les performances visées dans le cahier des charges ne sont pas des résultats mesurés.
+
+## Sous le capot
+
+<div align="center">
+
+`Counter-Strike 2` → `WASAPI` → `Silero VAD` → `whisper.cpp` → `Opus-MT` → `Overlay`
+
+</div>
+
+La capture ciblée récupère l'audio attribué au processus CS2 — **y compris les sons du jeu**, pas exclusivement la voix de vos coéquipiers. Le pipeline tente ensuite d'identifier les segments de parole avant de les transcrire et de les traduire. Les fonctions à venir sont décrites dans le [cahier des charges v2.0](docs/cahier-des-charges.md) et l'[architecture technique](docs/architecture.md).
+
+### Stack technique
+
+| Couche | Technologie |
+| --- | --- |
+| Application native | **Tauri v2 · Rust** |
+| Interface | **React · TypeScript · Tailwind CSS** |
+| Direction artistique et animation | **Motion · Three.js** |
+| Capture / fonctionnalités Windows | **WASAPI process loopback · WebView2 · APIs Windows** |
+| Intelligence vocale locale | **Silero VAD · whisper.cpp · Opus-MT** |
+| Tests | **Vitest · Cargo tests · scripts de validation Windows** |
+
+### Structure du dépôt
+
+```text
+Crosstalk/
+├── src/               # Application React, écrans, overlay et UI de l'installateur
+├── src-tauri/         # Cœur Rust, intégration Windows et configuration Tauri
+├── src-installer/     # Installateur personnalisé séparé
+├── docs/              # Architecture, cahier des charges et protocoles de test
+├── design/            # Maquettes et archives de conception
+├── scripts/           # Validation locale, publication et bancs d'essai
+└── CONTRIBUTING.md    # Workflow de contribution
+```
+
+## Développer en local
+
+**Prérequis :** Windows 10/11 x64, Node.js 22, Rust stable avec toolchain **MSVC**, Visual Studio Build Tools (développement desktop C++), LLVM / `LIBCLANG_PATH` et CMake.
 
 ```powershell
 npm install
-npm run app:dev     # lance l'application Tauri avec rechargement à chaud
-npm test            # tests de l'interface (Vitest)
-cd src-tauri; cargo test   # tests du cœur Rust
-npm run app:build   # produit le .exe et les installateurs NSIS / MSI
+npm run app:dev        # application Tauri et rechargement à chaud
+npm test               # tests React / TypeScript
+npm run typecheck      # contrôle des types
 ```
 
-Les installateurs sont générés dans `src-tauri/target/release/bundle/` (`nsis/` et `msi/`).
+Pour les tests Rust et le build, depuis la racine du dépôt :
 
-**Validation complète** (aucune CI : tout se vérifie en local) :
+```powershell
+cd src-tauri
+cargo test --all-targets --locked
+cd ..
+npm run app:build
+```
+
+Les bundles Tauri sont générés dans `src-tauri/target/release/bundle/` (`nsis/` et `msi/`). Le projet comporte également un **installateur personnalisé** distinct, documenté dans l'architecture.
+
+### Validation locale · sans GitHub Actions
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts\validate.ps1
 ```
 
-Le script enchaîne garde anti-triche, typecheck, tests, rustfmt, clippy, build MSVC et installateurs, puis écrit `dist-local\<commit>\validation.md`, le rapport à joindre à la Pull Request.
+La validation couvre les contrôles anti-triche du dépôt, les vérifications TypeScript, les tests, `rustfmt`, `clippy`, la compilation Windows et les bundles prévus par le script. Un rapport est généré dans `dist-local\<commit>\validation.md`. Les vérifications audio et les essais réels dans CS2 restent manuels et doivent être rapportés séparément.
 
-> `npm run dev` sert uniquement l'interface dans un navigateur, pour des retouches visuelles rapides. Le produit livré est toujours l'application Tauri.
+`npm run dev` lance seulement l'interface web pour la conception ; **le produit livré est l'application desktop Tauri**.
 
-## Contribution
+## Contribuer et publier
 
-- `develop` est la branche de développement et la branche par défaut. `main` est la production.
-- Chaque sujet a sa branche (`feat/…`, `fix/…`, `chore/…`), part de `develop` et y revient par Pull Request, accompagnée d'un rapport de validation locale.
-- `main` n'accepte que des Pull Requests de release (`develop` → `main`), validées par le propriétaire du dépôt.
-- Le projet n'utilise pas GitHub Actions : builds, tests et benchmarks s'exécutent sur un PC Windows. GitHub sert au code, aux branches, aux issues et aux Pull Requests.
-- Les publications se font par tag `vx.y.z` sur `main` ; les installateurs, construits en local, sont joints à une Release GitHub en brouillon.
+```text
+main             → production / releases validées
+  ↑
+develop          → intégration du développement
+  ↑
+feat/* · fix/* · chore/* → branches de travail, Pull Requests
+```
 
-Le détail est dans [CONTRIBUTING.md](CONTRIBUTING.md).
+Chaque modification suit une branche dédiée et une Pull Request ciblant `develop`. La branche `main` reste réservée aux releases approuvées. **Aucune GitHub Actions n'est utilisée** : les validations et compilations sont réalisées localement sur Windows. Les versions de production sont publiées via tags `vx.y.z` et Releases GitHub après validation du mainteneur.
+
+Lire **[CONTRIBUTING.md](CONTRIBUTING.md)** pour les règles de branches, les rapports de test et le processus de publication.
+
+---
+
+<div align="center">
+
+### **CROSSTALK**
+
+*La bonne information. Au bon moment. Dans votre langue.*
+
+<sub>Independent Windows desktop project for Counter-Strike 2. Not affiliated with, endorsed by, or sponsored by Valve.</sub>
+
+</div>
