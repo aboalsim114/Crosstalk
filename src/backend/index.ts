@@ -169,3 +169,91 @@ export const cs2 = {
   status: (): Promise<Cs2Status> => (isTauri ? invoke<Cs2Status>('cs2_status') : Promise.resolve({ running: false, pid: null })),
   onStatus: (cb: (s: Cs2Status) => void) => (isTauri ? listen<Cs2Status>('cs2://status', (e) => cb(e.payload)) : Promise.resolve(noop)),
 };
+
+// ---------- speech recognition (src-tauri/src/speech) ----------
+
+export type SpeechLang = 'ru' | 'en';
+export type EngineState = 'missing' | 'loading' | 'ready' | 'error';
+export type RejectReason =
+  | 'short'
+  | 'transient'
+  | 'stale'
+  | 'overflow'
+  | 'empty'
+  | 'noSpeech'
+  | 'lowConfidence'
+  | 'hallucination'
+  | 'repetition'
+  | 'wrongScript';
+
+export interface SpeechConfig {
+  model: string;
+  languages: SpeechLang[];
+  /** 0.2–0.9. */
+  vadThreshold: number;
+  glossary: string[];
+}
+
+export interface SpeechStatus {
+  state: EngineState;
+  config: SpeechConfig;
+  modelPath: string | null;
+  vadReady: boolean;
+  modelsDir: string;
+  error: string | null;
+  loadMs: number | null;
+  backend: string;
+  threads: number;
+}
+
+/** A transcription in the speaker's language (not a translation). */
+export interface Transcript {
+  id: number;
+  text: string;
+  lang: SpeechLang;
+  langProb: number;
+  audioMs: number;
+  latencyMs: number;
+  asrMs: number;
+  avgLogprob: number;
+  noSpeechProb: number;
+  model: string;
+}
+
+export interface SpeechStats {
+  segments: number;
+  transcribed: number;
+  rejected: Partial<Record<RejectReason, number>>;
+  droppedBlocks: number;
+  latencyP50Ms: number | null;
+  latencyP95Ms: number | null;
+  lastRtf: number | null;
+  cpuPercent: number | null;
+}
+
+export interface VoiceActivity {
+  speaking: boolean;
+  transcribing: boolean;
+}
+
+export interface ModelInfo {
+  id: string;
+  file: string;
+  sizeMb: number;
+  note: string;
+  installed: boolean;
+  url: string;
+}
+
+export const speech = {
+  status: (): Promise<SpeechStatus | null> => (isTauri ? invoke<SpeechStatus>('speech_status') : Promise.resolve(null)),
+  stats: (): Promise<SpeechStats | null> => (isTauri ? invoke<SpeechStats>('speech_stats') : Promise.resolve(null)),
+  models: (): Promise<ModelInfo[]> => (isTauri ? invoke<ModelInfo[]>('speech_models') : Promise.resolve([])),
+  configure: (config: SpeechConfig): Promise<SpeechStatus | null> =>
+    isTauri ? invoke<SpeechStatus>('speech_configure', { config }) : Promise.resolve(null),
+  rescan: (): Promise<SpeechStatus | null> => (isTauri ? invoke<SpeechStatus>('speech_rescan') : Promise.resolve(null)),
+  onStatus: (cb: (s: SpeechStatus) => void) => (isTauri ? listen<SpeechStatus>('speech://status', (e) => cb(e.payload)) : Promise.resolve(noop)),
+  onTranscript: (cb: (t: Transcript) => void) => (isTauri ? listen<Transcript>('speech://transcript', (e) => cb(e.payload)) : Promise.resolve(noop)),
+  onActivity: (cb: (a: VoiceActivity) => void) => (isTauri ? listen<VoiceActivity>('speech://activity', (e) => cb(e.payload)) : Promise.resolve(noop)),
+  onStats: (cb: (s: SpeechStats) => void) => (isTauri ? listen<SpeechStats>('speech://stats', (e) => cb(e.payload)) : Promise.resolve(noop)),
+};

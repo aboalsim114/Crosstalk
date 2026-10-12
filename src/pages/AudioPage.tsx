@@ -2,7 +2,8 @@ import { config } from '../config';
 import { Radio, Seg, Slider, Toggle, ToggleRow, fnt } from '../components/atoms';
 import { LevelMeter } from '../components/LevelMeter';
 import { captureSummary, cs2Summary, isCapturing, refreshDevices, runCaptureTest, testMessage, useAudio } from '../state/audio';
-import { MODELS } from '../state/data';
+import { MODELS, type ModelId } from '../state/data';
+import { engineSummary, formatMs, rescanModels, statsLine, useSpeech } from '../state/speech';
 import { useApp, type Accel, type CaptureSource, type Engine } from '../state/store';
 
 const ACCELS: [Accel, string][] = [
@@ -25,7 +26,7 @@ function CaptureCard() {
     ? [
         ['process', 'Audio de CS2 uniquement', `Process loopback WASAPI ciblant cs2.exe. Sans injection. ${audio.cs2?.running ? `CS2 détecté (PID ${audio.cs2.pid}).` : 'CS2 non détecté.'}`, 'RECOMMANDÉ', false],
         ['device', 'Périphérique de sortie', 'Loopback du casque — capte aussi Discord, navigateur…', 'REPLI', false],
-        ['wav', 'Fichier WAV de démonstration', 'Arrive avec la reconnaissance vocale', 'À VENIR', true],
+        ['wav', 'Fichier WAV de démonstration', 'Hors application : crosstalk-asr-bench --manifest', 'OUTIL', true],
       ]
     : [
         ['process', 'Audio de CS2 uniquement', 'Process loopback WASAPI ciblant cs2.exe. Sans injection.', fb ? 'INDISPONIBLE' : 'RECOMMANDÉ', fb],
@@ -142,18 +143,109 @@ function VadCard() {
   const vad = useApp((s) => s.vad);
   const noise = useApp((s) => s.tg.noise);
   const { set, toggle } = useApp.getState();
+  const native = useSpeech((x) => x.native);
+  const stats = useSpeech((x) => x.stats);
+  const activity = useSpeech((x) => x.activity);
   return (
     <div className="glass flex flex-col gap-3.5 p-5">
-      <div className="lbl">DÉTECTION DE PAROLE · VAD</div>
-      <Slider label="Seuil de détection" unit="%" min={20} max={90} value={vad} onChange={(v) => set({ vad: v })} hint="Plus haut = ignore davantage les tirs et bruitages" />
-      <div className="flex items-center justify-between gap-3">
-        <div className="flex flex-col gap-[3px]">
-          <span className="row-title">
-            Suppression de bruit <span style={{ font: fnt(500, 9, 'mono'), letterSpacing: '.12em', color: '#ffa24a', marginLeft: 6 }}>EXPÉRIMENTAL</span>
+      <div className="flex items-center justify-between">
+        <span className="lbl">DÉTECTION DE PAROLE · VAD{native ? ' SILERO' : ''}</span>
+        {native && (
+          <span data-testid="vad-activity" style={{ font: fnt(500, 9.5, 'mono'), letterSpacing: '.12em', color: activity.speaking ? '#ffa24a' : '#5a5650' }}>
+            {activity.speaking ? '● PAROLE' : 'À L’ÉCOUTE'}
           </span>
-          <span className="row-sub">Pré-roll 250 ms · post-roll 400 ms</span>
+        )}
+      </div>
+      <Slider label="Seuil de détection" unit="%" min={20} max={90} value={vad} onChange={(v) => set({ vad: v })} hint="Plus haut = ignore davantage les tirs et bruitages" />
+      {native ? (
+        <div className="flex flex-col gap-1.5" style={{ font: fnt(400, 11, 'sans', 1.5), color: '#6e6961' }}>
+          <span>Pré-roll 256 ms · post-roll 416 ms · 8 s max · rejet des tirs et explosions · segments de plus de 6 s abandonnés.</span>
+          <span data-testid="speech-stats" style={{ color: '#8f8a83' }}>
+            {statsLine(stats)}
+          </span>
+          <span>La VAD ne sépare pas parfaitement les voix des bruitages : un filtre anti-hallucinations vérifie aussi chaque transcription.</span>
         </div>
-        <Toggle on={noise} onClick={() => toggle('noise')} label="Suppression de bruit" />
+      ) : (
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex flex-col gap-[3px]">
+            <span className="row-title">
+              Suppression de bruit <span style={{ font: fnt(500, 9, 'mono'), letterSpacing: '.12em', color: '#ffa24a', marginLeft: 6 }}>EXPÉRIMENTAL</span>
+            </span>
+            <span className="row-sub">Pré-roll 250 ms · post-roll 400 ms</span>
+          </div>
+          <Toggle on={noise} onClick={() => toggle('noise')} label="Suppression de bruit" />
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Desktop app: the real model files found on disk and the engine state. */
+function NativeModelCard() {
+  const s = useApp();
+  const sp = useSpeech();
+  const engine = engineSummary(sp.status);
+  const stats = sp.stats;
+  return (
+    <div className="glass flex flex-col gap-2 p-5">
+      <div className="flex items-center justify-between pb-1">
+        <span className="lbl">MODÈLE LOCAL · WHISPER</span>
+        <span style={{ font: fnt(500, 9.5, 'mono'), letterSpacing: '.12em', color: '#6e6961' }}>{sp.status?.backend ?? 'CPU'} · SANS GPU</span>
+      </div>
+      <div className="flex items-baseline justify-between gap-3 pb-1" data-testid="engine-state">
+        <span style={{ font: fnt(500, 12.5), color: engine.color }}>{engine.value}</span>
+        <span className="truncate text-right" style={{ font: fnt(400, 11), color: '#6e6961' }}>
+          {engine.detail}
+        </span>
+      </div>
+      {sp.models.map((m) => {
+        const on = s.model === m.id;
+        return (
+          <div
+            key={m.id}
+            role="radio"
+            aria-checked={on}
+            aria-disabled={!m.installed}
+            onClick={() => m.installed && s.set({ model: m.id as ModelId })}
+            className="grid items-center gap-3 rounded-[10px] px-3 py-2.5"
+            style={{
+              gridTemplateColumns: '15px minmax(0,1fr) auto',
+              border: `1px solid ${on ? 'rgba(255,162,74,.35)' : 'rgba(255,255,255,.05)'}`,
+              background: on ? 'rgba(255,162,74,.06)' : 'transparent',
+              cursor: m.installed ? 'pointer' : 'not-allowed',
+              opacity: m.installed || on ? 1 : 0.55,
+              transition: 'all .3s',
+            }}
+          >
+            <Radio on={on} size={13} dot={5} />
+            <div className="flex min-w-0 flex-col gap-0.5">
+              <span style={{ font: fnt(500, 12.5, 'mono'), color: '#ece6dc' }}>whisper-{m.id}</span>
+              <span style={{ font: fnt(400, 11), color: '#6e6961' }}>{m.note}</span>
+            </div>
+            <div className="flex flex-col items-end gap-0.5">
+              <span style={{ font: fnt(400, 11, 'mono'), color: '#8f8a83' }}>{m.sizeMb >= 1000 ? `${(m.sizeMb / 1000).toFixed(1).replace('.', ',')} Go` : `${m.sizeMb} Mo`}</span>
+              <span style={{ font: fnt(500, 10.5), color: on ? '#ffa24a' : m.installed ? '#7fe0a8' : '#6e6961' }}>{on ? (m.installed ? 'Actif' : 'Sélectionné · absent') : m.installed ? 'Installé' : 'Non installé'}</span>
+            </div>
+          </div>
+        );
+      })}
+      {stats && stats.transcribed > 0 && (
+        <div style={{ font: fnt(400, 11, 'sans', 1.5), color: '#8f8a83' }} data-testid="asr-metrics">
+          Latence p50 {stats.latencyP50Ms != null ? formatMs(stats.latencyP50Ms) : '—'} · p95 {stats.latencyP95Ms != null ? formatMs(stats.latencyP95Ms) : '—'}
+          {stats.lastRtf != null && ` · RTF ${stats.lastRtf.toFixed(2).replace('.', ',')}`}
+          {stats.cpuPercent != null && ` · CPU ${Math.round(stats.cpuPercent)} % de la machine`}
+        </div>
+      )}
+      <div className="flex items-center gap-3 pt-1">
+        <div className="pill pill-ghost flex-none px-3.5 py-[7px]" role="button" onClick={() => rescanModels()} style={{ font: fnt(500, 11.5) }}>
+          Rechercher les modèles
+        </div>
+        <span className="min-w-0 truncate" title={sp.status?.modelsDir} style={{ font: fnt(400, 10.5, 'mono'), color: '#5a5650' }}>
+          {sp.status?.modelsDir ?? '%LOCALAPPDATA%\\Crosstalk\\models'}
+        </span>
+      </div>
+      <div style={{ font: fnt(400, 10.5, 'sans', 1.5), color: '#5a5650' }}>
+        Installation : scripts\download-models.ps1 (téléchargement depuis Hugging Face, vérification SHA-1). Le téléchargement intégré arrive avec les réglages persistants.
       </div>
     </div>
   );
@@ -161,6 +253,8 @@ function VadCard() {
 
 function ModelCard() {
   const s = useApp();
+  const native = useSpeech((x) => x.native);
+  if (native) return <NativeModelCard />;
   return (
     <div className="glass flex flex-col gap-2 p-5">
       <div className="flex items-center justify-between pb-1">

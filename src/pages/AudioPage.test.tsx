@@ -1,7 +1,8 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { IDLE_CAPTURE } from '../backend';
 import { useAudio } from '../state/audio';
+import { useSpeech } from '../state/speech';
 import { useApp } from '../state/store';
 import { AudioPage } from './AudioPage';
 
@@ -26,7 +27,7 @@ describe('Audio & IA in the desktop app', () => {
     expect(screen.getByTestId('level-meter')).toHaveTextContent('−20,0 dBFS rms · −10,5 dBFS crête');
     expect(screen.getByRole('meter')).toHaveAttribute('aria-valuenow', '0.67');
     expect(screen.getByTestId('capture-state')).toHaveTextContent('Process loopback');
-    expect(screen.getByText('À VENIR')).toBeInTheDocument();
+    expect(screen.getByText('OUTIL')).toBeInTheDocument();
     expect(screen.getByText('Tester la capture 10 s')).toBeInTheDocument();
   });
 
@@ -43,5 +44,53 @@ describe('Audio & IA in the desktop app', () => {
     render(<AudioPage />);
     expect(screen.queryByTestId('level-meter')).not.toBeInTheDocument();
     expect(screen.getByText('Test audio 10 s')).toBeInTheDocument();
+  });
+});
+
+describe('speech recognition cards in the desktop app', () => {
+  const speech0 = useSpeech.getState();
+  beforeEach(() => useSpeech.setState(speech0, true));
+
+  it('lists the real model files and the engine state', () => {
+    useSpeech.setState({
+      native: true,
+      status: {
+        state: 'missing',
+        config: { model: 'base', languages: ['ru', 'en'], vadThreshold: 0.55, glossary: [] },
+        modelPath: null,
+        vadReady: true,
+        modelsDir: 'C:\\Users\\x\\AppData\\Local\\Crosstalk\\models',
+        error: null,
+        loadMs: null,
+        backend: 'CPU · AVX2',
+        threads: 4,
+      },
+      models: [
+        { id: 'tiny', file: 'ggml-tiny.bin', sizeMb: 75, note: 'Très rapide', installed: true, url: '' },
+        { id: 'base', file: 'ggml-base.bin', sizeMb: 142, note: 'Défaut', installed: false, url: '' },
+      ],
+    });
+    useApp.setState({ model: 'base' });
+    render(<AudioPage />);
+    expect(screen.getByTestId('engine-state')).toHaveTextContent('Modèle absent');
+    expect(screen.getByText('Sélectionné · absent')).toBeInTheDocument();
+    expect(screen.getByText('Installé')).toBeInTheDocument();
+    expect(screen.getByText('Rechercher les modèles')).toBeInTheDocument();
+    expect(screen.getByText(/CPU · AVX2 · SANS GPU/)).toBeInTheDocument();
+    // Picking an installed model selects it; a missing one cannot be picked.
+    fireEvent.click(screen.getByText('whisper-tiny'));
+    expect(useApp.getState().model).toBe('tiny');
+  });
+
+  it('shows the real VAD activity and rejection counters', () => {
+    useSpeech.setState({
+      native: true,
+      activity: { speaking: true, transcribing: false },
+      stats: { segments: 6, transcribed: 2, rejected: { transient: 4 }, droppedBlocks: 0, latencyP50Ms: 1100, latencyP95Ms: 1900, lastRtf: 0.4, cpuPercent: 9 },
+    });
+    render(<AudioPage />);
+    expect(screen.getByTestId('vad-activity')).toHaveTextContent('● PAROLE');
+    expect(screen.getByTestId('speech-stats')).toHaveTextContent('2 transcrits · 4 rejetés (tir / explosion 4)');
+    expect(screen.getByTestId('asr-metrics')).toHaveTextContent('Latence p50 1,1 s · p95 1,9 s · RTF 0,40 · CPU 9 % de la machine');
   });
 });

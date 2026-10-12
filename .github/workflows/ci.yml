@@ -37,7 +37,10 @@ jobs:
   windows:
     name: windows-build
     runs-on: windows-latest
-    timeout-minutes: 60
+    timeout-minutes: 75
+    env:
+      # whisper-rs-sys generates its bindings with bindgen (LLVM is preinstalled).
+      LIBCLANG_PATH: C:\Program Files\LLVM\bin
     steps:
       - uses: actions/checkout@v4
 
@@ -97,12 +100,15 @@ jobs:
       - name: Build Windows installers (NSIS + MSI)
         run: npx tauri build --target x86_64-pc-windows-msvc
 
-      - name: Build the audio diagnostic probe
+      - name: Build the audio probe and the ASR bench
         working-directory: src-tauri
         shell: bash
         run: |
-          cargo build --release --locked --example audio_probe --target x86_64-pc-windows-msvc
+          cargo build --release --locked --example audio_probe --example asr_bench --target x86_64-pc-windows-msvc
           cp target/x86_64-pc-windows-msvc/release/examples/audio_probe.exe target/x86_64-pc-windows-msvc/release/crosstalk-audio-probe.exe
+          cp target/x86_64-pc-windows-msvc/release/examples/asr_bench.exe target/x86_64-pc-windows-msvc/release/crosstalk-asr-bench.exe
+          # Flat artifact: the helper scripts sit next to the executables.
+          cp ../scripts/download-models.ps1 ../scripts/fetch-asr-corpus.py target/x86_64-pc-windows-msvc/release/
 
       - name: Upload installers
         uses: actions/upload-artifact@v4
@@ -114,3 +120,91 @@ jobs:
             src-tauri/target/x86_64-pc-windows-msvc/release/bundle/msi/*.msi
             src-tauri/target/x86_64-pc-windows-msvc/release/crosstalk.exe
             src-tauri/target/x86_64-pc-windows-msvc/release/crosstalk-audio-probe.exe
+            src-tauri/target/x86_64-pc-windows-msvc/release/crosstalk-asr-bench.exe
+            src-tauri/target/x86_64-pc-windows-msvc/release/download-models.ps1
+            src-tauri/target/x86_64-pc-windows-msvc/release/fetch-asr-corpus.py
+
+  # Speech recognition measurements on a real Windows CPU with real models and a
+  # public reference corpus (FLEURS ru/en). Informative: it depends on Hugging
+  # Face being reachable, so it never blocks a merge. Results: job summary and
+  # annotations.
+  asr-bench:
+    name: asr-bench
+    runs-on: windows-latest
+    timeout-minutes: 140
+    continue-on-error: true
+    env:
+      LIBCLANG_PATH: C:\Program Files\LLVM\bin
+      CROSSTALK_MODELS_DIR: ${{ github.workspace }}\models
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri -> target
+          key: asr-bench
+
+      - name: Build the bench
+        working-directory: src-tauri
+        shell: pwsh
+        run: |
+          cargo build --release --locked --example asr_bench 2>&1 | Tee-Object -FilePath build.log
+          if ($LASTEXITCODE -ne 0) {
+            Select-String -Path build.log -Pattern 'error' | Select-Object -First 15 | ForEach-Object { echo "::error title=bench build::$($_.Line)" }
+            exit 1
+          }
+
+      - uses: actions/cache@v4
+        with:
+          path: models
+          key: whisper-models-v1-tiny-base-small-silero512
+
+      - name: Download models (checked by size and SHA-1)
+        shell: pwsh
+        run: ./scripts/download-models.ps1 -Models tiny,base,small -Dir models
+
+      - name: Download the reference corpus (FLEURS dev, CC-BY-4.0)
+        shell: bash
+        run: python scripts/fetch-asr-corpus.py --out corpus --per-lang 8
+
+      - name: Runner CPU
+        shell: pwsh
+        run: |
+          $cpu = (Get-CimInstance Win32_Processor | Select-Object -First 1).Name
+          $n = [Environment]::ProcessorCount
+          echo "::notice title=ASR runner::$cpu, $n threads logiques"
+          echo "Processeur du runner : $cpu ($n threads logiques)" >> $env:GITHUB_STEP_SUMMARY
+
+      # One step per measurement, each with its own time limit, so that a slow
+      # model does not hide the results of the others.
+      - name: False transcripts on synthetic combat noise (base)
+        timeout-minutes: 10
+        continue-on-error: true
+        shell: bash
+        run: scripts/ci-asr-bench.sh noise 480 --model base --noise-only 120
+
+      - name: tiny (clean + combat)
+        timeout-minutes: 15
+        continue-on-error: true
+        shell: bash
+        run: scripts/ci-asr-bench.sh tiny 780 --model tiny --manifest corpus/manifest.tsv --scenario clean,combat
+
+      - name: base (clean + combat)
+        timeout-minutes: 20
+        continue-on-error: true
+        shell: bash
+        run: scripts/ci-asr-bench.sh base 1080 --model base --manifest corpus/manifest.tsv --scenario clean,combat
+
+      - name: small (clean)
+        timeout-minutes: 20
+        continue-on-error: true
+        shell: bash
+        run: scripts/ci-asr-bench.sh small 1080 --model small --manifest corpus/manifest.tsv --scenario clean
+
+      - name: base with Whisper's full 30 s window (clean, for comparison)
+        timeout-minutes: 20
+        continue-on-error: true
+        shell: bash
+        run: scripts/ci-asr-bench.sh base-full 1080 --model base --full-encoder --manifest corpus/manifest.tsv --scenario clean

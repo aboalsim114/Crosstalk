@@ -1,18 +1,15 @@
 //! Translation pipeline: the seams for the upcoming native features.
 //!
 //! ```text
-//!   cs2::ChatSource ───────────────────────────────┐
-//!                                                  ▼
-//!   audio::AudioCapture → (VAD) → asr::Transcriber → translation::Translator → UI / overlay
+//!   cs2::ChatSource ─────────────────────────────────────────┐
+//!                                                            ▼
+//!   crate::audio (capture) → crate::speech (VAD, Whisper) → translation::Translator → UI / overlay
 //! ```
 //!
-//! Phase 1 ships the interface with simulated data (see `src/state/store.ts`); each
-//! stage here is a trait so the real implementations (WASAPI process loopback,
-//! whisper-rs, DeepL/Azure, console.log tailing) can land one PR at a time and be
-//! tested in isolation with fakes.
+//! Capture and speech recognition are implemented in their own modules; the
+//! remaining stages are traits so the real implementations (DeepL/Azure,
+//! console.log tailing) can land one PR at a time and be tested with fakes.
 
-pub mod asr;
-pub mod audio;
 pub mod cs2;
 pub mod translation;
 
