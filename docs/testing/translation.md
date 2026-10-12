@@ -6,7 +6,7 @@
 
 ## 0. Préparation
 
-1. Construire le commit testé : `powershell -ExecutionPolicy Bypass -File scripts\validate.ps1` (ou les commandes de CONTRIBUTING.md) et `cargo build --release --locked --example translate --target x86_64-pc-windows-msvc` dans `src-tauri`.
+1. Construire le commit testé : `powershell -ExecutionPolicy Bypass -File scripts\validate.ps1`. Le dossier `dist-local\<commit>\` contient `crosstalk-translate.exe`.
 2. Installer les modèles (environ 620 Mo en plus de Whisper) :
    ```powershell
    powershell -ExecutionPolicy Bypass -File scripts\download-models.ps1 -Translation
@@ -15,7 +15,7 @@
 
 ## 1. Outil en ligne de commande (sans CS2)
 
-`translate.exe` est dans `src-tauri\target\x86_64-pc-windows-msvc\release\examples\`.
+Dans `dist-local\<commit>\`, l'outil s'appelle `crosstalk-translate.exe` (ci-dessous `.\translate.exe`).
 
 | # | Commande | Résultat attendu |
 | --- | --- | --- |
