@@ -15,6 +15,8 @@
    Le script vérifie la taille exacte et le SHA-1 publié par whisper.cpp. Il affiche aussi le SHA-256 : copiez la ligne `ggml-silero-v5.1.2.bin` dans le compte rendu.
 4. Notez votre processeur (Gestionnaire des tâches → Performances) et votre version de Windows (`winver`).
 
+> **Sans CI Windows** (indisponible, par exemple quand les Actions sont bloquées) : `scripts/cross-build-windows-gnu.sh` produit sous Linux un paquet portable de test compilé avec MinGW/gcc (`dist-test/crosstalk-<commit>-windows-x64-gcc-test.zip`, notice `LISEZMOI-TEST.txt` incluse). La version officielle reste celle de la CI (MSVC). Pour comparer les deux compilateurs, lancez la même commande `crosstalk-asr-bench` avec les deux exécutables, sur le même WAV.
+
 ## 1. Banc d'essai hors ligne (sans CS2)
 
 Dans un terminal ouvert dans le dossier de l'artefact :
