@@ -154,15 +154,16 @@ jobs:
       # Ninja + clang-cl need the MSVC developer environment (linker, SDK).
       - uses: ilammy/msvc-dev-cmd@v1
 
+      # PowerShell, not bash: Git Bash's /usr/bin/link would shadow MSVC's link.exe.
       - name: Build the bench
         working-directory: src-tauri
-        shell: bash
+        shell: pwsh
         run: |
-          set -o pipefail
-          if ! cargo build --release --locked --example asr_bench 2>&1 | tee build.log; then
-            grep -iE "error|fatal" build.log | head -15 | while read -r l; do echo "::error title=bench build::$l"; done
+          cargo build --release --locked --example asr_bench 2>&1 | Tee-Object -FilePath build.log
+          if ($LASTEXITCODE -ne 0) {
+            Select-String -Path build.log -Pattern 'error' | Select-Object -First 15 | ForEach-Object { echo "::error title=bench build::$($_.Line)" }
             exit 1
-          fi
+          }
 
       - uses: actions/cache@v4
         with:
