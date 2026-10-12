@@ -392,6 +392,10 @@ fn main() {
                 );
                 md.push_str(&r);
                 md.push('\n');
+                // Written after every row: a time limit keeps what was measured.
+                if let Some(out) = arg(&args, "--markdown") {
+                    let _ = std::fs::write(&out, &md);
+                }
             }
         }
     }
