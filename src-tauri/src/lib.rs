@@ -23,6 +23,7 @@ mod overlay;
 // Traits and helpers for the upcoming native pipeline; wired in later phases.
 #[allow(dead_code)]
 mod pipeline;
+mod settings;
 mod shortcuts;
 pub mod speech;
 pub mod translation;
@@ -96,7 +97,9 @@ pub fn run() {
             chat::chat_configure,
             chat::chat_rescan,
             chat::chat_start,
-            chat::chat_stop
+            chat::chat_stop,
+            settings::settings_load,
+            settings::settings_save
         ])
         .setup(|app| {
             let handle = app.handle();
