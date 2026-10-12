@@ -203,7 +203,7 @@ Chaque étape est désactivable et mesurable dans l'écran Diagnostic.
 | F-41 | Clics transmis au jeu et aucun vol de focus clavier, en permanence. | P0 | ✅ à valider sous Windows |
 | F-42 | Fonctionne en mode « fenêtré sans bordures ». Le plein écran exclusif n'est pas garanti au MVP. | P0 | ✅ à valider sous Windows |
 | F-43 | Trois formats : Minimal, Bilingue, Accessible. | P1 | ✅ |
-| F-44 | Réglages : coin d'ancrage, opacité du fond (0–100 %), taille du texte (14–28 px), durée d'affichage (4–8 s), 2 ou 3 blocs visibles. | P0 | ✅ (non persistés) |
+| F-44 | Réglages : coin d'ancrage, opacité du fond (0–100 %), taille du texte (14–28 px), durée d'affichage (4–8 s), 2 ou 3 blocs visibles. | P0 | ✅ (réglages conservés dans %APPDATA%\Crosstalk\config.json) |
 | F-45 | Mode de repositionnement temporaire (clics capturés), position libre enregistrée par écran. | P1 | ◐ |
 | F-46 | Prise en charge du multi-écran et des mises à l'échelle DPI de 100 à 200 %. | P1 | ◐ |
 | F-47 | Widget Xbox Game Bar (UWP) qui affiche les mêmes sous-titres en plein écran exclusif. | **P2** | — |
