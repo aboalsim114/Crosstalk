@@ -23,7 +23,18 @@ pub fn audio_ctx_for(samples: usize, fast: bool) -> Option<i32> {
     Some(((secs * 50.0).ceil() as i32).clamp(128, 1500))
 }
 
+#[derive(Debug, Default, Clone, Copy)]
+pub struct InferenceTiming {
+    pub language_ms: u32,
+    pub full_ms: u32,
+}
+
 pub trait Recognizer: Send {
+    /// Timing of the previous call, if supported by the backend.
+    fn timing(&self) -> Option<InferenceTiming> {
+        None
+    }
+
     /// Transcribes 16 kHz mono samples.
     fn recognize(
         &mut self,
@@ -34,6 +45,16 @@ pub trait Recognizer: Send {
 
 /// Threads for Whisper: half of the logical CPUs, at most 4, so that CS2
 /// keeps the other half (the ASR thread also runs below normal priority).
+pub fn logical_threads() -> usize {
+    std::thread::available_parallelism()
+        .map(|n| n.get())
+        .unwrap_or(1)
+}
+
+pub fn sanitize_threads(threads: usize) -> usize {
+    threads.clamp(1, logical_threads())
+}
+
 pub fn default_threads() -> usize {
     let n = std::thread::available_parallelism()
         .map(|n| n.get())
@@ -79,6 +100,7 @@ mod whisper_impl {
     pub struct WhisperRecognizer {
         state: WhisperState,
         eot: i32,
+        timing: InferenceTiming,
     }
 
     impl WhisperRecognizer {
@@ -97,7 +119,11 @@ mod whisper_impl {
                 .create_state()
                 .map_err(|e| SpeechError::Model(format!("état Whisper : {e}")))?;
             let eot = ctx.token_eot();
-            Ok(Self { state, eot })
+            Ok(Self {
+                state,
+                eot,
+                timing: InferenceTiming::default(),
+            })
         }
 
         fn detect_language(
@@ -128,13 +154,19 @@ mod whisper_impl {
     }
 
     impl Recognizer for WhisperRecognizer {
+        fn timing(&self) -> Option<InferenceTiming> {
+            Some(self.timing)
+        }
         fn recognize(
             &mut self,
             samples: &[f32],
             opts: &RecognizeOptions,
         ) -> Result<Recognition, SpeechError> {
             let threads = opts.threads.max(1);
+            self.timing = InferenceTiming::default();
+            let language_started = std::time::Instant::now();
             let (lang, lang_prob) = self.detect_language(samples, opts.languages, threads)?;
+            self.timing.language_ms = language_started.elapsed().as_millis() as u32;
 
             let mut p = FullParams::new(SamplingStrategy::Greedy { best_of: 1 });
             p.set_n_threads(threads as i32);
@@ -163,10 +195,12 @@ mod whisper_impl {
                 p.set_initial_prompt(opts.prompt);
             }
 
+            let full_started = std::time::Instant::now();
             self.state
                 .full(p, samples)
                 .map_err(|e| SpeechError::Inference(format!("whisper : {e}")))?;
 
+            self.timing.full_ms = full_started.elapsed().as_millis() as u32;
             let mut text = String::new();
             let (mut logprob_sum, mut tokens) = (0.0f32, 0usize);
             let mut no_speech_prob = 0.0f32;
@@ -235,5 +269,10 @@ mod tests {
     fn leaves_cpu_for_the_game() {
         let t = default_threads();
         assert!((1..=4).contains(&t));
+    }
+    #[test]
+    fn explicit_threads_never_oversubscribe() {
+        assert_eq!(sanitize_threads(0), 1);
+        assert_eq!(sanitize_threads(usize::MAX), logical_threads());
     }
 }
