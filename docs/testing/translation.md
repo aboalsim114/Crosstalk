@@ -27,6 +27,14 @@ Dans `dist-local\<commit>\`, l'outil s'appelle `crosstalk-translate.exe` (ci-des
 
 Préparez une liste de 20 annonces courantes (10 russes, 10 anglaises) et notez pour chacune : correcte / compréhensible / fausse.
 
+### 1 bis. Annonces courtes (lexique) et qualité
+
+| # | Commande | Résultat attendu |
+| --- | --- | --- |
+| 1.6 | `.\translate.exe --lang en "CT, go, go."` | « CT, on y va » (lexique des annonces, instantané) — plus jamais une phrase de film inventée. |
+| 1.7 | `.\translate.exe --lang ru "Двое на Б"` · `--lang en "one low, lit"` | « deux sur B » · « un ennemi à peu de PV, touché (gros dégâts) ». |
+| 1.8 | Une vraie phrase (« they are rotating to B with the AWP ») | Traduite par le modèle avec recherche en faisceau (4 hypothèses) : notez le temps et la qualité (correcte / compréhensible / fausse). |
+
 ## 2. Dans l'application
 
 | # | Action | Résultat attendu |

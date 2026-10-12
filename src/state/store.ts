@@ -102,6 +102,8 @@ export interface AppActions {
   addChat: (entry: FeedEntry) => void;
   /** A real transcript: replaces the live line of the same utterance, or is added. */
   upsertTranscript: (entry: FeedEntry) => void;
+  /** Quick French of a live line (provisional, until the final translation). */
+  applyPartialTranslation: (t: Translation) => void;
   /** Removes the live line of an utterance finally rejected. */
   retractTranscript: (tid: number) => void;
   /** Attaches the French translation (or its failure) to the transcript line. */
@@ -341,8 +343,11 @@ export const useApp = create<AppState & AppActions>()((set, get) => {
     upsertTranscript: (entry) => {
       const i = get().feed.findIndex((f) => f.tid === entry.tid && f.live);
       if (i < 0) return get().addLine(entry);
-      set((st) => ({ feed: st.feed.map((f, k) => (k === i ? { ...entry, id: f.id } : f)) }));
+      // The provisional French stays shown until the final translation arrives.
+      set((st) => ({ feed: st.feed.map((f, k) => (k === i ? { ...entry, id: f.id, shown: f.shown } : f)) }));
     },
+    applyPartialTranslation: (t) =>
+      set((st) => ({ feed: st.feed.map((f) => (f.tid === t.id && f.live && t.translated ? { ...f, shown: t.translated } : f)) })),
     retractTranscript: (tid) => set((st) => ({ feed: st.feed.filter((f) => !(f.tid === tid && f.live)) })),
     applyTranslation: (t) =>
       set((st) => ({ feed: st.feed.map((f) => (f.tid === t.id && f.status === 'transcrit' && !f.live ? withTranslation(f, t) : f)) })),
@@ -387,6 +392,6 @@ export function withTranslation(f: FeedEntry, t: Translation): FeedEntry {
     return { ...f, status: 'final', tr: t.translated, shown: t.translated, lat: total, err: false };
   }
   const why = t.error ?? 'moteur indisponible';
-  if (QUIET_FAILURES.includes(why)) return { ...f, note: why };
+  if (QUIET_FAILURES.includes(why)) return { ...f, note: why, shown: null };
   return { ...f, status: 'erreur', shown: null, err: true, lat: total, note: why };
 }

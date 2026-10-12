@@ -30,6 +30,12 @@ fn complete(spec: &FileSpec) -> bool {
 /// Files the app needs and does not have yet: VAD, the chosen Whisper model
 /// and, when translation is on, both Opus-MT models.
 pub fn missing(dir: &Path, whisper_model: &str, translation: bool) -> Vec<FileSpec> {
+    missing_all(dir, &[whisper_model], translation)
+}
+
+/// Same, for several Whisper models (the installer fetches every model the
+/// app can run on the CPU, so that changing model never downloads anything).
+pub fn missing_all(dir: &Path, whisper_models: &[&str], translation: bool) -> Vec<FileSpec> {
     let mut all = vec![FileSpec {
         label: "Détection de parole (Silero)".into(),
         url: whisper::VAD_URL.into(),
@@ -37,7 +43,7 @@ pub fn missing(dir: &Path, whisper_model: &str, translation: bool) -> Vec<FileSp
         bytes: whisper::VAD_BYTES,
         sha1: None,
     }];
-    if let Some(m) = whisper::spec(whisper_model) {
+    for m in whisper_models.iter().filter_map(|id| whisper::spec(id)) {
         all.push(FileSpec {
             label: format!("Transcription (Whisper {})", m.id),
             url: whisper::url(m),
@@ -183,7 +189,17 @@ impl Downloader {
     /// Starts downloading what is missing, on a background thread. Returns
     /// false when a download already runs or nothing is missing.
     pub fn start(self: &Arc<Self>, dir: PathBuf, whisper_model: &str, translation: bool) -> bool {
-        let files = missing(&dir, whisper_model, translation);
+        self.start_all(dir, &[whisper_model], translation)
+    }
+
+    /// [`Downloader::start`] for several Whisper models.
+    pub fn start_all(
+        self: &Arc<Self>,
+        dir: PathBuf,
+        whisper_models: &[&str],
+        translation: bool,
+    ) -> bool {
+        let files = missing_all(&dir, whisper_models, translation);
         if files.is_empty() || self.running.swap(true, Ordering::SeqCst) {
             return false;
         }
@@ -570,5 +586,15 @@ mod tests {
         )
         .unwrap();
         assert_eq!(missing(&d, "base", false).len(), 1);
+    }
+
+    #[test]
+    fn the_installer_pack_holds_every_cpu_model() {
+        let d = dir("all");
+        let all = missing_all(&d, &["base", "small"], true);
+        assert_eq!(all.len(), 3 + 10);
+        let mb: u64 = all.iter().map(|f| f.bytes).sum::<u64>() / 1_000_000;
+        assert!((1200..1300).contains(&mb), "{mb} Mo");
+        assert_eq!(all.iter().filter(|f| f.sha1.is_some()).count(), 2);
     }
 }

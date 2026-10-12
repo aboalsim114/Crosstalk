@@ -230,8 +230,14 @@ impl Network {
 
     /// Decoder state (1 × 1 × d) after feeding the next token.
     pub fn step(&mut self, token: u32) -> Result<Tensor> {
+        self.step_batch(&[token])
+    }
+
+    /// Decoder states (b × 1 × d) after feeding one token per hypothesis
+    /// (beam search). The caches must hold `b` rows: see [`Network::reorder`].
+    pub fn step_batch(&mut self, tokens: &[u32]) -> Result<Tensor> {
         let encoded = self.encoded.clone().expect("encode() before step()");
-        let ids = Tensor::new(&[[token]], encoded.device())?;
+        let ids = Tensor::new(tokens, encoded.device())?.unsqueeze(1)?;
         let mut x = self.embed(&ids, self.step)?;
         for l in &mut self.decoder {
             x = (l.attn.incremental(&x)? + &x)?.apply(&l.attn_norm)?;
@@ -240,5 +246,22 @@ impl Network {
         }
         self.step += 1;
         Ok(x)
+    }
+
+    /// Keeps, for each new hypothesis, the cached keys/values of its parent
+    /// (row `parents[i]`): beams are pruned and duplicated between steps.
+    pub fn reorder(&mut self, parents: &[u32]) -> Result<()> {
+        let Some(device) = self.encoded.as_ref().map(|e| e.device().clone()) else {
+            return Ok(());
+        };
+        let idx = Tensor::new(parents, &device)?;
+        for l in &mut self.decoder {
+            for a in [&mut l.attn, &mut l.cross] {
+                if let Some((k, v)) = &a.cache {
+                    a.cache = Some((k.index_select(&idx, 0)?, v.index_select(&idx, 0)?));
+                }
+            }
+        }
+        Ok(())
     }
 }

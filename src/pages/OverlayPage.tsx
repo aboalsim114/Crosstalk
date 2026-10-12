@@ -31,6 +31,17 @@ export function overlayBlocks(feed: OverlayLine[], maxBlocks: number): OverlayBl
     const t = f.shown || f.orig;
     // A real transcript is the original text: never labelled as French.
     const transcript = f.status === 'transcrit';
+    // Provisional French of a line still being spoken (or whose final translation is pending).
+    if (transcript && f.shown) {
+      return {
+        key: `${i}-${f.orig}`,
+        color: voice ? '#ffa24a' : '#7fd4ff',
+        head: `${voice ? 'VOIX' : `CHAT • ${CHANNEL_NAME[f.ch!]}`} • ${LANG_NAME[f.src]} → FRANÇAIS (PROVISOIRE)`,
+        orig: f.orig,
+        line: `${f.sender ? f.sender + ' : ' : ''}« ${f.shown}${f.live ? ' …' : ''} »`,
+        opacity: i === maxBlocks - 1 && maxBlocks > 2 ? 0.5 : 1,
+      };
+    }
     return {
       key: `${i}-${f.orig}`,
       color: voice ? '#ffa24a' : '#7fd4ff',

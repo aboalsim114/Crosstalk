@@ -130,7 +130,7 @@ Statut : ✅ réalisé dans le dépôt (interface et données simulées comprise
 | F-22 | Ne jamais capturer le microphone de l'utilisateur sans activation explicite (voir F-50). | P0 | — |
 | F-23 | Rééchantillonner en 16 kHz mono. Détection de voix (VAD Silero via ONNX Runtime) avec seuil réglable, pré-roll 250 ms, post-roll 400 ms, segment maximal de 8 s. | P0 | — |
 | F-24 | Transcription locale avec whisper.cpp (crate `whisper-rs`), modèles tiny à large-v3-turbo, accélération CUDA ou Vulkan si disponible, sinon CPU. Whisper est le choix de départ, confirmé ou remplacé après le banc d'essai (A-11). | P0 | — |
-| F-25 | Transcription provisoire pendant la parole (fenêtre glissante), remplacée par la version finale. Adoptée seulement si son coût GPU/CPU reste compatible avec la cible FPS. | P1 | — |
+| F-25 | Transcription provisoire pendant la parole (fenêtre glissante), remplacée par la version finale. Adoptée seulement si son coût GPU/CPU reste compatible avec la cible FPS. | P1 | ✅ (transcription et traduction provisoires ; coût CPU à mesurer en partie) |
 | F-26 | Détection de langue restreinte aux langues sources préférées (ru, en par défaut). | P0 | — |
 | F-27 | Abandonner les segments périmés (plus de 6 s d'attente) pour éviter l'accumulation de retard. | P0 | — |
 | F-28 | ~~Transcription cloud en option~~ : abandonnée (décision du 12/10/2026, aucun service payant ni clé API pour l'utilisateur). | — | abandonnée |
@@ -193,7 +193,7 @@ Chaque étape est désactivable et mesurable dans l'écran Diagnostic.
 | F-33 | Glossaire CS : termes conservés (smoke, flash, eco, rush B…) remplacés par des repères avant traduction puis restaurés (insensible à la casse, mots entiers), et termes traduits avec un rendu imposé. Si le modèle perd un repère, la phrase est retraduite sans protection. Modifiable par l'utilisateur. | P0 | ✅ (fiabilité à mesurer sur les vrais modèles) |
 | F-34 | Une ligne qui attend plus de 5 s, ou une file pleine, est affichée en original avec la mention « moteur indisponible ». | P0 | ✅ |
 | F-35 | Cache LRU des traductions (1 000 entrées) pour les messages répétés (« gg », « nt »…). | P1 | ✅ |
-| F-36 | Normalisation des annonces : callouts de cartes, économie et utilitaires traduits comme des annonces courtes. **Aucune information absente de l'original ne doit être ajoutée.** Glossaire par carte. | P1 | — |
+| F-36 | Normalisation des annonces : callouts de cartes, économie et utilitaires traduits comme des annonces courtes. **Aucune information absente de l'original ne doit être ajoutée.** Glossaire par carte. | P1 | ◐ (lexique des annonces en/ru → fr ; glossaire par carte à faire) |
 
 ### 4.5 Overlay en jeu
 

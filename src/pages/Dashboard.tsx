@@ -6,7 +6,7 @@ import { engineSummary, useSpeech } from '../state/speech';
 import { translationSummary, useTranslation } from '../state/translation';
 import { cs2SetupSummary, useChat } from '../state/chat';
 import { isLive, useApp, type FeedMode } from '../state/store';
-import { feedRow, isDemoLine, subtitle, voiceLatency } from './derive';
+import { feedRow, isDemoLine, latencyAdvice, subtitle, voiceLatency } from './derive';
 
 const MODES: [FeedMode, string][] = [
   ['text', 'Texte'],
@@ -129,8 +129,8 @@ function StatusCards() {
     {
       label: 'LATENCE VOIX',
       value: lat ? `p50 ${fmtSeconds(lat.p50)}` : '—',
-      sub: lat ? `p95 ${fmtSeconds(lat.p95)} · ${lat.n} phrases` : 'Objectif p50 ≤ 2 s · p95 ≤ 4 s',
-      dot: lat ? '#7fe0a8' : '#3d3a36',
+      sub: lat ? (latencyAdvice(lat.p50, s.model) ?? `p95 ${fmtSeconds(lat.p95)} · ${lat.n} phrases`) : 'Objectif p50 ≤ 2 s · p95 ≤ 4 s',
+      dot: !lat ? '#3d3a36' : latencyAdvice(lat.p50, s.model) ? '#ffa24a' : '#7fe0a8',
     },
   ];
   return (

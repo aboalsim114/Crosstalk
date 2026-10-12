@@ -210,6 +210,75 @@ def save_pth_legacy(state, path):
             f.write(data)
 
 
+# ---------- PyTorch beam search, ported to numpy ----------
+
+EOS_BOOST = float(os.environ.get("EOS_BOOST", "6"))
+
+
+def pt_beam_search(model, ids, num_beams, max_new, eos, pad, start, eos_boost):
+    """transformers 4.46 `_beam_search` + `BeamSearchScorer` (batch 1,
+    length_penalty 1, early_stopping False, forced_eos at max length), with
+    `eos_boost` added to the </s> logit. Logits from full forward passes."""
+    enc = np.array([ids])
+
+    def log_probs(prefix):
+        logits = np.asarray(model(input_ids=enc, decoder_input_ids=np.array([prefix])).logits[0, -1], dtype=np.float64)
+        logits[eos] += eos_boost
+        m = logits.max()
+        return logits - m - np.log(np.exp(logits - m).sum())
+
+    max_length = 1 + max_new
+    seqs = [[start] for _ in range(num_beams)]
+    beam_scores = np.array([0.0] + [-1e9] * (num_beams - 1))
+    hyps, worst = [], 1e9
+
+    def add(tokens, sum_lp, generated_len):
+        nonlocal worst
+        score = sum_lp / generated_len
+        if len(hyps) < num_beams or score > worst:
+            hyps.append((score, tokens))
+            if len(hyps) > num_beams:
+                hyps.sort(key=lambda h: h[0])
+                hyps.pop(0)
+                worst = hyps[0][0]
+            else:
+                worst = min(score, worst)
+
+    done = False
+    while len(seqs[0]) < max_length:
+        cur = len(seqs[0])
+        scores = np.stack([log_probs(sq) for sq in seqs])
+        scores[:, pad] = -np.inf  # bad_words_ids, after log_softmax
+        if cur == max_length - 1:  # ForcedEOSTokenLogitsProcessor
+            scores[:, :] = -np.inf
+            scores[:, eos] = 0.0
+        nxt = scores + beam_scores[:, None]
+        flat = nxt.reshape(-1)
+        top = np.argsort(-flat, kind="stable")[: 2 * num_beams]
+        vocab = scores.shape[1]
+        new = []
+        for rank, i in enumerate(top):
+            tok, b, sc = int(i % vocab), int(i // vocab), float(flat[i])
+            if tok == eos:
+                if rank >= num_beams:
+                    continue
+                add(seqs[b][1:], sc, cur + 1 - 1)
+            else:
+                new.append((sc, tok, b))
+            if len(new) == num_beams:
+                break
+        best = float(flat[top[0]])
+        if len(hyps) >= num_beams and worst >= best / (cur + 1 - 1):
+            done = True
+            break
+        seqs = [seqs[b] + [tok] for _, tok, b in new]
+        beam_scores = np.array([sc for sc, _, _ in new])
+    if not done:
+        for sq, sc in zip(seqs, beam_scores):
+            add(sq[1:], float(sc), len(sq) - 1)
+    return max(hyps, key=lambda h: h[0])[1]
+
+
 # ---------- model ----------
 
 def flax_to_pt(params):
@@ -304,6 +373,16 @@ def main():
             gen = model.generate(np.array([ids]), num_beams=1, do_sample=False, max_new_tokens=12,
                                  bad_words_ids=[[v - 1]]).sequences[0].tolist()
             case["generated"] = gen
+            # Beam search as the app runs it (num_beams=4, length_penalty=1, no early stop).
+            beam = model.generate(np.array([ids]), num_beams=4, do_sample=False, max_new_tokens=12,
+                                  bad_words_ids=[[v - 1]], early_stopping=False,
+                                  length_penalty=1.0).sequences[0].tolist()
+            case["beam4"] = beam
+            # Hypotheses that end early (</s> made likelier): exercises the
+            # finished-hypotheses logic, against a numpy port of PyTorch's
+            # beam search (the Flax one above uses a different algorithm).
+            case["beam4_eos"] = pt_beam_search(model, ids, num_beams=4, max_new=12, eos=0, pad=v - 1,
+                                               start=v - 1, eos_boost=EOS_BOOST)
             case["decoded"] = tok.decode(gen, skip_special_tokens=True)
         cases.append(case)
     # The target tokenizer round trip, independent of the random model.

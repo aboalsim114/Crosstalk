@@ -175,6 +175,7 @@ function startTranslationBridge(): Promise<() => void>[] {
   unlisten.push(translation.onStatus((status) => useTranslation.setState({ status })));
   unlisten.push(
     translation.onResult((t) => {
+      if (t.partial) return useApp.getState().applyPartialTranslation(t);
       recordTime(t);
       useApp.getState().applyTranslation(t);
     }),

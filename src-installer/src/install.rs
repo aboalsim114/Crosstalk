@@ -31,6 +31,10 @@ pub struct Entry {
 }
 
 pub const APP_EXE: &str = "crosstalk.exe";
+/// Whisper models installed: every one the app runs on the CPU in this
+/// version (base: fast, small: more precise). Medium and large-v3-turbo, too
+/// slow without a GPU, can still be fetched from the app.
+pub const WHISPER_MODELS: &[&str] = &["base", "small"];
 const STAGING: &str = ".crosstalk-setup";
 const MB: f64 = 1e6;
 
@@ -141,7 +145,7 @@ impl Installer {
     }
 
     fn models_todo(&self) -> Vec<downloads::FileSpec> {
-        downloads::missing(&self.models_dir, whisper::DEFAULT_MODEL, true)
+        downloads::missing_all(&self.models_dir, WHISPER_MODELS, true)
     }
 
     pub fn platform(&self) -> &dyn Platform {
@@ -343,7 +347,7 @@ impl Installer {
         let d = Downloader::new(self.fetcher.clone(), Arc::new(Forward(Mutex::new(tx))));
         *self.downloader.lock().unwrap() = Some(d.clone());
         self.check()?;
-        if !d.start(self.models_dir.clone(), whisper::DEFAULT_MODEL, true) {
+        if !d.start_all(self.models_dir.clone(), WHISPER_MODELS, true) {
             return Ok(());
         }
         for st in rx {
@@ -451,12 +455,11 @@ mod tests {
             if self.fail {
                 return Err("connexion impossible".into());
             }
-            let size =
-                downloads::missing(&PathBuf::from("/nonexistent"), whisper::DEFAULT_MODEL, true)
-                    .into_iter()
-                    .find(|f| f.url == url)
-                    .unwrap()
-                    .bytes;
+            let size = downloads::missing_all(&PathBuf::from("/nonexistent"), WHISPER_MODELS, true)
+                .into_iter()
+                .find(|f| f.url == url)
+                .unwrap()
+                .bytes;
             let chunk = vec![0u8; 1 << 20];
             let mut left = size - offset;
             while left > 0 {
@@ -543,7 +546,7 @@ mod tests {
         let inst = installer(&root, fetcher.clone(), Arc::new(Fake::default()));
         assert!(inst.model_bytes() > 700_000_000, "{}", inst.model_bytes());
         // Every model already present (sparse files of the exact size) but the VAD.
-        for f in downloads::missing(&inst.models_dir, whisper::DEFAULT_MODEL, true) {
+        for f in downloads::missing_all(&inst.models_dir, WHISPER_MODELS, true) {
             if f.path.ends_with(whisper::VAD_FILE) {
                 continue;
             }

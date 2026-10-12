@@ -157,6 +157,30 @@ describe('store with real voices', () => {
     expect(feedRow(line).status).toBe('TRANSCRIT');
   });
 
+  it('shows a provisional French translation live, kept until the careful one', () => {
+    const { upsertTranscript, applyPartialTranslation, applyTranslation } = useApp.getState();
+    const tr = (over: object) => ({ id: t.id, lang: 'ru', original: 'Двое', translated: 'Deux', error: null, ms: 1, queueMs: 0, cached: false, glossary: true, ...over });
+    upsertTranscript(transcriptEntry({ ...t, partial: true, text: 'Двое идут' }));
+    applyPartialTranslation(tr({ partial: true, translated: 'Deux vont' }));
+    let [line] = useApp.getState().feed;
+    let row = feedRow(line);
+    expect(row.shown).toBe('Deux vont …');
+    expect(row.orig).toBe('Двое идут');
+    expect(row.langs).toBe('RU → FR · PROVISOIRE');
+    expect(overlayBlocks([line], 3)[0].head).toBe('VOIX • RUSSE → FRANÇAIS (PROVISOIRE)');
+
+    // Final transcript: the provisional French stays until its translation.
+    upsertTranscript(transcriptEntry(t));
+    [line] = useApp.getState().feed;
+    expect(line.live).toBe(false);
+    expect(feedRow(line).shown).toBe('Deux vont');
+    expect(feedRow(line).note).toMatch(/provisoire/);
+    applyTranslation(tr({ original: t.text, translated: 'Deux vont sur B' }));
+    [line] = useApp.getState().feed;
+    expect(line.status).toBe('final');
+    expect(feedRow(line).shown).toBe('Deux vont sur B');
+  });
+
   it('only translates the final line, and drops live lines on retraction or stop', () => {
     const { upsertTranscript, applyTranslation, retractTranscript } = useApp.getState();
     upsertTranscript(transcriptEntry({ ...t, partial: true, text: 'Двое' }));
