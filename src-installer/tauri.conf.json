@@ -1,0 +1,37 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Crosstalk Setup",
+  "version": "0.2.0",
+  "identifier": "app.crosstalk.setup",
+  "build": {
+    "beforeDevCommand": "npm run dev:installer",
+    "devUrl": "http://localhost:1430/installer.html",
+    "beforeBuildCommand": "npm run build:installer",
+    "frontendDist": "../dist-installer"
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "setup",
+        "title": "Installation de Crosstalk",
+        "url": "installer.html",
+        "width": 1000,
+        "height": 640,
+        "center": true,
+        "resizable": false,
+        "maximizable": false,
+        "decorations": false,
+        "transparent": true,
+        "shadow": false,
+        "backgroundColor": "#00000000"
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; script-src 'self'; connect-src 'self' ipc: http://ipc.localhost"
+    }
+  },
+  "bundle": {
+    "active": false,
+    "icon": ["../src-tauri/icons/32x32.png", "../src-tauri/icons/128x128.png", "../src-tauri/icons/icon.ico"]
+  }
+}

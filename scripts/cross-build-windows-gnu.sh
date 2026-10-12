@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Test build for Windows x64 from Linux with MinGW-w64 (gcc), used when no
-# Windows build machine (MSVC) is at hand. Produces the NSIS installer and a
-# portable folder with the command-line tools:
+# Windows build machine (MSVC) is at hand. Produces the installer (design
+# "Crosstalk Installer", src-installer) and a portable folder with the
+# command-line tools:
 #   dist-test/Crosstalk-<commit>-setup.exe
 #   dist-test/crosstalk-<commit>-windows-x64-gcc-test/
 #
@@ -39,24 +40,33 @@ build() { (cd src-tauri && cargo build --release --locked --target $target "$@")
 # First pass builds whisper.cpp (and fails at link), second pass links.
 build --example asr_bench --example audio_probe --example translate || { fix_archives; build --example asr_bench --example audio_probe --example translate; }
 fix_archives
-# The app and its NSIS installer through the Tauri CLI (builds and embeds the
-# UI). MinGW builds need libstdc++ and WebView2Loader.dll next to the exe: the
-# installer ships them. WebView2 itself is on every Windows 11 (and fetched by
-# the installer when missing) instead of being embedded at build time.
+# The app through the Tauri CLI (builds and embeds its UI). MinGW builds need
+# libstdc++ and WebView2Loader.dll next to the exe.
 gcc_dir=$(dirname "$(x86_64-w64-mingw32-g++-posix -print-libgcc-file-name)")
 rel="src-tauri/target/$target/release"
-overlay=$(mktemp --suffix=.json)
-cat > "$overlay" <<JSON
-{"bundle":{"targets":["nsis"],
-  "windows":{"webviewInstallMode":{"type":"downloadBootstrapper"}},
-  "resources":{"$gcc_dir/libstdc++-6.dll":"libstdc++-6.dll","$gcc_dir/libgcc_s_seh-1.dll":"libgcc_s_seh-1.dll",
-               "/usr/x86_64-w64-mingw32/lib/libwinpthread-1.dll":"libwinpthread-1.dll"}}}
-JSON
-npx tauri build --target $target --bundles nsis --config "$overlay"
-rm -f "$overlay"
-setup=$(ls -t "$rel"/bundle/nsis/*-setup.exe | head -1)
+npx tauri build --target $target --no-bundle
+version=$(node -p "require('./src-tauri/tauri.conf.json').version")
+
+# The installer (src-installer, "Crosstalk Installer" design) embeds those files,
+# built in the app's target directory so shared dependencies compile once.
+payload=$(mktemp -d)
+cp "$rel/crosstalk.exe" "$rel/WebView2Loader.dll" "$payload/"
+cp "$gcc_dir/libstdc++-6.dll" "$gcc_dir/libgcc_s_seh-1.dll" /usr/x86_64-w64-mingw32/lib/libwinpthread-1.dll "$payload/"
+(cd src-installer && CROSSTALK_PAYLOAD_DIR="$payload" CARGO_TARGET_DIR="$root/src-tauri/target" \
+  npx tauri build --target $target --no-bundle -- --locked)
+
+# Crosstalk-setup.exe: NSIS shell that installs WebView2 if needed, runs the
+# installer and writes the uninstaller (scripts/cross/setup-wrapper.nsi).
+files_nsh=$(mktemp --suffix=.nsh)
+for f in "$payload"/*; do echo "Delete \"\$INSTDIR\\$(basename "$f")\"" >> "$files_nsh"; done
+app_kb=$(( $(du -sb "$payload" | cut -f1) / 1024 ))
 mkdir -p dist-test
-cp "$setup" "dist-test/Crosstalk-$commit-setup.exe"
+makensis -V2 -INPUTCHARSET UTF8 \
+  -DVERSION="$version" -DOUTFILE="$root/dist-test/Crosstalk-$commit-setup.exe" \
+  -DSETUP_EXE="$root/$rel/crosstalk-setup.exe" -DLOADER="$root/$rel/WebView2Loader.dll" \
+  -DICON="$root/src-tauri/icons/icon.ico" -DFILES_NSH="$files_nsh" -DAPP_KB="$app_kb" \
+  scripts/cross/setup-wrapper.nsi
+rm -rf "$payload" "$files_nsh"
 echo "installateur : dist-test/Crosstalk-$commit-setup.exe"
 
 out="dist-test/crosstalk-$commit-windows-x64-gcc-test"

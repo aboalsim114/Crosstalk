@@ -15,6 +15,7 @@
 mod actions;
 pub mod audio;
 mod commands;
+mod download_commands;
 pub mod downloads;
 pub mod game;
 mod overlay;
@@ -87,9 +88,9 @@ pub fn run() {
             translation::translation_rescan,
             translation::translation_models,
             translation::translation_test,
-            downloads::models_download_status,
-            downloads::models_download_start,
-            downloads::models_download_cancel
+            download_commands::models_download_status,
+            download_commands::models_download_start,
+            download_commands::models_download_cancel
         ])
         .setup(|app| {
             let handle = app.handle();
@@ -101,7 +102,7 @@ pub fn run() {
             }
             app.manage(downloads::Downloader::new(
                 Arc::new(downloads::HttpFetcher),
-                Arc::new(downloads::TauriDownloadEvents(handle.clone())),
+                Arc::new(download_commands::TauriDownloadEvents(handle.clone())),
             ));
             let translation = translation::start(handle);
             app.manage(translation.clone());

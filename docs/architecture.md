@@ -56,6 +56,19 @@ Le découpage se fait d'abord en **modules** de la crate existante (`src-tauri/s
 
 Les traits `AudioCapture`, `Transcriber`, `Translator` et `ChatSource` existent déjà dans `pipeline/`. Ils permettent de tester chaque module avec des implémentations factices et d'alimenter le banc d'essai hors ligne avec des fichiers WAV.
 
+### Installateur (`src-installer/`)
+
+Application Tauri séparée, à l'interface tirée de la maquette « Crosstalk Installer » (`src/installer/`, page `installer.html`, bundle `dist-installer/`). Elle embarque les fichiers de l'application, compressés en deflate par `build.rs` à partir de `CROSSTALK_PAYLOAD_DIR`, et compile tels quels `downloads.rs` et les catalogues de modèles de l'application. Le code Tauri des téléchargements est séparé dans `download_commands.rs`.
+
+| Phase (UI) | Travail réel |
+| --- | --- |
+| Préparation 0–12 % | Espace libre (application et modèles), Crosstalk fermé |
+| Extraction 12–62 % | Fichiers copiés dans un dossier temporaire, puis téléchargement des modèles manquants, avec une progression pondérée par la taille |
+| Configuration 62–88 % | Fichiers mis en place, `HKCU\Software\Crosstalk` (`InstallDir`, `Version`) |
+| Finalisation 88–100 % | Raccourcis du menu Démarrer et du bureau |
+
+Annuler pendant les deux premières phases supprime le dossier temporaire : une version déjà installée reste intacte et les modèles partiels reprendront. `Crosstalk-setup.exe` est une enveloppe NSIS sans fenêtre (`scripts/cross/setup-wrapper.nsi`). Elle installe WebView2 s'il manque, lance l'installateur puis, si celui-ci renvoie 0, écrit `uninstall.exe` et l'entrée « Applications ». `/S` installe sans interface (`--silent`).
+
 ## 4. Files et concurrence
 
 | De → vers | Type | Capacité | Politique en cas de saturation |
