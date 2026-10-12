@@ -28,6 +28,7 @@ pub const STATUS_EVENT: &str = "speech://status";
 pub const TRANSCRIPT_EVENT: &str = "speech://transcript";
 pub const ACTIVITY_EVENT: &str = "speech://activity";
 pub const STATS_EVENT: &str = "speech://stats";
+pub const RETRACT_EVENT: &str = "speech://retract";
 
 #[derive(Debug, Clone, PartialEq, thiserror::Error)]
 pub enum SpeechError {
@@ -93,6 +94,9 @@ impl SpeechEvents for TauriEvents {
     }
     fn transcript(&self, transcript: &Transcript) {
         let _ = self.0.emit(TRANSCRIPT_EVENT, transcript);
+        if transcript.partial {
+            return; // only final transcripts are translated
+        }
         if let Some(t) = self
             .0
             .try_state::<Arc<crate::translation::TranslationService>>()
@@ -105,6 +109,9 @@ impl SpeechEvents for TauriEvents {
     }
     fn stats(&self, stats: &SpeechStats) {
         let _ = self.0.emit(STATS_EVENT, stats);
+    }
+    fn retract(&self, id: u64) {
+        let _ = self.0.emit(RETRACT_EVENT, id);
     }
 }
 

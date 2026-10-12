@@ -176,9 +176,10 @@ function startSpeechBridge(): Promise<() => void>[] {
   unlisten.push(
     speech.onTranscript((t) => {
       const app = useApp.getState();
-      if (capturesDuring(app.session)) app.addLine(transcriptEntry(t));
+      if (capturesDuring(app.session)) app.upsertTranscript(transcriptEntry(t));
     }),
   );
+  unlisten.push(speech.onRetract((id) => useApp.getState().retractTranscript(id)));
 
   // Model, VAD threshold, languages and glossary follow the UI settings.
   let lastKey = '';

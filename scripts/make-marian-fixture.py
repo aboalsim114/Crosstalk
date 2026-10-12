@@ -11,6 +11,12 @@ transformers, the reference the Rust translation engine is checked against.
 
 The weights file is written in PyTorch's zip format (data.pkl + storages)
 without PyTorch, exactly as `torch.save` lays it out.
+
+    python scripts/make-marian-fixture.py --legacy-copy [OUT_DIR]
+
+rewrites OUT_DIR/pytorch_model.bin as pytorch_model.legacy.bin in PyTorch's
+legacy (pre-1.6) format, the one of the real Helsinki-NLP checkpoints: same
+weights, tied embeddings sharing one storage, `_metadata` like a state dict.
 """
 import collections
 import io
@@ -147,6 +153,63 @@ def save_pth(state, path):
         z.writestr("archive/version", "3\n")
 
 
+def load_pth(path):
+    """Reads a zip checkpoint written by save_pth back into numpy arrays."""
+    with zipfile.ZipFile(path) as z:
+        def persistent_load(pid):
+            return np.frombuffer(z.read(f"archive/data/{pid[2]}"), dtype=np.float32)
+
+        class U(pickle.Unpickler):
+            def find_class(self, module, name):
+                if (module, name) == ("torch._utils", "_rebuild_tensor_v2"):
+                    return lambda st, off, size, stride, *_: np.lib.stride_tricks.as_strided(
+                        st[off:], shape=size, strides=[x * 4 for x in stride]).copy()
+                if (module, name) == ("torch", "FloatStorage"):
+                    return _Storage
+                return super().find_class(module, name)
+
+        u = U(io.BytesIO(z.read("archive/data.pkl")))
+        u.persistent_load = persistent_load
+        return u.load()
+
+
+def save_pth_legacy(state, path):
+    """torch.serialization._legacy_save, protocol 2, without PyTorch."""
+    sys.modules["torch"], sys.modules["torch._utils"] = torch_mod, utils_mod
+    try:
+        tensors, storages, seen = collections.OrderedDict(), {}, {}
+        for name, arr in state.items():
+            arr = np.ascontiguousarray(arr, dtype=np.float32)
+            data = arr.tobytes()
+            key = seen.setdefault(data, str(140000000000 + 64 * len(seen)))  # like str(id(storage))
+            storages[key] = (arr.size, data)
+            tensors[name] = _Tensor(key, arr)
+        tensors._metadata = collections.OrderedDict([("", {"version": 1})])
+
+        class P(_Pickler):
+            def persistent_id(self, obj):
+                if isinstance(obj, _StorageRef):
+                    return ("storage", _Storage, obj.key, "cpu", obj.numel, None)
+                return None
+
+        buf = io.BytesIO()
+        pickle.dump(0x1950A86A20F9469CFC6C, buf, protocol=2)
+        pickle.dump(1001, buf, protocol=2)
+        pickle.dump({"protocol_version": 1001, "little_endian": True,
+                     "type_sizes": {"short": 2, "int": 4, "long": 4}}, buf, protocol=2)
+        P(buf, protocol=2).dump(tensors)
+        keys = sorted(storages)
+        pickle.dump(keys, buf, protocol=2)
+    finally:
+        del sys.modules["torch"], sys.modules["torch._utils"]
+    with open(path, "wb") as f:
+        f.write(buf.getvalue())
+        for k in keys:
+            n, data = storages[k]
+            f.write(n.to_bytes(8, "little"))
+            f.write(data)
+
+
 # ---------- model ----------
 
 def flax_to_pt(params):
@@ -174,6 +237,11 @@ def flax_to_pt(params):
 
 
 def main():
+    if "--legacy-copy" in sys.argv:
+        state = load_pth(os.path.join(OUT, "pytorch_model.bin"))
+        save_pth_legacy(state, os.path.join(OUT, "pytorch_model.legacy.bin"))
+        print(len(state), "tensors written to", os.path.join(OUT, "pytorch_model.legacy.bin"))
+        return
     from transformers import FlaxMarianMTModel, MarianConfig, MarianTokenizer
 
     os.makedirs(OUT, exist_ok=True)

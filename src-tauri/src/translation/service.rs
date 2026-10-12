@@ -439,6 +439,16 @@ fn run(
         return fail("moteur indisponible (délai dépassé)");
     }
     let Some(engine) = engines.get_mut(spec.source) else {
+        // Present but unreadable is not the same as absent.
+        let broken = inner
+            .pairs
+            .lock()
+            .unwrap()
+            .get(spec.source)
+            .is_some_and(|p| p.state == PairState::Error);
+        if broken {
+            return fail("modèle de traduction illisible (voir Audio & IA)");
+        }
         return fail("modèle de traduction absent");
     };
     let key = (job.lang.clone(), cache_key(&job.text));

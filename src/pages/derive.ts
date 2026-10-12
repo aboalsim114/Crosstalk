@@ -24,7 +24,10 @@ export function isDemoLine(native: boolean, f: FeedEntry | undefined): boolean {
 }
 
 /** Under a transcript that stays untranslated, with the reason. */
+export const LIVE_NOTE = 'En cours d’écoute… le texte se complète';
+
 export function transcriptNote(f: FeedEntry): string {
+  if (f.live) return LIVE_NOTE;
   return f.note ? `Non traduit — ${f.note}` : TRANSCRIPT_NOTE;
 }
 
@@ -56,12 +59,12 @@ export function feedRow(f: FeedEntry): FeedRow {
       langs: f.src.toUpperCase() + ' · TRANSCRIPTION',
       lead: '',
       orig: '',
-      shown: f.orig,
-      trColor: '#ece6dc',
-      italic: false,
+      shown: f.live ? f.orig + ' …' : f.orig,
+      trColor: f.live ? '#b9b2a7' : '#ece6dc',
+      italic: !!f.live,
       note: transcriptNote(f),
       noteColor: '#6e6961',
-      status: 'TRANSCRIT',
+      status: f.live ? 'EN DIRECT' : 'TRANSCRIT',
       statusColor: STATUS_COLOR.transcrit,
       lat: f.lat ? fmtSeconds(f.lat) : '',
     };
@@ -120,9 +123,9 @@ export function subtitle(f0: FeedEntry | undefined, live: boolean): Subtitle {
       sender: '',
       color: '#ffa24a',
       orig: '',
-      text: '« ' + f0.orig + ' »',
-      italic: false,
-      trColor: '#f3ede3',
+      text: f0.live ? '« ' + f0.orig + ' … »' : '« ' + f0.orig + ' »',
+      italic: !!f0.live,
+      trColor: f0.live ? '#c9c2b7' : '#f3ede3',
       note: transcriptNote(f0),
       noteColor: '#6e6961',
     };

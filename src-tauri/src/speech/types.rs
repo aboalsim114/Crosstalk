@@ -99,7 +99,10 @@ fn default_true() -> bool {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Transcript {
+    /// Utterance id: a partial transcript and the final one share it.
     pub id: u64,
+    /// Live words of a segment still being spoken, replaced by the final one.
+    pub partial: bool,
     pub text: String,
     pub lang: Lang,
     /// Probability of `lang` among the allowed languages (1 when only one is allowed).
@@ -222,6 +225,7 @@ mod tests {
     fn transcript_serialises_for_the_ui() {
         let t = Transcript {
             id: 1,
+            partial: false,
             text: "Двое на B".into(),
             lang: Lang::Ru,
             lang_prob: 0.9,

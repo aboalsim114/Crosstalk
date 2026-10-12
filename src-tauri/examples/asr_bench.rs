@@ -501,6 +501,10 @@ fn live(secs: u64, dir: &Path, model: &str, config: SpeechConfig, threads: usize
             );
         }
         fn transcript(&self, t: &Transcript) {
+            if t.partial {
+                println!("  … [{}] {}", t.lang.code().to_uppercase(), t.text);
+                return;
+            }
             println!(
                 "[{}] « {} »  (audio {} ms · Whisper {} ms · latence {} ms · logprob {:.2})",
                 t.lang.code().to_uppercase(),
@@ -510,6 +514,9 @@ fn live(secs: u64, dir: &Path, model: &str, config: SpeechConfig, threads: usize
                 t.latency_ms,
                 t.avg_logprob
             );
+        }
+        fn retract(&self, _id: u64) {
+            println!("  (transcription partielle retirée)");
         }
         fn activity(&self, a: VoiceActivity) {
             if a.speaking {

@@ -67,7 +67,7 @@ function Pipeline() {
   const audio = useAudio();
   const sp = useSpeech();
   const tr = useTranslation((x) => x.status);
-  const translating = s.feed.some((f) => f.tid != null && f.status === 'transcrit' && !f.note);
+  const translating = s.feed.some((f) => f.tid != null && f.status === 'transcrit' && !f.note && !f.live);
   const fb = config.win10Fallback;
   const captureSub = audio.native ? captureSummary(audio.status).short : fb ? 'loopback' : 'cs2.exe';
   const stages: [string, string][] = [

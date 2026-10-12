@@ -113,6 +113,35 @@ impl Segmenter {
         self.active
     }
 
+    /// Frames of the segment being recorded (0 when nobody speaks).
+    pub fn open_frames(&self) -> usize {
+        if self.active {
+            self.frames.len()
+        } else {
+            0
+        }
+    }
+
+    /// The segment being recorded so far, for a live partial transcript.
+    pub fn open_segment(&self) -> Option<Segment> {
+        if !self.active || self.frames.is_empty() {
+            return None;
+        }
+        let release = self.cfg.release();
+        let voiced: Vec<&Frame> = self.frames.iter().filter(|f| f.prob >= release).collect();
+        let mut samples = Vec::with_capacity(self.frames.len() * FRAME);
+        for f in &self.frames {
+            samples.extend_from_slice(&f.samples);
+        }
+        Some(Segment {
+            samples,
+            start_frame: self.frames[0].index,
+            last_voiced_frame: voiced.last().map_or(self.frames[0].index, |f| f.index),
+            voiced_frames: voiced.len(),
+            forced: false,
+        })
+    }
+
     /// Index of the next frame, i.e. frames seen since the stream started.
     pub fn frames_seen(&self) -> u64 {
         self.next_index
@@ -388,6 +417,25 @@ mod tests {
         };
         assert!(!second.forced);
         assert_eq!(second.start_frame, 236);
+    }
+
+    #[test]
+    fn exposes_the_open_segment_while_speaking() {
+        let mut seg = Segmenter::new(SegmenterConfig::new(0.5));
+        assert!(seg.open_segment().is_none());
+        run(&mut seg, &speech_like(40));
+        assert!(seg.is_speaking());
+        let open = seg.open_segment().unwrap();
+        assert_eq!(seg.open_frames() * FRAME, open.samples.len());
+        assert!(open.voiced_frames >= 30 && open.samples.len() >= 40 * FRAME);
+        // The final segment starts like the partial view of it.
+        let out = run(&mut seg, &repeat(20, 0.0, 0.0));
+        let Some(Outcome::Segment(fin)) = out.last() else {
+            panic!("{out:?}")
+        };
+        assert_eq!(fin.start_frame, open.start_frame);
+        assert_eq!(&fin.samples[..open.samples.len()], &open.samples[..]);
+        assert_eq!(seg.open_frames(), 0);
     }
 
     #[test]

@@ -11,6 +11,12 @@
 //!                                         stale check, Whisper, filter ──▶ events
 //! ```
 //!
+//! While someone speaks, the open segment is also transcribed every second
+//! (from 1.5 s on) when Whisper is idle: these **partial** transcripts let the
+//! UI show the words live. The final transcript of the segment, with the same
+//! id, replaces them; if the segment is finally rejected, `retract` removes
+//! the line. Final segments always go first.
+//!
 //! Nothing is written to disk. `purge` (stop, emergency, CS2 closed) drops the
 //! open segment, the queue and any result still being computed.
 
@@ -42,6 +48,10 @@ pub const QUEUE_CAPACITY: usize = 3;
 const CHANNEL_BLOCKS: usize = 256;
 /// The VAD runs on this many frames at a time (6 x 32 ms = 192 ms).
 pub const VAD_HOP_FRAMES: usize = 6;
+/// A partial transcript needs this much open segment (47 x 32 ms = 1.5 s)...
+pub const PARTIAL_MIN_FRAMES: usize = 47;
+/// ...and this much new audio since the previous one (31 x 32 ms = 1 s).
+pub const PARTIAL_STEP_FRAMES: usize = 31;
 const STATS_EVERY: Duration = Duration::from_secs(2);
 const LATENCY_WINDOW: usize = 100;
 
@@ -50,6 +60,8 @@ pub trait SpeechEvents: Send + Sync + 'static {
     fn transcript(&self, transcript: &Transcript);
     fn activity(&self, activity: VoiceActivity);
     fn stats(&self, stats: &SpeechStats);
+    /// The line of a partial transcript must go: its segment was rejected.
+    fn retract(&self, id: u64);
 }
 
 /// Loads the models (whisper.cpp in the app, fakes in tests).
@@ -76,39 +88,77 @@ struct Job {
     voice_end: Instant,
     queued_at: Instant,
     generation: u64,
+    /// Id of the utterance: shared by its partial and final transcripts.
+    utterance: u64,
+    partial: bool,
 }
 
-/// Bounded queue that drops the oldest job when full.
+#[derive(Default)]
+struct Jobs {
+    finals: VecDeque<Job>,
+    /// The latest partial request (an older one is useless).
+    partial: Option<Job>,
+}
+
+/// Bounded queue of final segments (drops the oldest when full), plus one
+/// partial slot served only when no final segment waits.
 struct JobQueue {
-    jobs: Mutex<VecDeque<Job>>,
+    jobs: Mutex<Jobs>,
     ready: Condvar,
 }
 
 impl JobQueue {
     fn push(&self, job: Job) -> Option<Job> {
         let mut q = self.jobs.lock().unwrap();
-        let dropped = if q.len() >= QUEUE_CAPACITY {
-            q.pop_front()
+        if q.partial
+            .as_ref()
+            .is_some_and(|p| p.utterance == job.utterance)
+        {
+            q.partial = None;
+        }
+        let dropped = if q.finals.len() >= QUEUE_CAPACITY {
+            q.finals.pop_front()
         } else {
             None
         };
-        q.push_back(job);
+        q.finals.push_back(job);
         self.ready.notify_one();
         dropped
+    }
+
+    /// Asks for a partial transcript; false when final segments are waiting.
+    fn push_partial(&self, job: Job) -> bool {
+        let mut q = self.jobs.lock().unwrap();
+        if !q.finals.is_empty() {
+            return false;
+        }
+        q.partial = Some(job);
+        self.ready.notify_one();
+        true
     }
 
     fn pop(&self, timeout: Duration) -> Option<Job> {
         let q = self.jobs.lock().unwrap();
         let (mut q, _) = self
             .ready
-            .wait_timeout_while(q, timeout, |q| q.is_empty())
+            .wait_timeout_while(q, timeout, |q| q.finals.is_empty() && q.partial.is_none())
             .unwrap();
-        q.pop_front()
+        q.finals.pop_front().or_else(|| q.partial.take())
     }
 
     fn clear(&self) {
-        self.jobs.lock().unwrap().clear();
+        let mut q = self.jobs.lock().unwrap();
+        q.finals.clear();
+        q.partial = None;
     }
+}
+
+/// Utterances whose partial transcript is on screen, and utterances closed
+/// without a final transcript (a late partial result must not reappear).
+#[derive(Default)]
+struct Live {
+    shown: std::collections::HashSet<u64>,
+    closed: VecDeque<u64>,
 }
 
 #[derive(Default)]
@@ -164,6 +214,7 @@ struct Inner {
     engine: Mutex<EngineSlot>,
     recognizer: Mutex<Option<Box<dyn Recognizer>>>,
     queue: JobQueue,
+    live: Mutex<Live>,
     stats: Mutex<StatsAcc>,
     dropped_blocks: AtomicU64,
     /// Bumped by `purge`: older segments and results are discarded.
@@ -216,6 +267,23 @@ impl Inner {
             .unwrap()
             .snapshot(self.dropped_blocks.load(Ordering::Relaxed));
         self.events.stats(&s);
+    }
+
+    /// Removes the partial line of an utterance closed without a transcript.
+    fn close_utterance(&self, id: u64) {
+        let mut live = self.live.lock().unwrap();
+        live.closed.push_back(id);
+        if live.closed.len() > 64 {
+            live.closed.pop_front();
+        }
+        if live.shown.remove(&id) {
+            drop(live);
+            self.events.retract(id);
+        }
+    }
+
+    fn partial_shown(&self, id: u64) -> bool {
+        self.live.lock().unwrap().shown.contains(&id)
     }
 
     fn set_activity(&self, speaking: Option<bool>, transcribing: Option<bool>) {
@@ -272,8 +340,9 @@ impl SpeechService {
                 loaded_model: None,
             }),
             recognizer: Mutex::new(None),
+            live: Mutex::new(Live::default()),
             queue: JobQueue {
-                jobs: Mutex::new(VecDeque::new()),
+                jobs: Mutex::new(Jobs::default()),
                 ready: Condvar::new(),
             },
             stats: Mutex::new(StatsAcc::default()),
@@ -419,6 +488,10 @@ impl SpeechService {
         let _publication = self.inner.publication.lock().unwrap();
         self.inner.generation.fetch_add(1, Ordering::SeqCst);
         self.inner.queue.clear();
+        let shown: Vec<u64> = self.inner.live.lock().unwrap().shown.drain().collect();
+        for id in shown {
+            self.inner.events.retract(id);
+        }
         *self.inner.last_audio.lock().unwrap() = None;
         self.inner.set_activity(Some(false), Some(false));
     }
@@ -513,11 +586,17 @@ struct Front {
     clock: FrameClock,
     pending: Vec<f32>,
     generation: u64,
+    /// Id of the utterance being recorded.
+    utterance: Option<u64>,
+    /// Open-segment length at the last partial request.
+    partial_frames: usize,
 }
 
 impl Front {
     fn new(threshold: f32, generation: u64) -> Self {
         Self {
+            utterance: None,
+            partial_frames: 0,
             conditioner: None,
             segmenter: Segmenter::new(SegmenterConfig::new(threshold)),
             clock: FrameClock::new(),
@@ -612,6 +691,10 @@ fn run_vad(inner: &Inner, det: &mut dyn VoiceDetector, st: &mut Front) {
             match outcome {
                 None => {}
                 Some(Outcome::Rejected(r)) => {
+                    if let Some(id) = st.utterance.take() {
+                        inner.close_utterance(id);
+                    }
+                    st.partial_frames = 0;
                     diagnostic_rejection(r, 0, 0);
                     {
                         let mut s = inner.stats.lock().unwrap();
@@ -623,13 +706,21 @@ fn run_vad(inner: &Inner, det: &mut dyn VoiceDetector, st: &mut Front) {
                 Some(Outcome::Segment(segment)) => {
                     let voice_end = st.clock.instant_of(segment.last_voiced_frame + 1);
                     inner.stats.lock().unwrap().segments += 1;
+                    let utterance = st
+                        .utterance
+                        .take()
+                        .unwrap_or_else(|| inner.next_id.fetch_add(1, Ordering::SeqCst));
+                    st.partial_frames = 0;
                     let dropped = inner.queue.push(Job {
                         segment,
                         voice_end,
                         queued_at: Instant::now(),
                         generation: st.generation,
+                        utterance,
+                        partial: false,
                     });
                     if let Some(dropped) = dropped {
+                        inner.close_utterance(dropped.utterance);
                         diagnostic_rejection(
                             RejectReason::Overflow,
                             dropped.segment.duration_ms(),
@@ -640,7 +731,41 @@ fn run_vad(inner: &Inner, det: &mut dyn VoiceDetector, st: &mut Front) {
                     }
                 }
             }
+            if st.segmenter.is_speaking() && st.utterance.is_none() {
+                st.utterance = Some(inner.next_id.fetch_add(1, Ordering::SeqCst));
+                st.partial_frames = 0;
+            }
         }
+        request_partial(inner, st);
+    }
+}
+
+/// Live words while someone speaks: the open segment goes to Whisper when it
+/// is idle, at most once per `PARTIAL_STEP_FRAMES` of new audio.
+fn request_partial(inner: &Inner, st: &mut Front) {
+    let (Some(utterance), n) = (st.utterance, st.segmenter.open_frames()) else {
+        return;
+    };
+    if n < PARTIAL_MIN_FRAMES || n < st.partial_frames + PARTIAL_STEP_FRAMES {
+        return;
+    }
+    if inner.transcribing.load(Ordering::SeqCst) {
+        return; // retried at the next hop
+    }
+    let Some(segment) = st.segmenter.open_segment() else {
+        return;
+    };
+    let now = Instant::now();
+    let job = Job {
+        segment,
+        voice_end: now,
+        queued_at: now,
+        generation: st.generation,
+        utterance,
+        partial: true,
+    };
+    if inner.queue.push_partial(job) {
+        st.partial_frames = n;
     }
 }
 
@@ -672,7 +797,13 @@ fn asr_loop(inner: &Inner) {
         if job.generation != inner.generation.load(Ordering::SeqCst) {
             continue;
         }
-        if job.voice_end.elapsed() > STALE_AFTER {
+        if job.partial {
+            transcribe_partial(inner, job);
+            continue;
+        }
+        // A line already on screen (partial) is completed even when late.
+        if job.voice_end.elapsed() > STALE_AFTER && !inner.partial_shown(job.utterance) {
+            inner.close_utterance(job.utterance);
             diagnostic_rejection(
                 RejectReason::Stale,
                 job.segment.duration_ms(),
@@ -704,16 +835,20 @@ fn transcribe(inner: &Inner, job: Job) {
     let prompt = prompt_from(&config.glossary);
     let mut slot = inner.recognizer.lock().unwrap();
     if inner.engine.lock().unwrap().loaded_model.as_deref() != Some(config.model.as_str()) {
+        inner.close_utterance(job.utterance);
         return;
     }
     let Some(recognizer) = slot.as_mut() else {
+        inner.close_utterance(job.utterance);
         return; // model not installed or loading
     };
     let publication = inner.publication.lock().unwrap();
     if job.generation != inner.generation.load(Ordering::SeqCst) {
         return;
     }
-    if job.voice_end.elapsed() > STALE_AFTER {
+    let shown = inner.partial_shown(job.utterance);
+    if job.voice_end.elapsed() > STALE_AFTER && !shown {
+        inner.close_utterance(job.utterance);
         diagnostic_rejection(
             RejectReason::Stale,
             job.segment.duration_ms(),
@@ -755,10 +890,17 @@ fn transcribe(inner: &Inner, job: Job) {
                 eprintln!("crosstalk speech diagnostic: inference_error={e:?} audio_ms={audio_ms} queue_ms={queue_ms} inference_ms={asr_ms} timing={timing:?}");
             }
             eprintln!("crosstalk: {e}");
+            inner.close_utterance(job.utterance);
             return;
         }
     };
-    let outcome = judge_current(&rec, audio_ms, job.voice_end.elapsed());
+    // A line already shown live is completed even if late.
+    let age = if shown {
+        Duration::ZERO
+    } else {
+        job.voice_end.elapsed()
+    };
+    let outcome = judge_current(&rec, audio_ms, age);
     if std::env::var_os("CROSSTALK_SPEECH_DIAGNOSTICS").is_some_and(|v| v == "1") {
         eprintln!("crosstalk speech diagnostic: model={} encoder={} audio_ms={} queue_ms={} inference_ms={} timing={:?} lang={:?} lang_prob={} logprob={} no_speech={} outcome={:?} raw={:?}",
             config.model, if config.fast_encoder { "reduced" } else { "full" }, audio_ms, queue_ms,
@@ -768,6 +910,7 @@ fn transcribe(inner: &Inner, job: Job) {
         Err(reason) => {
             stats.reject(reason);
             drop(stats);
+            inner.close_utterance(job.utterance);
         }
         Ok(text) => {
             let latency_ms = job.voice_end.elapsed().as_millis() as u32;
@@ -777,8 +920,10 @@ fn transcribe(inner: &Inner, job: Job) {
                 stats.latencies.pop_front();
             }
             drop(stats);
+            inner.live.lock().unwrap().shown.remove(&job.utterance);
             inner.events.transcript(&Transcript {
-                id: inner.next_id.fetch_add(1, Ordering::SeqCst),
+                id: job.utterance,
+                partial: false,
                 text,
                 lang: rec.lang,
                 lang_prob: rec.lang_prob,
@@ -792,6 +937,66 @@ fn transcribe(inner: &Inner, job: Job) {
         }
     }
     inner.publish_stats();
+}
+
+/// Live words of the segment being recorded: shown, never counted in the
+/// statistics, replaced by the final transcript of the same id.
+fn transcribe_partial(inner: &Inner, job: Job) {
+    let config = inner.config.lock().unwrap().clone();
+    let prompt = prompt_from(&config.glossary);
+    let mut slot = inner.recognizer.lock().unwrap();
+    if inner.engine.lock().unwrap().loaded_model.as_deref() != Some(config.model.as_str()) {
+        return;
+    }
+    let Some(recognizer) = slot.as_mut() else {
+        return;
+    };
+    if job.generation != inner.generation.load(Ordering::SeqCst) {
+        return;
+    }
+    inner.set_activity(None, Some(true));
+    let started = Instant::now();
+    let result = recognizer.recognize(
+        &job.segment.samples,
+        &RecognizeOptions {
+            languages: &config.languages,
+            prompt: &prompt,
+            threads: inner.threads,
+            fast_encoder: config.fast_encoder,
+        },
+    );
+    drop(slot);
+    let asr_ms = started.elapsed().as_millis() as u32;
+    inner.set_activity(None, Some(false));
+    let audio_ms = job.segment.duration_ms();
+    let Ok(rec) = result else { return };
+    let Ok(text) = judge(&rec, audio_ms) else {
+        return; // nothing worth showing yet
+    };
+    let _publication = inner.publication.lock().unwrap();
+    if job.generation != inner.generation.load(Ordering::SeqCst) {
+        return;
+    }
+    {
+        let mut live = inner.live.lock().unwrap();
+        if live.closed.contains(&job.utterance) {
+            return;
+        }
+        live.shown.insert(job.utterance);
+    }
+    inner.events.transcript(&Transcript {
+        id: job.utterance,
+        partial: true,
+        text,
+        lang: rec.lang,
+        lang_prob: rec.lang_prob,
+        audio_ms,
+        latency_ms: asr_ms,
+        asr_ms,
+        avg_logprob: rec.avg_logprob,
+        no_speech_prob: rec.no_speech_prob,
+        model: config.model.clone(),
+    });
 }
 
 #[cfg(test)]
@@ -809,6 +1014,7 @@ mod tests {
         Transcript(Transcript),
         Activity(VoiceActivity),
         Stats(SpeechStats),
+        Retract(u64),
     }
 
     struct Events(Mutex<Sender<Ev>>);
@@ -824,6 +1030,9 @@ mod tests {
         }
         fn stats(&self, s: &SpeechStats) {
             let _ = self.0.lock().unwrap().send(Ev::Stats(s.clone()));
+        }
+        fn retract(&self, id: u64) {
+            let _ = self.0.lock().unwrap().send(Ev::Retract(id));
         }
     }
 
@@ -1017,10 +1226,12 @@ mod tests {
     #[test]
     fn queue_drops_the_oldest_segment() {
         let q = JobQueue {
-            jobs: Mutex::new(VecDeque::new()),
+            jobs: Mutex::new(Jobs::default()),
             ready: Condvar::new(),
         };
         let job = |n: u64| Job {
+            utterance: n,
+            partial: false,
             segment: Segment {
                 samples: vec![],
                 start_frame: n,
@@ -1037,8 +1248,129 @@ mod tests {
         }
         assert_eq!(q.push(job(9)).unwrap().segment.start_frame, 0);
         assert_eq!(q.pop(Duration::ZERO).unwrap().segment.start_frame, 1);
+        // Partials wait for the final segments, and the latest one wins.
+        assert!(!q.push_partial(Job {
+            partial: true,
+            ..job(20)
+        }));
         q.clear();
         assert!(q.pop(Duration::from_millis(1)).is_none());
+        assert!(q.push_partial(Job {
+            partial: true,
+            ..job(20)
+        }));
+        assert!(q.push_partial(Job {
+            partial: true,
+            ..job(21)
+        }));
+        let p = q.pop(Duration::ZERO).unwrap();
+        assert!(p.partial && p.utterance == 21);
+        // The final segment of an utterance cancels its pending partial.
+        assert!(q.push_partial(Job {
+            partial: true,
+            ..job(22)
+        }));
+        q.push(job(22));
+        assert!(!q.pop(Duration::ZERO).unwrap().partial);
+        assert!(q.pop(Duration::from_millis(1)).is_none());
+    }
+
+    /// Answers each call with the next text of the list (the last one repeats).
+    struct Script(Vec<&'static str>, usize);
+    impl Recognizer for Script {
+        fn recognize(
+            &mut self,
+            _: &[f32],
+            opts: &RecognizeOptions,
+        ) -> Result<Recognition, SpeechError> {
+            let text = self.0[self.1.min(self.0.len() - 1)];
+            self.1 += 1;
+            Ok(Recognition {
+                text: text.into(),
+                lang: opts.languages[0],
+                lang_prob: 1.0,
+                avg_logprob: -0.2,
+                no_speech_prob: 0.01,
+            })
+        }
+    }
+
+    fn next_event(rx: &Receiver<Ev>) -> Option<Ev> {
+        let end = Instant::now() + Duration::from_secs(5);
+        while let Some(left) = end.checked_duration_since(Instant::now()) {
+            match rx.recv_timeout(left) {
+                Ok(e @ (Ev::Transcript(_) | Ev::Retract(_))) => return Some(e),
+                Ok(_) => continue,
+                Err(_) => return None,
+            }
+        }
+        None
+    }
+
+    #[test]
+    fn long_utterances_show_live_words_then_the_final_line() {
+        let (svc, rx, _) = service("unused", 0, true);
+        wait_ready(&svc);
+        *svc.inner.recognizer.lock().unwrap() =
+            Some(Box::new(Script(vec!["Двое", "Двое идут на B"], 0)));
+        let mut sink = svc.sink();
+        feed(&mut sink, 2000, 0);
+        let Some(Ev::Transcript(p)) = next_event(&rx) else {
+            panic!("no partial")
+        };
+        assert!(p.partial);
+        assert_eq!(p.text, "Двое");
+        feed(&mut sink, 300, 700);
+        // Possibly more partials (one per second of speech), then the final line.
+        let f = loop {
+            match next_event(&rx) {
+                Some(Ev::Transcript(t)) if t.partial => assert_eq!(t.id, p.id),
+                Some(Ev::Transcript(t)) => break t,
+                e => panic!("expected the final transcript, got {e:?}"),
+            }
+        };
+        assert_eq!((f.id, f.text.as_str()), (p.id, "Двое идут на B"));
+        // Partials are not counted as transcripts.
+        assert_eq!(svc.stats().transcribed, 1);
+    }
+
+    #[test]
+    fn a_rejected_final_retracts_the_live_line() {
+        let (svc, rx, _) = service("unused", 0, true);
+        wait_ready(&svc);
+        *svc.inner.recognizer.lock().unwrap() =
+            Some(Box::new(Script(vec!["Бомба", "Продолжение следует..."], 0)));
+        let mut sink = svc.sink();
+        feed(&mut sink, 2000, 0);
+        let Some(Ev::Transcript(p)) = next_event(&rx) else {
+            panic!("no partial")
+        };
+        assert!(p.partial);
+        feed(&mut sink, 300, 700);
+        loop {
+            match next_event(&rx) {
+                Some(Ev::Transcript(t)) if t.partial => assert_eq!(t.id, p.id),
+                Some(Ev::Retract(id)) => break assert_eq!(id, p.id),
+                e => panic!("expected a retraction, got {e:?}"),
+            }
+        }
+        assert!(next_event(&rx).is_none());
+    }
+
+    #[test]
+    fn purge_retracts_live_lines() {
+        let (svc, rx, _) = service("Бомба на A", 0, true);
+        wait_ready(&svc);
+        let mut sink = svc.sink();
+        feed(&mut sink, 2000, 0);
+        let Some(Ev::Transcript(p)) = next_event(&rx) else {
+            panic!("no partial")
+        };
+        svc.purge();
+        match next_event(&rx) {
+            Some(Ev::Retract(id)) => assert_eq!(id, p.id),
+            e => panic!("expected a retraction, got {e:?}"),
+        }
     }
 
     #[test]
@@ -1133,6 +1465,8 @@ mod tests {
                 voice_end: Instant::now(),
                 queued_at: Instant::now(),
                 generation: 0,
+                utterance: 0,
+                partial: false,
             },
         );
         assert_eq!(next_transcript(&rx).unwrap().text, "Двое на B");
