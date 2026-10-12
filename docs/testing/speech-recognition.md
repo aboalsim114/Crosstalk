@@ -1,12 +1,12 @@
 # Protocole de test — reconnaissance vocale (feat/speech-recognition)
 
-À exécuter sur un PC **Windows 10/11 x64** avec Counter-Strike 2. La CI vérifie la logique (tests unitaires), la compilation Windows de whisper.cpp et mesure les modèles sur un corpus public (tâche `asr-bench`). En revanche, **elle ne peut ni tester CS2 ni mesurer votre machine** : ces étapes sont manuelles.
+À exécuter sur un PC **Windows 10/11 x64** avec Counter-Strike 2. `scripts\validate.ps1` (en local) vérifie la logique (tests unitaires) et la compilation Windows de whisper.cpp. Les mesures (corpus public, CS2, latence, CPU) sont manuelles et décrites ci-dessous.
 
 > Rien n'est enregistré ni envoyé : l'audio reste en mémoire, la transcription est locale (CPU). N'ajoutez pas vos enregistrements de partie au dépôt : les voix et les pseudos sont des données personnelles.
 
 ## 0. Préparation
 
-1. Téléchargez l'artefact `crosstalk-windows-x64` de la PR (onglet **Checks** → **CI**). Il contient l'installateur, `crosstalk-audio-probe.exe`, `crosstalk-asr-bench.exe` et `download-models.ps1`.
+1. Sur le commit à tester, construisez le paquet : `powershell -ExecutionPolicy Bypass -File scripts\validate.ps1`. Le dossier `dist-local\<commit>\` contient l'installateur, `crosstalk-audio-probe.exe`, `crosstalk-asr-bench.exe`, `download-models.ps1` et `fetch-asr-corpus.py`.
 2. Installez Crosstalk (`*-setup.exe`).
 3. Installez les modèles (VAD Silero + Whisper `base`, ~150 Mo) dans `%LOCALAPPDATA%\Crosstalk\models` :
    ```powershell
@@ -15,17 +15,17 @@
    Le script vérifie la taille exacte et le SHA-1 publié par whisper.cpp. Il affiche aussi le SHA-256 : copiez la ligne `ggml-silero-v5.1.2.bin` dans le compte rendu.
 4. Notez votre processeur (Gestionnaire des tâches → Performances) et votre version de Windows (`winver`).
 
-> **Sans CI Windows** (indisponible, par exemple quand les Actions sont bloquées) : `scripts/cross-build-windows-gnu.sh` produit sous Linux un paquet portable de test compilé avec MinGW/gcc (`dist-test/crosstalk-<commit>-windows-x64-gcc-test.zip`, notice `LISEZMOI-TEST.txt` incluse). La version officielle reste celle de la CI (MSVC). Pour comparer les deux compilateurs, lancez la même commande `crosstalk-asr-bench` avec les deux exécutables, sur le même WAV.
+> **Sans PC Windows de build** : `scripts/cross-build-windows-gnu.sh` produit sous Linux un paquet portable de test compilé avec MinGW/gcc (`dist-test/crosstalk-<commit>-windows-x64-gcc-test.zip`, notice `LISEZMOI-TEST.txt` incluse). La version officielle reste le build MSVC de `validate.ps1`. Pour comparer les deux compilateurs, lancez la même commande `crosstalk-asr-bench` avec les deux exécutables, sur le même WAV, CS2 fermé.
 
 ## 1. Banc d'essai hors ligne (sans CS2)
 
-Dans un terminal ouvert dans le dossier de l'artefact :
+Dans un terminal ouvert dans `dist-local\<commit>\` :
 
 | # | Commande | Résultat attendu |
 | --- | --- | --- |
 | 1.1 | `.\crosstalk-asr-bench.exe --vad-only --noise-only 120` | « 0 segments envoyés à Whisper » ou très peu : la VAD et les garde-fous écartent les tirs et explosions **synthétiques**. |
 | 1.2 | `.\crosstalk-asr-bench.exe --noise-only 120 --model base` | « **0 fausses transcriptions affichées** ». Sinon, notez les phrases inventées. |
-| 1.3 | Corpus de référence : `python fetch-asr-corpus.py --out corpus --per-lang 15` (inclus dans l’artefact ; Python 3 requis), puis `.\crosstalk-asr-bench.exe --manifest corpus\manifest.tsv --model base,small --markdown bench.md` | Un tableau avec WER/CER russe et anglais, latence et CPU, propre (`clean`) et sous bruit de combat synthétique (`combat`). Collez `bench.md` dans la PR. |
+| 1.3 | Corpus de référence : `python fetch-asr-corpus.py --out corpus --per-lang 15` (inclus dans le paquet ; Python 3 requis), puis `.\crosstalk-asr-bench.exe --manifest corpus\manifest.tsv --model base,small --markdown bench.md` | Un tableau avec WER/CER russe et anglais, latence et CPU, propre (`clean`) et sous bruit de combat synthétique (`combat`). Collez `bench.md` dans la PR. |
 | 1.4 | **Vos enregistrements CS2** (voir ci-dessous) : `.\crosstalk-asr-bench.exe --manifest mes-wav.tsv --scenario clean --model base --verbose` | Pour chaque fichier : les phrases transcrites et les segments rejetés (`Transient` = tir ou explosion, `Hallucination`, …). Vérifiez à l'oreille si le texte correspond à ce qui est dit. |
 
 **Format de `mes-wav.tsv`** (un fichier par ligne, séparateur tabulation ; la référence est facultative) :

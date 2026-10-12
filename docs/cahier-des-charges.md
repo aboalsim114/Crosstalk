@@ -282,7 +282,7 @@ La solution retenue est donc l'**analyse du HUD par capture d'image et OCR**.
 | Confidentialité | Aucun audio ni image écrit sur disque ou envoyé sans opt-in. Historique désactivé par défaut et purgé après 7 jours. Pseudos expurgés des journaux. Aucune télémétrie par défaut. |
 | Accessibilité | Contraste 4,5:1 minimum, navigation complète au clavier, format d'overlay Accessible, respect du réglage Windows « réduire les animations ». |
 | Localisation | Interface en français ; chaînes externalisées pour ajouter d'autres langues. |
-| Maintenabilité | `clippy` sans avertissement, `rustfmt`, TypeScript strict, couverture de tests ≥ 70 % hors interface, CI Windows obligatoire sur chaque PR. |
+| Maintenabilité | `clippy` sans avertissement, `rustfmt`, TypeScript strict, couverture de tests ≥ 70 % hors interface, validation locale Windows (`scripts/validate.ps1`) avec rapport sur chaque PR. |
 
 ## 6. Architecture technique
 
@@ -311,7 +311,7 @@ fenêtre CS2 ─► capture HUD ─► indicateur ─► OCR ─► corrélation
 | Locuteur (exp.) | Windows Graphics Capture, Windows.Media.Ocr via `windows-rs` |
 | Données | `serde` + JSON (config), `rusqlite` (historique), `keyring` (secrets) |
 | Journaux | `tracing`, rotation quotidienne, expurgation des clés et pseudos |
-| Distribution | Bundler Tauri (NSIS par utilisateur + MSI), WebView2 embarqué, mises à jour signées (`tauri-plugin-updater`), workflow de release sur tag |
+| Distribution | Bundler Tauri (NSIS par utilisateur + MSI), WebView2 embarqué, mises à jour signées (`tauri-plugin-updater`), release sur tag avec installateurs construits en local |
 
 ### 6.3 Données et fichiers
 
@@ -341,7 +341,7 @@ Le casque 3D réactif (Three.js) et le verre dépoli sont livrés. Ils doivent r
 - **Corpus HUD** : captures de l'indicateur vocal à plusieurs résolutions et échelles, avec les pseudos attendus.
 - **Mesure des FPS** : PresentMon, avec et sans Crosstalk, en CPU et en GPU.
 - **Tests manuels** : 20 h de parties réelles sur 3 configurations (GPU NVIDIA, GPU AMD, CPU seul), sous Windows 10 et 11.
-- **Intégration continue** : GitHub Actions sur runner Windows, sur chaque PR vers `develop` et `main` : typecheck, tests, clippy, rustfmt, installateurs ✅.
+- **Validation locale** : pas de GitHub Actions (décision du 12/10/2026). Sur chaque PR vers `develop` et `main`, `scripts/validate.ps1` sur un PC Windows : garde anti-triche, typecheck, tests, clippy, rustfmt, build MSVC, installateurs, avec rapport joint à la PR.
 
 **Critères d'acceptation de la version 1.0**
 - Toutes les exigences P0 et P1 sont implémentées et testées.
@@ -354,7 +354,7 @@ Le casque 3D réactif (Three.js) et le verre dépoli sont livrés. Ils doivent r
 ## 9. Planning et lots
 
 **Déjà réalisé :**
-- socle Tauri v2, CI Windows et installateurs ;
+- socle Tauri v2, build Windows et installateurs (validation locale, sans CI hébergée) ;
 - les sept écrans, l'intro et la scène 3D ;
 - zone de notification, raccourcis globaux, fenêtre d'overlay, démarrage avec Windows, instance unique ;
 - workflow Git `develop` / `main`.

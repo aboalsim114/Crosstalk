@@ -1,6 +1,6 @@
 # whisper.cpp build flags, read by whisper-rs-sys (GGML_* variables are passed to
-# CMake). GGML_NATIVE would tune the binary for the build machine's CPU (the CI
-# runner) and crash elsewhere: target AVX2/FMA/F16C instead, available on every
+# CMake). GGML_NATIVE would tune the binary for the build machine's CPU and crash
+# on older ones: target AVX2/FMA/F16C instead, available on every
 # CPU that runs Counter-Strike 2 comfortably (Intel Haswell / AMD Zen and later).
 [env]
 GGML_NATIVE = "OFF"

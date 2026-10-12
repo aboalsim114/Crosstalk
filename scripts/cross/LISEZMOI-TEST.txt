@@ -14,7 +14,7 @@ Ce que contient ce dossier
 
 IMPORTANT, à lire avant de tester
 ---------------------------------
-1. Compilé avec gcc (MinGW), et non avec MSVC comme la CI, via
+1. Compilé avec gcc (MinGW), et non avec MSVC comme la version officielle, via
    scripts/cross-build-windows-gnu.sh. Le code est exactement celui du
    commit @COMMIT@ ; seule la chaîne de compilation diffère. Pour une
    comparaison équitable, voir la section 6.
@@ -108,10 +108,10 @@ E) Impact FPS             : même scène (carte d'atelier « CS2 FPS
 
 6. Comparaison gcc / MSVC (pour décider du compilateur)
 -------------------------------------------------------
-Quand la facturation GitHub Actions sera réglée, la CI produira l'artefact
-officiel MSVC du même commit, avec son propre crosstalk-asr-bench.exe.
-Lancez alors exactement la même commande avec les deux exécutables, sur le
-même fichier :
+Construisez la version officielle MSVC du même commit sur votre PC
+(scripts\validate.ps1, voir CONTRIBUTING.md). Lancez exactement la même
+commande avec les deux crosstalk-asr-bench.exe, sur le même fichier, CS2
+fermé :
 
     .\crosstalk-asr-bench.exe --manifest mes-wav.tsv --scenario clean --model base
 
