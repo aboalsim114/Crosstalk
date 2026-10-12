@@ -1,6 +1,7 @@
 //! Local translation into French (Opus-MT, Apache-2.0), on the CPU: no API key,
 //! no network, nothing to pay.
 
+pub mod callouts;
 pub mod glossary;
 pub mod marian;
 pub mod models;
@@ -190,6 +191,73 @@ mod fixture_tests {
                 "texte pour {text:?}"
             );
         }
+    }
+
+    /// Beam search (4 beams) gives the sequences of transformers' `generate`.
+    #[test]
+    fn beam_search_matches_transformers() {
+        let mut m = Marian::load(&dir(), Mode::Exact).unwrap();
+        let mut n = 0;
+        for case in expected()["source"].as_array().unwrap() {
+            let Some(beam) = case["beam4"].as_array() else {
+                continue;
+            };
+            let ids: Vec<u32> = case["ids"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|v| v.as_u64().unwrap() as u32)
+                .collect();
+            // Drop the decoder start token and the final </s>.
+            let want: Vec<u32> = beam[1..]
+                .iter()
+                .map(|v| v.as_u64().unwrap() as u32)
+                .filter(|&t| t != 0)
+                .collect();
+            let got = m.generate_beam(&ids, 12, 4).unwrap();
+            assert_eq!(got, want, "beam search for {:?}", case["text"]);
+            n += 1;
+        }
+        assert!(n >= 5, "{n} cases");
+    }
+
+    /// With `</s>` made likelier, hypotheses end at different lengths: the
+    /// finished-hypotheses logic must match PyTorch's beam search (numpy port
+    /// in scripts/make-marian-fixture.py).
+    #[test]
+    fn beam_search_handles_early_endings_like_pytorch() {
+        let mut m = Marian::load(&dir(), Mode::Exact).unwrap();
+        let exp = expected();
+        m.boost_logit(0, exp["eos_boost"].as_f64().unwrap() as f32);
+        let mut lengths = Vec::new();
+        for case in exp["source"].as_array().unwrap() {
+            let Some(want) = case["beam4_eos"].as_array() else {
+                continue;
+            };
+            let ids: Vec<u32> = case["ids"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|v| v.as_u64().unwrap() as u32)
+                .collect();
+            let want: Vec<u32> = want
+                .iter()
+                .map(|v| v.as_u64().unwrap() as u32)
+                .filter(|&t| t != 0)
+                .collect();
+            assert_eq!(
+                m.generate_beam(&ids, 12, 4).unwrap(),
+                want,
+                "beam search for {:?}",
+                case["text"]
+            );
+            lengths.push(want.len());
+        }
+        // The cases do exercise early endings, not only the length limit.
+        assert!(
+            lengths.iter().any(|&l| l < 11) && lengths.contains(&11),
+            "{lengths:?}"
+        );
     }
 
     #[test]

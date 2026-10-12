@@ -10,10 +10,10 @@ Installateur : `Crosstalk-setup.exe` (lien du README) ou `dist-test\Crosstalk-<c
 | --- | --- | --- |
 | 1.1 | Lancer `Crosstalk-setup.exe` (SmartScreen : « Informations complémentaires » > « Exécuter quand même ») | Fenêtre sans bordure aux coins arrondis, casque 3D, intro avec barres cinéma, « EVERY VOICE. ONE LANGUAGE. ». Version réelle en bas à droite. |
 | 1.2 | Glisser la fenêtre par la barre du haut ; bouton « — » | La fenêtre se déplace ; elle se réduit dans la barre des tâches. |
-| 1.3 | « INITIALISER L'INSTALLATION » | Écran CONFIGURATION : `C:\Users\<vous>\AppData\Local\Crosstalk`, espace requis (environ 800 Mo), espace réellement disponible sur le disque. |
+| 1.3 | « INITIALISER L'INSTALLATION » | Écran CONFIGURATION : `C:\Users\<vous>\AppData\Local\Crosstalk`, espace requis (environ 1,3 Go : application et modèles), espace réellement disponible sur le disque. |
 | 1.4 | « Parcourir… » puis choisir `D:\Jeux` (ou un autre dossier) | Sélecteur de dossier Windows ; la destination devient `D:\Jeux\Crosstalk`. |
 | 1.5 | Lien « conditions d'utilisation », puis Échap | La fenêtre s'ouvre, puis se ferme. |
-| 1.6 | Décocher « Créer un raccourci sur le bureau », puis « INSTALLER CROSSTALK » | Écran INSTALLATION : le pourcentage avance, les phases s'allument une à une. Pendant l'extraction, le sous-titre affiche le fichier en cours et les Mo (« Transcription (Whisper base) · 120 / 776 Mo »). Notez la durée totale et le débit. |
+| 1.6 | Décocher « Créer un raccourci sur le bureau », puis « INSTALLER CROSSTALK » | Écran INSTALLATION : le pourcentage avance, les phases s'allument une à une. Pendant l'extraction, le sous-titre affiche le fichier en cours et les Mo (« Transcription (Whisper small) · 420 / 1 250 Mo »). Notez la durée totale et le débit. |
 | 1.7 | Fin | Écran « YOU'RE READY TO CONNECT. ». Raccourci dans le menu Démarrer, **pas** sur le bureau. Fichiers dans le dossier choisi : `crosstalk.exe`, `WebView2Loader.dll`, trois DLL MinGW, `uninstall.exe`. Modèles dans `%LOCALAPPDATA%\Crosstalk\models`. |
 | 1.8 | Cocher « Lancer automatiquement au démarrage de Windows », puis « LANCER CROSSTALK » | L'installateur se ferme et Crosstalk s'ouvre. Il ne propose **pas** de retélécharger les modèles (pas de bannière « Préparation »). Dans Crosstalk, l'interrupteur de démarrage automatique est activé. |
 | 1.9 | Paramètres Windows › Applications | « Crosstalk » apparaît, avec sa version et sa taille. |

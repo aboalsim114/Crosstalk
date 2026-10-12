@@ -50,7 +50,7 @@ describe('App', () => {
     render(<App />);
     fireEvent.change(screen.getByPlaceholderText(/Ajouter un terme/), { target: { value: 'boost' } });
     fireEvent.click(screen.getByText('Ajouter'));
-    expect(screen.getByTestId('gloss-count')).toHaveTextContent('14 termes');
+    expect(screen.getByTestId('gloss-count')).toHaveTextContent('15 termes');
   });
 });
 

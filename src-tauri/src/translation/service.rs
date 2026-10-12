@@ -10,6 +10,7 @@ use std::time::{Duration, Instant};
 
 use serde::{Deserialize, Serialize};
 
+use super::callouts;
 use super::glossary::{self, Term};
 use super::models;
 
@@ -79,10 +80,17 @@ pub struct Translation {
     pub cached: bool,
     /// False when glossary terms could not be protected in this line.
     pub glossary: bool,
+    /// Quick translation of a live (partial) line, replaced by the final one.
+    #[serde(default)]
+    pub partial: bool,
 }
 
 pub trait Engine: Send {
     fn translate(&mut self, text: &str) -> Result<String, String>;
+    /// Faster, lower quality (live lines): greedy decoding.
+    fn translate_fast(&mut self, text: &str) -> Result<String, String> {
+        self.translate(text)
+    }
 }
 
 pub trait EngineLoader: Send + Sync {
@@ -102,6 +110,7 @@ struct Job {
     queued: Instant,
     generation: u64,
     reply: Option<std::sync::mpsc::Sender<Translation>>,
+    partial: bool,
 }
 
 #[derive(Default)]
@@ -233,7 +242,27 @@ impl TranslationService {
             queued: Instant::now(),
             generation: self.inner.generation.load(Ordering::SeqCst),
             reply: None,
+            partial: false,
         });
+    }
+
+    /// Live words of a voice line: translated quickly when the worker is idle;
+    /// a newer live line replaces a pending one, final lines go first.
+    pub fn submit_partial(&self, id: u64, lang: &str, text: &str) {
+        {
+            let mut q = self.inner.queue.lock().unwrap();
+            q.retain(|j| !j.partial);
+            q.push_back(Job {
+                id,
+                lang: lang.into(),
+                text: text.into(),
+                queued: Instant::now(),
+                generation: self.inner.generation.load(Ordering::SeqCst),
+                reply: None,
+                partial: true,
+            });
+        }
+        self.inner.wake.notify_all();
     }
 
     /// Translates now and waits (manual test from the UI, bench).
@@ -246,6 +275,7 @@ impl TranslationService {
             queued: Instant::now(),
             generation: self.inner.generation.load(Ordering::SeqCst),
             reply: Some(tx),
+            partial: false,
         });
         rx.recv_timeout(Duration::from_secs(60))
             .unwrap_or_else(|_| failure(0, lang, text, "moteur indisponible", 0))
@@ -344,6 +374,7 @@ fn failure(id: u64, lang: &str, text: &str, why: &str, queue_ms: u32) -> Transla
         queue_ms,
         cached: false,
         glossary: true,
+        partial: false,
     }
 }
 
@@ -360,7 +391,12 @@ fn worker_loop(inner: &Inner) {
                 if inner.shutdown.load(Ordering::SeqCst) || inner.reload.load(Ordering::SeqCst) {
                     break None;
                 }
-                if let Some(j) = q.pop_front() {
+                // Final lines before the pending live one.
+                let next = q
+                    .iter()
+                    .position(|j| !j.partial)
+                    .or((!q.is_empty()).then_some(0));
+                if let Some(j) = next.and_then(|i| q.remove(i)) {
                     break Some(j);
                 }
                 q = inner
@@ -432,13 +468,29 @@ fn run(
             ..failure(job.id, &job.lang, &job.text, "", queue_ms)
         });
     }
+    // Known Counter-Strike callouts: exact, instant, no model needed (F-36).
+    if let Some(text) = callouts::translate(&job.lang, &job.text) {
+        return Some(Translation {
+            translated: Some(text),
+            error: None,
+            partial: job.partial,
+            ..failure(job.id, &job.lang, &job.text, "", queue_ms)
+        });
+    }
     let Some(spec) = models::pair(&job.lang) else {
         return fail("langue non gérée");
     };
+    // A live line older than 2 s has been replaced on screen: skip it.
+    if job.partial && job.queued.elapsed() > Duration::from_secs(2) {
+        return None;
+    }
     if !manual && job.queued.elapsed() > MAX_WAIT {
         return fail("moteur indisponible (délai dépassé)");
     }
     let Some(engine) = engines.get_mut(spec.source) else {
+        if job.partial {
+            return None; // the final line will say why
+        }
         // Present but unreadable is not the same as absent.
         let broken = inner
             .pairs
@@ -453,6 +505,25 @@ fn run(
     };
     let key = (job.lang.clone(), cache_key(&job.text));
     let started = Instant::now();
+    if job.partial {
+        let out = glossary::translate(&job.text, &config.glossary, |t| engine.translate_fast(t));
+        if job.generation != inner.generation.load(Ordering::SeqCst) {
+            return None;
+        }
+        return match out {
+            Ok((text, protected)) if !callouts::clean_output(&text).is_empty() => {
+                Some(Translation {
+                    translated: Some(callouts::clean_output(&text)),
+                    error: None,
+                    ms: started.elapsed().as_millis() as u32,
+                    glossary: protected,
+                    partial: true,
+                    ..failure(job.id, &job.lang, &job.text, "", queue_ms)
+                })
+            }
+            _ => None,
+        };
+    }
     if let Some(hit) = inner.cache.lock().unwrap().get(&key) {
         return Some(Translation {
             translated: Some(hit),
@@ -467,7 +538,7 @@ fn run(
     if !manual && job.generation != inner.generation.load(Ordering::SeqCst) {
         return None;
     }
-    match outcome {
+    match outcome.map(|(t, p)| (callouts::clean_output(&t), p)) {
         Ok((text, protected)) if !text.trim().is_empty() => {
             inner.cache.lock().unwrap().put(key, text.clone());
             Some(Translation {
@@ -480,6 +551,7 @@ fn run(
                 queue_ms,
                 cached: false,
                 glossary: protected,
+                partial: false,
             })
         }
         Ok(_) => fail("traduction vide"),
@@ -512,6 +584,9 @@ impl EngineLoader for OpusLoader {
 impl Engine for super::marian::Marian {
     fn translate(&mut self, text: &str) -> Result<String, String> {
         super::marian::Marian::translate(self, text)
+    }
+    fn translate_fast(&mut self, text: &str) -> Result<String, String> {
+        self.translate_with(text, 1)
     }
 }
 
@@ -591,6 +666,64 @@ mod tests {
     }
 
     #[test]
+    fn known_callouts_need_no_model() {
+        let (svc, rx, calls) = service(vec![], 0);
+        svc.submit(1, "en", "CT, go, go.");
+        let t = next(&rx);
+        assert_eq!(t.translated.as_deref(), Some("CT, on y va"));
+        assert_eq!(calls.load(Ordering::SeqCst), 0);
+    }
+
+    #[test]
+    fn subtitle_dashes_are_removed_from_the_model_output() {
+        struct Dash;
+        impl Engine for Dash {
+            fn translate(&mut self, _: &str) -> Result<String, String> {
+                Ok("- Deux vont sur B.".into())
+            }
+        }
+        let mut engines: HashMap<&'static str, Box<dyn Engine>> = HashMap::new();
+        engines.insert("en", Box::new(Dash));
+        let (svc, _rx, _) = service(vec![], 0);
+        let job = Job {
+            id: 1,
+            lang: "en".into(),
+            text: "Two are going B".into(),
+            queued: Instant::now(),
+            generation: 0,
+            reply: None,
+            partial: false,
+        };
+        let t = run(&svc.inner, &mut engines, &job).unwrap();
+        assert_eq!(t.translated.as_deref(), Some("Deux vont sur B."));
+    }
+
+    #[test]
+    fn live_lines_wait_for_final_ones_and_only_the_latest_is_kept() {
+        let (svc, rx, _) = service(vec!["ru"], 150);
+        svc.submit(1, "ru", "первая фраза");
+        svc.submit_partial(2, "ru", "живая");
+        svc.submit_partial(2, "ru", "живая строка");
+        svc.submit(3, "ru", "вторая фраза");
+        let order: Vec<(u64, bool, String)> = (0..3)
+            .map(|_| next(&rx))
+            .map(|t| (t.id, t.partial, t.translated.unwrap()))
+            .collect();
+        assert_eq!(
+            order,
+            vec![
+                (1, false, "FR:первая фраза".into()),
+                (3, false, "FR:вторая фраза".into()),
+                (2, true, "FR:живая строка".into())
+            ]
+        );
+        assert!(
+            rx.recv_timeout(Duration::from_millis(400)).is_err(),
+            "the replaced live line was translated"
+        );
+    }
+
+    #[test]
     fn a_transcript_comes_back_in_french_then_from_the_cache() {
         let (svc, rx, calls) = service(vec!["ru", "en"], 0);
         assert!(svc
@@ -598,17 +731,17 @@ mod tests {
             .pairs
             .iter()
             .all(|p| p.state == PairState::Ready));
-        svc.submit(7, "ru", "Двое на B");
+        svc.submit(7, "ru", "Двое идут на B");
         let t = next(&rx);
         assert_eq!(
             (t.id, t.translated.as_deref(), t.cached),
-            (7, Some("FR:Двое на B"), false)
+            (7, Some("FR:Двое идут на B"), false)
         );
-        svc.submit(8, "ru", "  двое   НА b ");
+        svc.submit(8, "ru", "  двое   ИДУТ на b ");
         let t = next(&rx);
         assert_eq!(
             (t.id, t.translated.as_deref(), t.cached),
-            (8, Some("FR:Двое на B"), true)
+            (8, Some("FR:Двое идут на B"), true)
         );
         assert_eq!(calls.load(Ordering::SeqCst), 1);
     }
@@ -621,7 +754,7 @@ mod tests {
             st.pairs.iter().find(|p| p.source == "en").unwrap().state,
             PairState::Missing
         );
-        svc.submit(1, "en", "Two on B");
+        svc.submit(1, "en", "Two of them are going B");
         let t = next(&rx);
         assert_eq!(t.translated, None);
         assert_eq!(t.error.as_deref(), Some("modèle de traduction absent"));

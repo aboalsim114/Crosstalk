@@ -284,6 +284,8 @@ export interface Translation {
   queueMs: number;
   cached: boolean;
   glossary: boolean;
+  /** Quick translation of a live line, replaced by the final one. */
+  partial?: boolean;
 }
 
 export const translation = {

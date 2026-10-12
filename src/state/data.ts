@@ -65,9 +65,10 @@ export const GLOSSARY: GlossEntry[] = [
   ['AWP', 'Conserver', 'AWP'],
   ['rotate', 'Conserver', 'rotate'],
   ['save', 'Conserver', 'save'],
-  ['CT / T', 'Conserver', 'CT / T'],
-  ['one low', 'Traduire', 'un en bas (PV faibles)'],
-  ['lit', 'Traduire', 'touché'],
+  ['CT', 'Conserver', 'CT'],
+  ['T', 'Conserver', 'T'],
+  ['one low', 'Traduire', 'un ennemi à peu de PV'],
+  ['lit', 'Traduire', 'touché (gros dégâts)'],
 ];
 
 /** Original → translation pairs orbiting the 3D headset. */

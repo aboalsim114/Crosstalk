@@ -93,3 +93,12 @@ describe('sceneTarget', () => {
     expect(sceneTarget({ entered: true, page: 'audio' })).toMatchObject({ s: 0.32, dim: 0.5 });
   });
 });
+
+describe('latency advice', () => {
+  it('points to whisper-base when the chosen model is too slow for live subtitles', async () => {
+    const { latencyAdvice } = await import('./derive');
+    expect(latencyAdvice(1800, 'small')).toBeNull();
+    expect(latencyAdvice(6370, 'small')).toMatch(/whisper-base/);
+    expect(latencyAdvice(6370, 'base')).toMatch(/processeur/);
+  });
+});

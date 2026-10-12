@@ -25,10 +25,19 @@ export function isDemoLine(native: boolean, f: FeedEntry | undefined): boolean {
 }
 
 /** Under a transcript that stays untranslated, with the reason. */
+/** Advice when the measured voice delay is too long for live subtitles. */
+export function latencyAdvice(p50Ms: number, model: string): string | null {
+  if (p50Ms <= 3000) return null;
+  if (model !== 'tiny' && model !== 'base') return `Trop lent pour le direct avec whisper-${model} : choisissez whisper-base (Audio & IA)`;
+  return 'Délai élevé : le processeur est très chargé pendant la partie';
+}
+
 export const LIVE_NOTE = 'En cours d’écoute… le texte se complète';
+export const PROVISIONAL_NOTE = 'Traduction provisoire — version soignée en cours';
 
 export function transcriptNote(f: FeedEntry): string {
-  if (f.live) return LIVE_NOTE;
+  if (f.live) return f.shown ? `${LIVE_NOTE} · traduction provisoire` : LIVE_NOTE;
+  if (f.shown && !f.note) return PROVISIONAL_NOTE;
   if (f.note) return `Non traduit — ${f.note}`;
   return f.kind === 'chat' ? CHAT_PENDING_NOTE : TRANSCRIPT_NOTE;
 }
@@ -59,12 +68,13 @@ export function feedRow(f: FeedEntry): FeedRow {
       tag: voice ? 'VOIX' : 'CHAT · ' + CHANNEL_NAME[f.ch!],
       color: voice ? '#ffa24a' : '#7fd4ff',
       time: f.time,
-      langs: (f.src === 'xx' ? '??' : f.src.toUpperCase()) + (voice ? ' · TRANSCRIPTION' : ' · ORIGINAL'),
+      langs: (f.src === 'xx' ? '??' : f.src.toUpperCase()) + (f.shown ? ' → FR · PROVISOIRE' : voice ? ' · TRANSCRIPTION' : ' · ORIGINAL'),
       lead: f.sender ? f.sender + ' — ' : '',
-      orig: '',
-      shown: f.live ? f.orig + ' …' : f.orig,
-      trColor: f.live ? '#b9b2a7' : '#ece6dc',
-      italic: !!f.live,
+      // Provisional French (live line) above its original, else the original alone.
+      orig: f.shown ? f.orig : '',
+      shown: (f.shown ?? f.orig) + (f.live ? ' …' : ''),
+      trColor: f.live || f.shown ? '#b9b2a7' : '#ece6dc',
+      italic: !!f.live || !!f.shown,
       note: transcriptNote(f),
       noteColor: '#6e6961',
       status: f.live ? 'EN DIRECT' : 'TRANSCRIT',
@@ -126,10 +136,10 @@ export function subtitle(f0: FeedEntry | undefined, live: boolean): Subtitle {
       tag: (voice ? 'VOIX' : 'CHAT · ' + CHANNEL_NAME[f0.ch!]) + ' · ' + LANG_NAME[f0.src] + (voice ? ' · TRANSCRIPTION' : ' · ORIGINAL'),
       sender: f0.sender ?? '',
       color: voice ? '#ffa24a' : '#7fd4ff',
-      orig: '',
-      text: f0.live ? '« ' + f0.orig + ' … »' : '« ' + f0.orig + ' »',
-      italic: !!f0.live,
-      trColor: f0.live ? '#c9c2b7' : '#f3ede3',
+      orig: f0.shown ? f0.orig : '',
+      text: '« ' + (f0.shown ?? f0.orig) + (f0.live ? ' …' : '') + ' »',
+      italic: !!f0.live || !!f0.shown,
+      trColor: f0.live || f0.shown ? '#c9c2b7' : '#f3ede3',
       note: transcriptNote(f0),
       noteColor: '#6e6961',
     };

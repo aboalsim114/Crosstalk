@@ -74,8 +74,8 @@ Crosstalk est un outil **externe**. Il n'injecte pas de code dans `cs2.exe`, ne 
 **[↓ Télécharger l'installateur Crosstalk-setup.exe](https://github.com/aboalsim114/Crosstalk/raw/downloads/Crosstalk-setup.exe)**
 
 1. **Téléchargez** `Crosstalk-setup.exe` depuis la branche de distribution `downloads`.
-2. **Installez** Crosstalk dans le dossier proposé ou celui de votre choix. L'installateur personnalisé gère la mise en place de l'application, les raccourcis et les modèles nécessaires.
-3. **Lancez** Crosstalk puis ouvrez CS2. Les modèles de reconnaissance et de traduction représentent environ **780 Mo** à télécharger une fois. Une fois installés, le pipeline de transcription/traduction peut fonctionner hors ligne.
+2. **Installez** Crosstalk dans le dossier proposé ou celui de votre choix. L'installateur met en place l'application, les raccourcis et **télécharge tous les modèles** pendant l'installation : détection de voix, Whisper base et small, traduction russe et anglais → français (environ **1,25 Go**, une seule fois).
+3. **Lancez** Crosstalk puis ouvrez CS2 : tout fonctionne hors ligne, sans aucun téléchargement supplémentaire.
 
 **Avant l'installation :** ce build de test n'est pas signé numériquement et peut déclencher un avertissement SmartScreen. Vérifiez la provenance et, si nécessaire, comparez son empreinte SHA-256 avec la [fiche de distribution](https://github.com/aboalsim114/Crosstalk/blob/downloads/VERSION.md) avant de décider de l'exécuter.
 

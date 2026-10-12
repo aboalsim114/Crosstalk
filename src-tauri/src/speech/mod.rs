@@ -94,14 +94,16 @@ impl SpeechEvents for TauriEvents {
     }
     fn transcript(&self, transcript: &Transcript) {
         let _ = self.0.emit(TRANSCRIPT_EVENT, transcript);
-        if transcript.partial {
-            return; // only final transcripts are translated
-        }
         if let Some(t) = self
             .0
             .try_state::<Arc<crate::translation::TranslationService>>()
         {
-            t.submit(transcript.id, transcript.lang.code(), &transcript.text);
+            // Live lines get a quick translation, final ones the careful one.
+            if transcript.partial {
+                t.submit_partial(transcript.id, transcript.lang.code(), &transcript.text);
+            } else {
+                t.submit(transcript.id, transcript.lang.code(), &transcript.text);
+            }
         }
     }
     fn activity(&self, activity: VoiceActivity) {

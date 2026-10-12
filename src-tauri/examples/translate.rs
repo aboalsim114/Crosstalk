@@ -6,6 +6,7 @@
 //!
 //! Models: `scripts/download-models.ps1 -Translation` (or CROSSTALK_MODELS_DIR).
 //! `--exact` uses the full f32 output layer (reference), default is the app's fast mode.
+//! `--greedy` decodes greedily (live lines) instead of the beam search of final lines.
 //! `--max-new` forces the number of decoding steps (timing with random weights).
 use std::path::PathBuf;
 use std::time::Instant;
@@ -26,10 +27,14 @@ fn main() {
         .iter()
         .enumerate()
         .rev()
-        .find(|(i, a)| !a.starts_with("--") && (*i == 0 || !args[i - 1].starts_with("--")))
+        .find(|(i, a)| {
+            // Only these flags take a value; --exact and --greedy do not.
+            let after_value_flag = *i > 0 && matches!(args[i - 1].as_str(), "--lang" | "--model-dir" | "--repeat" | "--max-new");
+            !a.starts_with("--") && !after_value_flag
+        })
         .map(|(_, a)| a.clone())
         .unwrap_or_else(|| {
-            eprintln!("usage : crosstalk-translate [--lang ru|en] [--model-dir DIR] [--repeat N] [--max-new N] TEXTE");
+            eprintln!("usage : crosstalk-translate [--lang ru|en] [--model-dir DIR] [--repeat N] [--max-new N] [--exact] [--greedy] TEXTE");
             std::process::exit(2)
         });
     let lang = opt("--lang").unwrap_or_else(|| "ru".into());
@@ -47,6 +52,7 @@ fn main() {
     let forced: Option<usize> = opt("--max-new").and_then(|v| v.parse().ok());
 
     let t0 = Instant::now();
+    let greedy = args.iter().any(|a| a == "--greedy");
     let mode = if args.iter().any(|a| a == "--exact") {
         Mode::Exact
     } else {
@@ -71,7 +77,17 @@ fn main() {
                 let ids = m.generate(&src, n).expect("génération");
                 format!("({} jetons) {}", ids.len(), m.decode(&ids))
             }
-            None => m.translate(&text).expect("traduction"),
+            // As in the app: known callouts from the lexicon, else the model
+            // (beam search; --greedy for the quick decoding of live lines).
+            None => match crosstalk_lib::translation::callouts::translate(&lang, &text) {
+                Some(t) => format!("{t}  [lexique]"),
+                None if greedy => crosstalk_lib::translation::callouts::clean_output(
+                    &m.translate_with(&text, 1).expect("traduction"),
+                ),
+                None => crosstalk_lib::translation::callouts::clean_output(
+                    &m.translate(&text).expect("traduction"),
+                ),
+            },
         };
         times.push(t.elapsed().as_millis() as u64);
     }

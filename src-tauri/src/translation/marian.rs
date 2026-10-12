@@ -177,11 +177,210 @@ impl Marian {
         Ok(generated)
     }
 
+    /// Log-probabilities of the next token for each hypothesis (rows of
+    /// `hidden`, b × 1 × d), as `(token, logprob)` lists. `forced_eos`: last
+    /// allowed step, where only `</s>` remains (HF `forced_eos_token_id`).
+    fn log_probs(
+        &self,
+        hidden: &Tensor,
+        forced_eos: bool,
+    ) -> candle_core::Result<Vec<Vec<(u32, f32)>>> {
+        let eos = self.config.eos_token_id;
+        let rows = match &self.head {
+            Head::Full(linear, bias) => {
+                let logits = linear.forward(hidden)?.broadcast_add(bias)?.squeeze(1)?;
+                candle_nn::ops::log_softmax(&logits, 1)?.to_vec2::<f32>()?
+            }
+            Head::Target(_, q, bias) => {
+                let logits = q.forward(hidden)?.broadcast_add(bias)?.squeeze(1)?;
+                candle_nn::ops::log_softmax(&logits, 1)?.to_vec2::<f32>()?
+            }
+        };
+        Ok(rows
+            .into_iter()
+            .map(|row| {
+                row.into_iter()
+                    .enumerate()
+                    .map(|(i, lp)| {
+                        let tok = match &self.head {
+                            Head::Full(..) => i as u32,
+                            Head::Target(allowed, ..) => allowed[i],
+                        };
+                        // bad_words_ids = [[pad]], applied after log_softmax as HF does.
+                        let lp = if tok == self.config.pad_token_id {
+                            f32::NEG_INFINITY
+                        } else if forced_eos {
+                            if tok == eos {
+                                0.0
+                            } else {
+                                f32::NEG_INFINITY
+                            }
+                        } else {
+                            lp
+                        };
+                        (tok, lp)
+                    })
+                    .collect()
+            })
+            .collect())
+    }
+
+    /// Beam search with `beams` hypotheses, as transformers' `generate`
+    /// (length_penalty 1, early_stopping false, `</s>` forced at the last of
+    /// `max_new` steps). More faithful than greedy decoding on short callouts.
+    pub fn generate_beam(
+        &mut self,
+        src: &[u32],
+        max_new: usize,
+        beams: usize,
+    ) -> Result<Vec<u32>, String> {
+        let err = |e: candle_core::Error| format!("traduction : {e}");
+        if beams <= 1 {
+            return self.generate(src, max_new);
+        }
+        let input = Tensor::new(src, &self.device)
+            .and_then(|t| t.unsqueeze(0))
+            .map_err(err)?;
+        self.model.encode(&input).map_err(err)?;
+        let eos = self.config.eos_token_id;
+        // Live hypotheses: generated tokens and summed log-probability.
+        let mut live: Vec<(Vec<u32>, f32)> = vec![(Vec::new(), 0.0)];
+        let mut last = vec![self.config.decoder_start_token_id];
+        let mut done = Hypotheses::new(beams);
+        let mut finished = false;
+        for step in 0..max_new {
+            let hidden = self.model.step_batch(&last).map_err(err)?;
+            let lps = self.log_probs(&hidden, step + 1 == max_new).map_err(err)?;
+            // The 2 x beams best continuations over all hypotheses.
+            let mut cands: Vec<(f32, usize, u32)> = Vec::with_capacity(lps.len() * 2 * beams);
+            for (b, row) in lps.iter().enumerate() {
+                let base = live[b].1;
+                let mut best: Vec<(f32, usize, u32)> = row
+                    .iter()
+                    .map(|&(tok, lp)| (base + lp, b, tok))
+                    .filter(|c| c.0.is_finite())
+                    .collect();
+                let keep = (2 * beams).min(best.len());
+                if keep == 0 {
+                    continue;
+                }
+                best.select_nth_unstable_by(keep - 1, |a, b| b.0.total_cmp(&a.0));
+                best.truncate(keep);
+                cands.extend(best);
+            }
+            cands.sort_by(|a, b| b.0.total_cmp(&a.0));
+            cands.truncate(2 * beams);
+            // transformers counts the new token: cur_len - decoder_prompt_len.
+            let generated = step + 1;
+            let mut next: Vec<(Vec<u32>, f32)> = Vec::with_capacity(beams);
+            let mut parents = Vec::with_capacity(beams);
+            for (rank, &(score, b, tok)) in cands.iter().enumerate() {
+                if tok == eos {
+                    if rank < beams {
+                        done.add(live[b].0.clone(), score, generated);
+                    }
+                } else {
+                    let mut t = live[b].0.clone();
+                    t.push(tok);
+                    next.push((t, score));
+                    parents.push(b as u32);
+                }
+                if next.len() == beams {
+                    break;
+                }
+            }
+            let best_score = cands.first().map_or(f32::NEG_INFINITY, |c| c.0);
+            if done.is_done(best_score, generated) || next.is_empty() {
+                finished = true;
+                break;
+            }
+            self.model.reorder(&parents).map_err(err)?;
+            last = next
+                .iter()
+                .map(|(t, _)| *t.last().expect("non-empty"))
+                .collect();
+            live = next;
+        }
+        if !finished {
+            for (t, score) in live {
+                let n = t.len();
+                done.add(t, score, n);
+            }
+        }
+        Ok(done.best().unwrap_or_default())
+    }
+
     pub fn translate(&mut self, text: &str) -> Result<String, String> {
+        self.translate_with(text, BEAMS)
+    }
+
+    /// `beams` = 1: greedy, for live (partial) lines that will be replaced.
+    pub fn translate_with(&mut self, text: &str, beams: usize) -> Result<String, String> {
         let src = self.encode(text);
         let max_new = (src.len() * 3).clamp(16, 256);
-        let ids = self.generate(&src, max_new)?;
+        let ids = self.generate_beam(&src, max_new, beams)?;
         Ok(self.decode(&ids))
+    }
+}
+
+#[cfg(test)]
+impl Marian {
+    /// Adds `delta` to one output logit (tests: makes `</s>` likelier).
+    pub fn boost_logit(&mut self, token: u32, delta: f32) {
+        if let Head::Full(_, bias) = &mut self.head {
+            let mut b: Vec<f32> = bias.flatten_all().unwrap().to_vec1().unwrap();
+            b[token as usize] += delta;
+            *bias = Tensor::from_vec(b, bias.shape().clone(), bias.device()).unwrap();
+        }
+    }
+}
+
+/// Beam width of the final translations (generation_config of Opus-MT).
+pub const BEAMS: usize = 4;
+
+/// Finished hypotheses, best `n` by length-normalised score (HF BeamHypotheses).
+struct Hypotheses {
+    n: usize,
+    items: Vec<(f32, Vec<u32>)>,
+    worst: f32,
+}
+
+impl Hypotheses {
+    fn new(n: usize) -> Self {
+        Self {
+            n,
+            items: Vec::new(),
+            worst: 1e9,
+        }
+    }
+
+    fn add(&mut self, tokens: Vec<u32>, sum_logprobs: f32, generated: usize) {
+        let score = sum_logprobs / generated as f32;
+        if self.items.len() < self.n || score > self.worst {
+            self.items.push((score, tokens));
+            if self.items.len() > self.n {
+                let (i, _) = self
+                    .items
+                    .iter()
+                    .enumerate()
+                    .min_by(|a, b| a.1 .0.total_cmp(&b.1 .0))
+                    .expect("non-empty");
+                self.items.remove(i);
+            }
+            self.worst = self.items.iter().map(|h| h.0).fold(f32::INFINITY, f32::min);
+        }
+    }
+
+    /// No live hypothesis can beat the finished ones any more.
+    fn is_done(&self, best_sum_logprobs: f32, generated: usize) -> bool {
+        self.items.len() >= self.n && self.worst >= best_sum_logprobs / generated as f32
+    }
+
+    fn best(self) -> Option<Vec<u32>> {
+        self.items
+            .into_iter()
+            .max_by(|a, b| a.0.total_cmp(&b.0))
+            .map(|h| h.1)
     }
 }
 
