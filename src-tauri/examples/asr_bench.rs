@@ -428,27 +428,30 @@ fn vad_only(args: &[String], detector: &mut dyn VoiceDetector, config: &SpeechCo
                 *rej.entry(e).or_insert(0) += 1;
             }
         }
-        println!(
-            "{name} : {:.1} s d'audio → {} segments envoyés à Whisper ({:.1} s), rejetés avant Whisper : {:?}",
+        let mut out = format!(
+            "{name} : {:.1} s d'audio → {} segments envoyés à Whisper ({:.1} s), rejetés avant Whisper : {:?}\n",
             audio_s,
             sent.len(),
             speech_ms as f64 / 1000.0,
             rej
         );
         for r in &sent {
-            println!(
-                "    segment à {:.2} s, durée {:.2} s",
+            out.push_str(&format!(
+                "    segment à {:.2} s, durée {:.2} s\n",
                 r.start_ms as f64 / 1000.0,
                 r.audio_ms as f64 / 1000.0
-            );
+            ));
         }
+        print!("{out}");
+        out
     };
+    let mut report = String::from("### VAD seule (sans Whisper)\n\n```\n");
     if let Some(secs) = arg(args, "--noise-only").and_then(|s| s.parse::<u64>().ok()) {
         let rate = 48_000;
         let noise = combat_track((secs * rate as u64) as usize, rate, peak, 42);
         let res = run_pipeline(&noise, rate, detector, None, config, 1)
             .unwrap_or_else(|e| fail(&e.to_string()));
-        summarize("Bruit seul (synthétique)", &res, secs as f64);
+        report.push_str(&summarize("Bruit seul (synthétique)", &res, secs as f64));
     }
     if let Some(manifest) = arg(args, "--manifest") {
         let scenarios = arg(args, "--scenario").unwrap_or_else(|| "clean,combat".into());
@@ -466,9 +469,14 @@ fn vad_only(args: &[String], detector: &mut dyn VoiceDetector, config: &SpeechCo
                 let res = run_pipeline(&mono, wav.rate, detector, None, config, 1)
                     .unwrap_or_else(|e| fail(&e.to_string()));
                 let name = format!("{} [{scenario}]", clip.path.display());
-                summarize(&name, &res, mono.len() as f64 / wav.rate as f64);
+                report.push_str(&summarize(&name, &res, mono.len() as f64 / wav.rate as f64));
             }
         }
+    }
+    report.push_str("```\n");
+    if let Some(out) = arg(args, "--markdown") {
+        std::fs::write(&out, &report).unwrap_or_else(|e| fail(&format!("{out}: {e}")));
+        println!("\nRapport écrit dans {out}");
     }
 }
 
