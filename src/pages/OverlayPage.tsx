@@ -35,12 +35,15 @@ export function overlayBlocks(feed: OverlayLine[], maxBlocks: number): OverlayBl
       key: `${i}-${f.orig}`,
       color: voice ? '#ffa24a' : '#7fd4ff',
       head: transcript
-        ? `VOIX • ${LANG_NAME[f.src]} • TRANSCRIPTION (NON TRADUITE)`
+        ? voice
+          ? `VOIX • ${LANG_NAME[f.src]} • TRANSCRIPTION (NON TRADUITE)`
+          : `CHAT • ${CHANNEL_NAME[f.ch!]} • ${LANG_NAME[f.src]} (NON TRADUIT)`
         : voice
           ? `VOIX • ${LANG_NAME[f.src]} → FRANÇAIS`
           : `CHAT • ${CHANNEL_NAME[f.ch!]} • ${LANG_NAME[f.src]} → FRANÇAIS`,
       orig: transcript ? '' : f.orig,
-      line: transcript ? `[${f.src.toUpperCase()}] « ${t}${f.live ? ' …' : ''} »` : f.sender ? `${f.sender} : « ${t} »` : `« ${t} »`,
+      line: transcript
+        ? `${f.sender ? f.sender + ' : ' : `[${f.src === 'xx' ? '??' : f.src.toUpperCase()}] `}« ${t}${f.live ? ' …' : ''} »` : f.sender ? `${f.sender} : « ${t} »` : `« ${t} »`,
       opacity: i === maxBlocks - 1 && maxBlocks > 2 ? 0.5 : 1,
     };
   });

@@ -12,7 +12,7 @@ export type OverlayFormat = 'minimal' | 'bilingue' | 'accessible';
 export type Corner = 'tl' | 'tr' | 'bl' | 'br';
 export type CaptureSource = 'process' | 'device' | 'wav';
 export type Accel = 'cpu' | 'cuda';
-export type ToggleKey = 'click' | 'noise' | 'translate' | 'hist' | 'skipFr';
+export type ToggleKey = 'click' | 'noise' | 'translate' | 'hist' | 'skipFr' | 'ignoreOwn';
 export type SourceLang = 'ru' | 'en' | 'de' | 'es' | 'pt' | 'pl';
 
 export interface FeedEntry extends SimEvent {
@@ -55,6 +55,10 @@ export interface AppState {
   overlayOn: boolean;
   repos: boolean;
   tg: Record<ToggleKey, boolean>;
+  /** CS2 folder or console.log given by hand when the detection fails. */
+  chatPath: string;
+  /** The player's own name, to leave out their chat messages. */
+  ownName: string;
   capture: CaptureSource;
   vad: number;
   model: ModelId;
@@ -94,6 +98,8 @@ export interface AppActions {
   clearFeed: () => void;
   /** Adds a real line (speech transcript) to the Script and the overlay. */
   addLine: (entry: FeedEntry) => void;
+  /** A real chat message from console.log (not shown in "voices only" mode). */
+  addChat: (entry: FeedEntry) => void;
   /** A real transcript: replaces the live line of the same utterance, or is added. */
   upsertTranscript: (entry: FeedEntry) => void;
   /** Removes the live line of an utterance finally rejected. */
@@ -121,7 +127,9 @@ const initial: AppState = {
   maxBlocks: 3,
   overlayOn: true,
   repos: false,
-  tg: { click: true, noise: false, translate: true, hist: false, skipFr: true },
+  tg: { click: true, noise: false, translate: true, hist: false, skipFr: true, ignoreOwn: true },
+  chatPath: '',
+  ownName: '',
   capture: 'process',
   vad: 55,
   model: 'base',
@@ -160,16 +168,14 @@ const liveSession = (): Session => (config.win10Fallback ? 'DEGRADED' : 'LISTENI
 export const useApp = create<AppState & AppActions>()((set, get) => {
   const schedule = (ms = 2400) => later(tick, ms);
 
-  // Plays the next simulated event: voice goes VAD → ASR (provisional) → final; chat lands at once.
-  // In the desktop app voices are really transcribed: only the written chat is still simulated.
+  // Plays the next simulated event (browser preview only): voice goes VAD → ASR
+  // (provisional) → final; chat lands at once. The desktop app shows only real
+  // lines: voices from the capture, chat from console.log.
   function tick() {
     const s = get();
     if (!isLive(s) || s.paused) return;
     const realVoice = useAudio.getState().native;
-    if (realVoice && s.mode === 'voice') {
-      schedule(3000);
-      return;
-    }
+    if (realVoice) return;
     let i = s.idx;
     let e = EVENTS[i % EVENTS.length];
     let guard = 0;
@@ -326,6 +332,11 @@ export const useApp = create<AppState & AppActions>()((set, get) => {
       if (get().mode === 'text') return;
       sceneFx.push('ember');
       set((st) => ({ feed: [entry, ...st.feed].slice(0, 40), seg: st.seg + 1 }));
+    },
+    addChat: (entry) => {
+      if (get().mode === 'voice') return;
+      sceneFx.push('ice');
+      set((st) => ({ feed: [entry, ...st.feed].slice(0, 40) }));
     },
     upsertTranscript: (entry) => {
       const i = get().feed.findIndex((f) => f.tid === entry.tid && f.live);

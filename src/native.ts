@@ -1,10 +1,11 @@
 // Wires the store to the native side: global shortcuts / tray actions in, and the
 // in-game overlay window out. Only active inside the Tauri app.
 
-import { audioCapture, cs2, isTauri, modelDownload, onNativeAction, overlayWindow, speech, translation, type CaptureStatus, type NativeAction, type OverlayWindowConfig } from './backend';
+import { audioCapture, chat, cs2, isTauri, modelDownload, onNativeAction, overlayWindow, speech, translation, type CaptureStatus, type NativeAction, type OverlayWindowConfig } from './backend';
 import { refreshModels, speechConfigFrom, transcriptEntry, useSpeech } from './state/speech';
 import { recordTime, translationConfigFrom, useTranslation } from './state/translation';
 import { setupNeeds, startSetup, useSetup } from './state/setup';
+import { chatConfigFrom, chatEntry, useChat } from './state/chat';
 import { captureModeFor, levelToUnit, recordTestLevel, refreshDevices, useAudio } from './state/audio';
 import { isRunning, useApp, type AppState, type FeedEntry, type Session } from './state/store';
 
@@ -136,6 +137,38 @@ function startSetupBridge(): Promise<() => void>[] {
 export const translationConfigKey = (s: AppState) => JSON.stringify(translationConfigFrom(s));
 
 /** Mirrors the local translation: model states, and each French line onto its transcript. */
+/** Mirrors the console.log chat: followed while the session captures, lines into the Script. */
+function startChatBridge(): Promise<() => void>[] {
+  const unlisten: Promise<() => void>[] = [];
+  chat.status().then((status) => status && useChat.setState({ status }));
+  unlisten.push(chat.onStatus((status) => useChat.setState({ status })));
+  unlisten.push(
+    chat.onMessage((m) => {
+      const app = useApp.getState();
+      if (capturesDuring(app.session)) app.addChat(chatEntry(m));
+    }),
+  );
+  let lastKey = '';
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const push = (s: AppState) => {
+    const key = JSON.stringify(chatConfigFrom(s));
+    if (key === lastKey) return;
+    lastKey = key;
+    clearTimeout(timer);
+    timer = setTimeout(() => chat.configure(chatConfigFrom(s)).then((status) => status && useChat.setState({ status })), 400);
+  };
+  push(useApp.getState());
+  if (capturesDuring(useApp.getState().session)) chat.start();
+  const unsub = useApp.subscribe((next, prev) => {
+    push(next);
+    const action = captureActionFor(prev.session, next.session);
+    if (action === 'start') chat.start().then((status) => status && useChat.setState({ status }));
+    if (action === 'stop') chat.stop();
+  });
+  unlisten.push(Promise.resolve(unsub));
+  return unlisten;
+}
+
 function startTranslationBridge(): Promise<() => void>[] {
   const unlisten: Promise<() => void>[] = [];
   translation.status().then((status) => status && useTranslation.setState({ status }));
@@ -203,6 +236,7 @@ export function startNativeBridge(): () => void {
   unlisten.push(...startAudioBridge());
   unlisten.push(...startSpeechBridge());
   unlisten.push(...startTranslationBridge());
+  unlisten.push(...startChatBridge());
   unlisten.push(...startSetupBridge());
 
   const push = () => overlayWindow.pushState(overlayPayload(useApp.getState()));

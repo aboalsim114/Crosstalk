@@ -1,0 +1,11 @@
+{
+  "version": "cs2-2026.10",
+  "comment": "Chat lines of CS2's console.log. A copy in %APPDATA%\\Crosstalk\\chat-rules.json takes precedence: rules can be fixed without a new version. Named groups: channel, sender, message (required), location, dead (optional).",
+  "rules": [
+    {
+      "name": "cs2",
+      "pattern": "^(?:\\d{2}/\\d{2}(?:/\\d{4})? \\d{2}:\\d{2}:\\d{2}(?:\\.\\d+)?\\s+)?\\[(?P<channel>ALL|CT|T)\\]\\s+(?P<dead1>\\*?\\[?DEAD\\]?\\*?\\s+)?(?P<sender>.+?)[\\x{200e}\\x{200f}]?\\s*(?:[\\x{fe6b}@]\\s*(?P<location>[^:\\[\\]]+?))?\\s*(?P<dead>\\[DEAD\\]|\\*DEAD\\*)?\\s*:\\s(?P<message>.*)$"
+    }
+  ],
+  "channels": { "ALL": "ALL", "CT": "CT", "T": "T" }
+}

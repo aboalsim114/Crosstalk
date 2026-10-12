@@ -49,7 +49,7 @@ Un overlay transparent conçu pour afficher les sous-titres sans prendre le cont
 </tr>
 </table>
 
-> **État actuel — version de développement.** Le pipeline vocal fonctionne avec des sources audio réelles, mais peut aussi détecter les tirs, effets sonores et autres bruits du jeu. L'isolation fiable des voix, la précision des traductions et la latence en conditions réelles sont encore en cours de validation. Le chat écrit est pour l'instant simulé dans l'interface. Ne considérez pas ce build comme une version stable.
+> **État actuel — version de développement.** Le pipeline vocal fonctionne avec des sources audio réelles, mais peut aussi détecter les tirs, effets sonores et autres bruits du jeu. L'isolation fiable des voix, la précision des traductions et la latence en conditions réelles sont encore en cours de validation. Le chat écrit est lu dans `console.log` de CS2 (option `-condebug`) ; son format reste à confirmer en partie réelle. Ne considérez pas ce build comme une version stable.
 
 ## Une expérience de bureau, pensée pour le jeu
 
@@ -109,7 +109,7 @@ Ces raccourcis utilisent `RegisterHotKey`, sans hook clavier. Un éventuel confl
 | Traduction vocale vers le français | **Implémenté · en test** | Opus-MT local ; qualité et délais à mesurer sur des matchs réels. |
 | Overlay Windows et commandes rapides | **Implémenté** | Fenêtre transparente et raccourcis globaux. |
 | Identification fiable du joueur qui parle | **Expérimental / à valider** | Approche HUD et OCR prévue ; ne pas présumer qu'un pseudo est correctement identifié. |
-| Capture du chat écrit et traduction | **En développement** | Les messages montrés actuellement dans l'interface sont simulés. |
+| Chat écrit de CS2 et traduction | **Implémenté · en test** | Lecture de `console.log` (option de lancement `-condebug`, vérifiée dans Steam) ; format des lignes à confirmer en partie réelle, règles modifiables sans nouvelle version. |
 | Version Windows stable et signée | **Non disponible** | Builds de test uniquement à ce stade. |
 
 Le cap produit est simple : **moins de bruit, des traductions utiles, et un minimum d'interruption pendant le jeu.** Les performances visées dans le cahier des charges ne sont pas des résultats mesurés.

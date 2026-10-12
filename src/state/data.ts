@@ -1,7 +1,8 @@
 // Static content and simulated events, ported 1:1 from the Claude Design prototype
 // (project/CS2 Live Translator v2 Cinematic.dc.html).
 
-export type Lang = 'ru' | 'en' | 'fr';
+/** 'xx': written chat whose language could not be told (shown as is). */
+export type Lang = 'ru' | 'en' | 'fr' | 'xx';
 export type Channel = 'CT' | 'T' | 'ALL';
 
 export interface SimEvent {
@@ -27,7 +28,7 @@ export const EVENTS: SimEvent[] = [
   { kind: 'chat', ch: 'CT', sender: 'Lucas', src: 'fr', orig: 'je prends B avec toi', tr: null },
 ];
 
-export const LANG_NAME: Record<Lang, string> = { ru: 'RUSSE', en: 'ANGLAIS', fr: 'FRANÇAIS' };
+export const LANG_NAME: Record<Lang, string> = { ru: 'RUSSE', en: 'ANGLAIS', fr: 'FRANÇAIS', xx: 'LANGUE INCONNUE' };
 export const CHANNEL_NAME: Record<Channel, string> = { CT: 'ÉQUIPE CT', T: 'ÉQUIPE T', ALL: 'TOUS' };
 
 export type PageId = 'dash' | 'overlay' | 'audio' | 'lang' | 'hist' | 'diag' | 'about';

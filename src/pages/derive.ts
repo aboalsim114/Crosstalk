@@ -14,10 +14,11 @@ export const STATUS_COLOR: Record<FeedStatus, string> = {
 
 /** Shown under a real transcript while its French translation is computed. */
 export const TRANSCRIPT_NOTE = 'Transcription en langue originale — traduction en cours';
+export const CHAT_PENDING_NOTE = 'Message en langue originale — traduction en cours';
 
 /**
- * In the desktop app, only lines born from a real transcript (voice, transcribed
- * then translated on the PC) are genuine; the written chat is still simulated.
+ * In the desktop app every real line carries the id of its source (a voice
+ * transcript or a console.log message): a line without one is a demo line.
  */
 export function isDemoLine(native: boolean, f: FeedEntry | undefined): boolean {
   return native && !!f && f.tid == null;
@@ -28,7 +29,8 @@ export const LIVE_NOTE = 'En cours d’écoute… le texte se complète';
 
 export function transcriptNote(f: FeedEntry): string {
   if (f.live) return LIVE_NOTE;
-  return f.note ? `Non traduit — ${f.note}` : TRANSCRIPT_NOTE;
+  if (f.note) return `Non traduit — ${f.note}`;
+  return f.kind === 'chat' ? CHAT_PENDING_NOTE : TRANSCRIPT_NOTE;
 }
 
 export interface FeedRow {
@@ -51,13 +53,14 @@ export interface FeedRow {
 
 export function feedRow(f: FeedEntry): FeedRow {
   if (f.status === 'transcrit') {
+    const voice = f.kind === 'voice';
     return {
       id: f.id,
-      tag: 'VOIX',
-      color: '#ffa24a',
+      tag: voice ? 'VOIX' : 'CHAT · ' + CHANNEL_NAME[f.ch!],
+      color: voice ? '#ffa24a' : '#7fd4ff',
       time: f.time,
-      langs: f.src.toUpperCase() + ' · TRANSCRIPTION',
-      lead: '',
+      langs: (f.src === 'xx' ? '??' : f.src.toUpperCase()) + (voice ? ' · TRANSCRIPTION' : ' · ORIGINAL'),
+      lead: f.sender ? f.sender + ' — ' : '',
       orig: '',
       shown: f.live ? f.orig + ' …' : f.orig,
       trColor: f.live ? '#b9b2a7' : '#ece6dc',
@@ -118,10 +121,11 @@ export function subtitle(f0: FeedEntry | undefined, live: boolean): Subtitle {
       noteColor: '#5a5650',
     };
   if (f0.status === 'transcrit') {
+    const voice = f0.kind === 'voice';
     return {
-      tag: 'VOIX · ' + LANG_NAME[f0.src] + ' · TRANSCRIPTION',
-      sender: '',
-      color: '#ffa24a',
+      tag: (voice ? 'VOIX' : 'CHAT · ' + CHANNEL_NAME[f0.ch!]) + ' · ' + LANG_NAME[f0.src] + (voice ? ' · TRANSCRIPTION' : ' · ORIGINAL'),
+      sender: f0.sender ?? '',
+      color: voice ? '#ffa24a' : '#7fd4ff',
       orig: '',
       text: f0.live ? '« ' + f0.orig + ' … »' : '« ' + f0.orig + ' »',
       italic: !!f0.live,

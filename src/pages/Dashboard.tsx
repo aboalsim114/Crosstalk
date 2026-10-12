@@ -4,6 +4,7 @@ import { EASE, Seg, fmtSeconds, fnt } from '../components/atoms';
 import { SIGNAL_THRESHOLD_DB, captureSummary, cs2Summary, isCapturing, useAudio } from '../state/audio';
 import { engineSummary, useSpeech } from '../state/speech';
 import { translationSummary, useTranslation } from '../state/translation';
+import { cs2SetupSummary, useChat } from '../state/chat';
 import { isLive, useApp, type FeedMode } from '../state/store';
 import { feedRow, isDemoLine, subtitle, voiceLatency } from './derive';
 
@@ -114,9 +115,10 @@ function StatusCards() {
   const capture = captureSummary(audio.status);
   const engine = engineSummary(useSpeech((x) => x.status));
   const trSum = translationSummary(useTranslation((x) => x.status));
+  const chatSum = cs2SetupSummary(useChat((x) => x.status));
   const cards = [
     audio.native
-      ? { label: 'COUNTER-STRIKE 2', value: cs2.value, sub: cs2.detail, dot: cs2.color }
+      ? { label: 'COUNTER-STRIKE 2', value: cs2.value, sub: `${cs2.detail} · chat : ${chatSum.value}`, dot: cs2.color }
       : { label: 'COUNTER-STRIKE 2', value: live ? 'En cours' : 'Détecté', sub: 'console.log · -condebug actif', dot: '#7fe0a8' },
     audio.native
       ? { label: 'CAPTURE', value: capture.value, sub: capture.detail, dot: capture.color }
@@ -159,14 +161,6 @@ function ScriptPanel() {
         <div className="flex items-baseline gap-2.5">
           <span style={{ font: fnt(400, 22, 'serif'), color: '#ece6dc' }}>Script</span>
           <span style={{ font: fnt(400, 10.5, 'mono'), color: '#5a5650' }}>{feed.length ? `${feed.length} répliques` : ''}</span>
-          {native && (
-            <span
-              title="Les voix sont réellement transcrites puis traduites sur ce PC. Le chat écrit est encore simulé : ces lignes sont des exemples."
-              style={{ font: fnt(600, 9, 'mono'), letterSpacing: '.14em', color: '#ffa24a', border: '1px solid rgba(255,162,74,.35)', borderRadius: 999, padding: '2px 7px' }}
-            >
-              CHAT SIMULÉ
-            </span>
-          )}
         </div>
         <Seg options={MODES} value={mode} onChange={(v) => set({ mode: v })} item={{ padding: '4px 10px', font: fnt(500, 11) }} />
       </div>

@@ -38,6 +38,8 @@ candle-transformers = "0.11"
 # OpenSSL), checked by exact size and published SHA-1.
 ureq = "2.12"
 sha1_smol = "1"
+# Chat lines of console.log, matched by the rules file (src/chat/rules.json).
+regex = "1"
 
 [features]
 default = ["whisper"]
@@ -53,6 +55,7 @@ windows = { version = "0.62", features = [
   "Win32_Security",
   "Win32_System_Com_StructuredStorage",
   "Win32_System_Diagnostics_ToolHelp",
+  "Win32_System_Registry",
   "Win32_System_SystemInformation",
   "Win32_System_Threading",
   "Win32_System_Variant",

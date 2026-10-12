@@ -6,6 +6,8 @@ import { useAudio, type AudioState } from '../state/audio';
 import { engineSummary, useSpeech } from '../state/speech';
 import { percentile, translationSummary, useTranslation } from '../state/translation';
 import { useApp } from '../state/store';
+import { useChat } from '../state/chat';
+import type { ChatStatus } from '../backend';
 
 type DiagState = 'OK' | 'AVERT.' | 'ÉCHEC';
 
@@ -19,6 +21,40 @@ export function captureDiag(a: Pick<AudioState, 'platform' | 'status'>): [string
   if (st.state === 'capturing' && st.source?.kind === 'process') return [`${base} · ${st.source.processName} ciblé (PID ${st.source.pid})`, 'OK'];
   if (st.state === 'capturing') return [`${base} · repli système${st.fallbackReason ? ` — ${st.fallbackReason}` : ''}`, 'AVERT.'];
   return [`${base} · non testé dans cette session`, doc === false ? 'AVERT.' : 'OK'];
+}
+
+/** Real console.log, -condebug and parser rows from the Rust chat service. */
+export function chatDiag(st: ChatStatus | null): [string, string, DiagState][] {
+  if (!st) return [['Journal console.log', 'Recherche de CS2…', 'AVERT.']];
+  const s = st.setup;
+  const log: [string, string, DiagState] = !s.consoleLog
+    ? ['Journal console.log', s.steamDir ? 'CS2 introuvable dans les bibliothèques Steam : indiquez son dossier (Langues & glossaire)' : 'Steam introuvable : indiquez le dossier de CS2', 'ÉCHEC']
+    : [`Journal console.log${s.manual ? ' (chemin manuel)' : ''}`, s.consoleLog + (s.consoleLogExists ? '' : ' · pas encore créé (lancez CS2 avec -condebug)'), s.consoleLogExists ? 'OK' : 'AVERT.'];
+  const condebug: [string, string, DiagState] =
+    s.condebug === 'present'
+      ? ['Option -condebug', 'Présente dans les options de lancement Steam', 'OK']
+      : s.condebug === 'absent'
+        ? ['Option -condebug', 'Absente : Steam › CS2 › Propriétés › Options de lancement', 'ÉCHEC']
+        : ['Option -condebug', 'Options de lancement Steam illisibles : à vérifier à la main', 'AVERT.'];
+  const rules: [string, string, DiagState] = [
+    'Parseur de chat',
+    `Règles ${st.rulesVersion} · ${st.rulesFile ?? 'intégrées'}${st.rulesWarning ? ` · ${st.rulesWarning}` : ''}`,
+    st.rulesWarning ? 'AVERT.' : 'OK',
+  ];
+  return [log, condebug, rules];
+}
+
+/** What the Rust services report now (no fabricated history). */
+export function nativeLog(chat: ChatStatus | null, lines: [string, string][]): [string, string, string][] {
+  const out: [string, string, string][] = [];
+  if (chat) {
+    out.push(['', 'INFO', `cs2-detect: ${chat.setup.libraries.length} bibliothèque(s) Steam${chat.setup.cs2Dir ? ' · CS2 trouvé' : ' · CS2 introuvable'}`]);
+    if (chat.state === 'following') out.push(['', 'INFO', `chat-ingest: console.log suivi, ${chat.offset.toLocaleString('fr-FR')} octets lus, ${chat.messages} message(s)`]);
+    if (chat.state === 'waiting') out.push(['', 'WARN', 'chat-ingest: console.log absent, en attente du lancement de CS2']);
+    if (chat.rulesWarning) out.push(['', 'WARN', `chat-rules: ${chat.rulesWarning}`]);
+  }
+  for (const [lv, m] of lines) out.push(['', lv, m]);
+  return out;
 }
 
 export function DiagPage() {
@@ -48,10 +84,16 @@ export function DiagPage() {
   const trRow: [string, string, DiagState] = sp.native
     ? ['Traduction locale · Opus-MT', `${trSum.value}${p50 != null ? ` · p50 ${p50} ms` : ''}`, trSum.color === '#7fe0a8' ? 'OK' : trSum.color === '#ff8a7a' ? 'ÉCHEC' : 'AVERT.']
     : ['Traduction locale · Opus-MT', down ? 'Délai dépassé (5 s) — repli sur l’original' : 'Réponse en 210 ms', down ? 'ÉCHEC' : 'OK'];
+  const chatStatus = useChat((x) => x.status);
+  const chatRows: [string, string, DiagState][] = sp.native
+    ? chatDiag(chatStatus)
+    : [
+        ['Journal console.log', 'D:\\SteamLibrary\\steamapps\\common\\Counter-Strike Global Offensive\\game\\csgo\\console.log', 'OK'],
+        ['Option -condebug', 'Détectée dans les options Steam', 'OK'],
+        ['Parseur de chat', 'cs2-2026.09 · 42 fixtures validées', 'OK'],
+      ];
   const rows: [string, string, DiagState][] = [
-    ['Journal console.log', 'D:\\SteamLibrary\\steamapps\\common\\Counter-Strike Global Offensive\\game\\csgo\\console.log', 'OK'],
-    ['Option -condebug', 'Détectée dans les options Steam', 'OK'],
-    ['Parseur de chat', 'cs2-2026.09 · 42 fixtures validées', 'OK'],
+    ...chatRows,
     ['Process loopback', captureDetail, captureState],
     asrRow,
     trRow,
@@ -59,7 +101,7 @@ export function DiagPage() {
       ? ['Raccourcis globaux', `${keysFailed.map((k) => k.keys).join(', ')} déjà utilisé par une autre application`, 'AVERT.']
       : ['Raccourcis globaux', 'Ctrl+Alt+F8 / F9 / F10 · aucun conflit', 'OK'],
   ];
-  const logs: [string, string, string][] = [
+  const demoLogs: [string, string, string][] = [
     ['14:02:11', 'INFO', 'app-shell: instance unique acquise'],
     ['14:02:11', 'INFO', 'cs2-detect: 2 bibliothèques Steam'],
     ['14:02:12', 'INFO', 'chat-ingest: suivi depuis offset 1 284 330'],
@@ -70,6 +112,13 @@ export function DiagPage() {
     ['14:03:41', 'WARN', 'audio-pipeline: segment périmé abandonné'],
     ['14:03:44', 'INFO', 'overlay: 2 blocs affichés'],
   ];
+  const logs = sp.native
+    ? nativeLog(chatStatus, [
+        [captureState === 'ÉCHEC' ? 'WARN' : 'INFO', `audio: ${captureDetail}`],
+        [sp.status?.state === 'ready' ? 'INFO' : 'WARN', `asr: ${engine.value} · ${engine.detail}`],
+        ['INFO', `translation: ${trSum.value}`],
+      ])
+    : demoLogs;
   return (
     <div className="grid grid-cols-2 items-start gap-4">
       <div className="glass flex flex-col overflow-hidden">

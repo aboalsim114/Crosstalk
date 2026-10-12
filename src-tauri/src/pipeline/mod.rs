@@ -1,7 +1,7 @@
 //! Translation pipeline: the seams for the upcoming native features.
 //!
 //! ```text
-//!   cs2::ChatSource ─────────────────────────────────────────┐
+//!   crate::chat (console.log) ───────────────────────────────┐
 //!                                                            ▼
 //!   crate::audio (capture) → crate::speech (VAD, Whisper) → translation::Translator → UI / overlay
 //! ```
@@ -10,7 +10,6 @@
 //! remaining stages are traits so the real implementations (DeepL/Azure,
 //! console.log tailing) can land one PR at a time and be tested with fakes.
 
-pub mod cs2;
 pub mod translation;
 
 use serde::Serialize;
