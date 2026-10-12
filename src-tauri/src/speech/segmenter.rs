@@ -25,7 +25,8 @@ pub struct SegmenterConfig {
     pub start_frames: usize,
     /// Voiced audio needed for a segment to be transcribed (256 ms).
     pub min_voiced_frames: usize,
-    /// Hard cap (250 frames = 8 s).
+    /// Hard cap (156 frames = 5 s): with game noise keeping a segment open,
+    /// a longer cap only delays the final line.
     pub max_frames: usize,
 }
 
@@ -37,7 +38,7 @@ impl SegmenterConfig {
             hang_frames: 13,
             start_frames: 2,
             min_voiced_frames: 8,
-            max_frames: 250,
+            max_frames: 156,
         }
     }
 
@@ -401,8 +402,8 @@ mod tests {
     #[test]
     fn cuts_long_monologues_at_the_quietest_frame() {
         let mut s = Segmenter::new(SegmenterConfig::new(0.5));
-        let mut input = speech_like(240);
-        input[235] = (0.05, 0.36); // breath, still voiced (release 0.35)
+        let mut input = speech_like(150);
+        input[145] = (0.05, 0.36); // breath, still voiced (release 0.35)
         input.extend(speech_like(40));
         input.extend(repeat(15, 0.0, 0.0));
         let out = run(&mut s, &input);
@@ -411,12 +412,12 @@ mod tests {
             panic!()
         };
         assert!(first.forced);
-        assert_eq!(first.samples.len(), 236 * FRAME);
+        assert_eq!(first.samples.len(), 146 * FRAME);
         let Outcome::Segment(second) = &out[1] else {
             panic!()
         };
         assert!(!second.forced);
-        assert_eq!(second.start_frame, 236);
+        assert_eq!(second.start_frame, 146);
     }
 
     #[test]

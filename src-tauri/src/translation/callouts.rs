@@ -73,7 +73,17 @@ const PHRASES: &[(&str, &str)] = &[
     ("careful", "attention"),
     ("watch out", "attention"),
     ("flash", "flash"),
-    ("flash out", "flash"),
+    ("flash out", "flash lancée"),
+    ("smoke out", "smoke lancée"),
+    ("molly out", "molotov lancé"),
+    ("nade out", "grenade lancée"),
+    ("he out", "HE lancée"),
+    ("flashing", "je flash"),
+    ("smoking", "je smoke"),
+    ("dead", "mort"),
+    ("he's dead", "il est mort"),
+    ("killed", "tué"),
+    ("kill", "tué"),
     ("smoke", "smoke"),
     ("molly", "molotov"),
     ("nade", "grenade"),
@@ -247,6 +257,20 @@ pub fn translate(lang: &str, text: &str) -> Option<String> {
     if segments.is_empty() || segments.len() > 6 {
         return None;
     }
+    // Whisper often cuts "smoke out" (grenade thrown) into "smoke, out".
+    let mut merged: Vec<String> = Vec::with_capacity(segments.len());
+    for s in segments {
+        match merged.last_mut() {
+            Some(prev)
+                if s == "out"
+                    && matches!(prev.as_str(), "smoke" | "flash" | "molly" | "nade" | "he") =>
+            {
+                prev.push_str(" out")
+            }
+            _ => merged.push(s),
+        }
+    }
+    let segments = merged;
     let mut out: Vec<String> = Vec::new();
     for s in &segments {
         let fr = segment(s)?;
@@ -293,6 +317,19 @@ mod tests {
             translate("ru", "минус один, последний").as_deref(),
             Some("un de moins, le dernier")
         );
+    }
+
+    #[test]
+    fn grenades_thrown() {
+        assert_eq!(
+            translate("en", "B, mid, smoke, out.").as_deref(),
+            Some("B, mid, smoke lancée")
+        );
+        assert_eq!(
+            translate("en", "flash out").as_deref(),
+            Some("flash lancée")
+        );
+        assert_eq!(translate("en", "out"), None);
     }
 
     #[test]

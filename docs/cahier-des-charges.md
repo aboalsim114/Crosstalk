@@ -128,7 +128,7 @@ Statut : ✅ réalisé dans le dépôt (interface et données simulées comprise
 | F-20 | Capturer uniquement l'audio de `cs2.exe` par process loopback WASAPI (`ActivateAudioInterfaceAsync`, documenté à partir du build 20348). Son fonctionnement sous Windows 10 22H2 (19045) est à vérifier en L0. | P0 | — |
 | F-21 | Mode « tout le son du PC » (loopback du périphérique de sortie) : repli quand le process loopback est indisponible, et mode volontaire pour traduire aussi Discord ou TeamSpeak. Avertissement explicite : capte aussi le navigateur et les autres applications. | P0 | — |
 | F-22 | Ne jamais capturer le microphone de l'utilisateur sans activation explicite (voir F-50). | P0 | — |
-| F-23 | Rééchantillonner en 16 kHz mono. Détection de voix (VAD Silero via ONNX Runtime) avec seuil réglable, pré-roll 250 ms, post-roll 400 ms, segment maximal de 8 s. | P0 | — |
+| F-23 | Rééchantillonner en 16 kHz mono. Détection de voix (VAD Silero via ONNX Runtime) avec seuil réglable, pré-roll 250 ms, post-roll 400 ms, segment maximal de 5 s (8 s initialement : trop long avec le bruit du jeu, mesuré en partie le 12/10/2026). | P0 | — |
 | F-24 | Transcription locale avec whisper.cpp (crate `whisper-rs`), modèles tiny à large-v3-turbo, accélération CUDA ou Vulkan si disponible, sinon CPU. Whisper est le choix de départ, confirmé ou remplacé après le banc d'essai (A-11). | P0 | — |
 | F-25 | Transcription provisoire pendant la parole (fenêtre glissante), remplacée par la version finale. Adoptée seulement si son coût GPU/CPU reste compatible avec la cible FPS. | P1 | ✅ (transcription et traduction provisoires ; coût CPU à mesurer en partie) |
 | F-26 | Détection de langue restreinte aux langues sources préférées (ru, en par défaut). | P0 | — |

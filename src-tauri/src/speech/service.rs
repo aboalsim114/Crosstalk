@@ -52,6 +52,12 @@ pub const VAD_HOP_FRAMES: usize = 6;
 pub const PARTIAL_MIN_FRAMES: usize = 47;
 /// ...and this much new audio since the previous one (31 x 32 ms = 1 s).
 pub const PARTIAL_STEP_FRAMES: usize = 31;
+/// Live lines stop while Whisper needs more than this share of the audio
+/// duration: the final lines must not wait behind them.
+pub const PARTIAL_MAX_RTF: f32 = 0.5;
+/// A final segment this late after the voice ended, whose live line is on
+/// screen, becomes final with that live text instead of waiting for Whisper.
+pub const LIVE_FALLBACK_AFTER: Duration = Duration::from_secs(3);
 const STATS_EVERY: Duration = Duration::from_secs(2);
 const LATENCY_WINDOW: usize = 100;
 
@@ -159,6 +165,11 @@ impl JobQueue {
 struct Live {
     shown: std::collections::HashSet<u64>,
     closed: VecDeque<u64>,
+    /// Last live transcript of each shown utterance: the final line when the
+    /// segment comes too late for another Whisper pass.
+    last: std::collections::HashMap<u64, Transcript>,
+    /// Whisper time of the last live transcript, to pace the next ones.
+    partial_ms: u32,
 }
 
 #[derive(Default)]
@@ -276,6 +287,7 @@ impl Inner {
         if live.closed.len() > 64 {
             live.closed.pop_front();
         }
+        live.last.remove(&id);
         if live.shown.remove(&id) {
             drop(live);
             self.events.retract(id);
@@ -488,7 +500,11 @@ impl SpeechService {
         let _publication = self.inner.publication.lock().unwrap();
         self.inner.generation.fetch_add(1, Ordering::SeqCst);
         self.inner.queue.clear();
-        let shown: Vec<u64> = self.inner.live.lock().unwrap().shown.drain().collect();
+        let shown: Vec<u64> = {
+            let mut live = self.inner.live.lock().unwrap();
+            live.last.clear();
+            live.shown.drain().collect()
+        };
         for id in shown {
             self.inner.events.retract(id);
         }
@@ -746,7 +762,14 @@ fn request_partial(inner: &Inner, st: &mut Front) {
     let (Some(utterance), n) = (st.utterance, st.segmenter.open_frames()) else {
         return;
     };
-    if n < PARTIAL_MIN_FRAMES || n < st.partial_frames + PARTIAL_STEP_FRAMES {
+    // Paced by Whisper's speed: at least twice its last live time between two
+    // live lines, and none when it cannot keep up (CPU taken by the game).
+    let partial_ms = inner.live.lock().unwrap().partial_ms as usize;
+    let step = PARTIAL_STEP_FRAMES.max(2 * partial_ms / FRAME_MS as usize);
+    if n < PARTIAL_MIN_FRAMES || n < st.partial_frames + step {
+        return;
+    }
+    if partial_ms as f32 > PARTIAL_MAX_RTF * (n * FRAME_MS as usize) as f32 {
         return;
     }
     if inner.transcribing.load(Ordering::SeqCst) {
@@ -801,7 +824,10 @@ fn asr_loop(inner: &Inner) {
             transcribe_partial(inner, job);
             continue;
         }
-        // A line already on screen (partial) is completed even when late.
+        // Too late for another Whisper pass: the live text becomes final.
+        if job.voice_end.elapsed() > LIVE_FALLBACK_AFTER && finalize_from_live(inner, &job) {
+            continue;
+        }
         if job.voice_end.elapsed() > STALE_AFTER && !inner.partial_shown(job.utterance) {
             inner.close_utterance(job.utterance);
             diagnostic_rejection(
@@ -815,6 +841,40 @@ fn asr_loop(inner: &Inner) {
         }
         transcribe(inner, job);
     }
+}
+
+/// Emits the last live transcript of the job's utterance as its final line
+/// (no new Whisper pass); false when no live line is on screen.
+fn finalize_from_live(inner: &Inner, job: &Job) -> bool {
+    let _publication = inner.publication.lock().unwrap();
+    if job.generation != inner.generation.load(Ordering::SeqCst) {
+        return true; // purged: nothing to emit
+    }
+    let last = {
+        let mut live = inner.live.lock().unwrap();
+        let Some(t) = live.last.remove(&job.utterance) else {
+            return false;
+        };
+        live.shown.remove(&job.utterance);
+        t
+    };
+    let latency_ms = job.voice_end.elapsed().as_millis() as u32;
+    {
+        let mut stats = inner.stats.lock().unwrap();
+        stats.transcribed += 1;
+        stats.latencies.push_back(latency_ms);
+        if stats.latencies.len() > LATENCY_WINDOW {
+            stats.latencies.pop_front();
+        }
+    }
+    inner.events.transcript(&Transcript {
+        partial: false,
+        latency_ms,
+        audio_ms: job.segment.duration_ms(),
+        ..last
+    });
+    inner.publish_stats();
+    true
 }
 
 /// Judge again after inference: a fresh queue entry may expire during computation.
@@ -920,7 +980,11 @@ fn transcribe(inner: &Inner, job: Job) {
                 stats.latencies.pop_front();
             }
             drop(stats);
-            inner.live.lock().unwrap().shown.remove(&job.utterance);
+            {
+                let mut live = inner.live.lock().unwrap();
+                live.shown.remove(&job.utterance);
+                live.last.remove(&job.utterance);
+            }
             inner.events.transcript(&Transcript {
                 id: job.utterance,
                 partial: false,
@@ -968,6 +1032,7 @@ fn transcribe_partial(inner: &Inner, job: Job) {
     drop(slot);
     let asr_ms = started.elapsed().as_millis() as u32;
     inner.set_activity(None, Some(false));
+    inner.live.lock().unwrap().partial_ms = asr_ms;
     let audio_ms = job.segment.duration_ms();
     let Ok(rec) = result else { return };
     let Ok(text) = judge(&rec, audio_ms) else {
@@ -984,7 +1049,7 @@ fn transcribe_partial(inner: &Inner, job: Job) {
         }
         live.shown.insert(job.utterance);
     }
-    inner.events.transcript(&Transcript {
+    let t = Transcript {
         id: job.utterance,
         partial: true,
         text,
@@ -996,7 +1061,14 @@ fn transcribe_partial(inner: &Inner, job: Job) {
         avg_logprob: rec.avg_logprob,
         no_speech_prob: rec.no_speech_prob,
         model: config.model.clone(),
-    });
+    };
+    inner
+        .live
+        .lock()
+        .unwrap()
+        .last
+        .insert(job.utterance, t.clone());
+    inner.events.transcript(&t);
 }
 
 #[cfg(test)]
@@ -1355,6 +1427,74 @@ mod tests {
             }
         }
         assert!(next_event(&rx).is_none());
+    }
+
+    #[test]
+    fn a_late_final_segment_takes_its_live_text() {
+        let (svc, rx, calls) = service("unused", 0, true);
+        wait_ready(&svc);
+        let live = Transcript {
+            id: 42,
+            partial: true,
+            text: "Двое идут".into(),
+            lang: Lang::Ru,
+            lang_prob: 1.0,
+            audio_ms: 2000,
+            latency_ms: 300,
+            asr_ms: 300,
+            avg_logprob: -0.2,
+            no_speech_prob: 0.01,
+            model: "base".into(),
+        };
+        {
+            let mut l = svc.inner.live.lock().unwrap();
+            l.shown.insert(42);
+            l.last.insert(42, live);
+        }
+        let job = Job {
+            segment: Segment {
+                samples: vec![0.0; 16_000 * 3],
+                start_frame: 0,
+                last_voiced_frame: 90,
+                voiced_frames: 90,
+                forced: false,
+            },
+            voice_end: Instant::now() - Duration::from_secs(4),
+            queued_at: Instant::now(),
+            generation: 0,
+            utterance: 42,
+            partial: false,
+        };
+        assert!(finalize_from_live(&svc.inner, &job));
+        let t = next_transcript(&rx).unwrap();
+        assert_eq!((t.id, t.partial, t.text.as_str()), (42, false, "Двое идут"));
+        assert!(t.latency_ms >= 4000);
+        assert_eq!(calls.load(Ordering::SeqCst), 0, "no Whisper pass");
+        assert_eq!(svc.stats().transcribed, 1);
+        // Without a live line, Whisper is needed.
+        assert!(!finalize_from_live(
+            &svc.inner,
+            &Job {
+                utterance: 43,
+                ..job
+            }
+        ));
+    }
+
+    #[test]
+    fn live_lines_stop_when_whisper_cannot_keep_up() {
+        let (svc, rx, calls) = service("Двое на B", 0, true);
+        wait_ready(&svc);
+        // The last live line took 3 s of Whisper for 2 s of audio.
+        svc.inner.live.lock().unwrap().partial_ms = 3000;
+        let mut sink = svc.sink();
+        // Two halves: the capture → VAD buffer holds 256 blocks of 10 ms.
+        feed(&mut sink, 2000, 0);
+        std::thread::sleep(Duration::from_millis(300));
+        feed(&mut sink, 0, 700);
+        let t = next_transcript(&rx).unwrap();
+        assert!(!t.partial, "a live line was requested");
+        assert_eq!(calls.load(Ordering::SeqCst), 1);
     }
 
     #[test]

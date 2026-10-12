@@ -385,11 +385,17 @@ export function startMeter(): () => void {
 const QUIET_FAILURES = ['traduction désactivée', 'modèle de traduction absent', 'langue non gérée'];
 
 /** A transcript line once its translation arrived: French text, or the original with why. */
+/** A translation identical to the original: only Counter-Strike terms. */
+export const KEPT_NOTE = 'Termes CS conservés tels quels (glossaire, modifiable dans Langues & glossaire)';
+
 export function withTranslation(f: FeedEntry, t: Translation): FeedEntry {
   const total = (f.lat ?? 0) + t.queueMs + t.ms;
   if (t.translated) {
     if (t.lang === 'fr') return { ...f, status: 'original', shown: null, tr: null };
-    return { ...f, status: 'final', tr: t.translated, shown: t.translated, lat: total, err: false };
+    // Only CS terms kept by the glossary: say so, else it looks untranslated.
+    const same = (x: string) => x.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
+    const note = same(t.translated) === same(f.orig) ? KEPT_NOTE : undefined;
+    return { ...f, status: 'final', tr: t.translated, shown: t.translated, lat: total, err: false, note };
   }
   const why = t.error ?? 'moteur indisponible';
   if (QUIET_FAILURES.includes(why)) return { ...f, note: why, shown: null };
