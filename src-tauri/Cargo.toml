@@ -10,7 +10,9 @@ rust-version = "1.80"
 [lib]
 # The `_lib` suffix avoids a name clash with the binary on Windows (cargo#8519).
 name = "crosstalk_lib"
-crate-type = ["staticlib", "cdylib", "rlib"]
+# Desktop only: the binary links the rlib. The template's staticlib/cdylib are
+# for Tauri mobile, and a cdylib exceeds the 65,535 DLL exports limit with candle.
+crate-type = ["rlib"]
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
