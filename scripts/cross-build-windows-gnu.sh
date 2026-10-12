@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# Test build for Windows x64 from Linux with MinGW-w64 (gcc), used when the
-# Windows CI (MSVC) is unavailable. Produces a portable folder, not an installer:
+# Test build for Windows x64 from Linux with MinGW-w64 (gcc), used when no
+# Windows build machine (MSVC) is at hand. Produces a portable folder, not an installer:
 #   dist-test/crosstalk-<commit>-windows-x64-gcc-test/
 #
 # Requirements (Ubuntu 24.04): apt install mingw-w64 nsis libclang-dev cmake
 #                              rustup target add x86_64-pc-windows-gnu
-# The official release stays the MSVC build of the CI; the compiler only
+# The official release stays the MSVC build (scripts/validate.ps1); the compiler only
 # changes after a measured comparison (docs/testing/speech-recognition.md).
 set -euo pipefail
 root=$(cd "$(dirname "$0")/.." && pwd)

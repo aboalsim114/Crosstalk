@@ -17,3 +17,6 @@ Thumbs.db
 !.vscode/extensions.json
 *.log
 dist-test/
+
+# Local validation packages (scripts/validate.ps1)
+dist-local/

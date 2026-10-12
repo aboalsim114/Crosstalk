@@ -23,7 +23,7 @@ Phase 1 : l'interface complète, les animations et les interactions fonctionnent
 | `src/` | Interface React + TypeScript (Tailwind CSS, Motion, Three.js), embarquée dans l'exécutable. |
 | `docs/` | **Cahier des charges v2.0** ([cahier-des-charges.md](docs/cahier-des-charges.md)) et **architecture** ([architecture.md](docs/architecture.md)) : les documents de référence. |
 | `design/` | Maquette d'origine (Claude Design), cahier des charges v1.0 et transcriptions de conception. Référence historique. |
-| `.github/workflows/` | CI GitHub Actions sur runner Windows : tests, puis génération des installateurs. |
+| `scripts/` | Outillage local : `validate.ps1` (validation complète sous Windows), garde anti-triche, modèles Whisper, banc d'essai. |
 
 ## Intégration Windows
 
@@ -38,7 +38,7 @@ Phase 1 : l'interface complète, les animations et les interactions fonctionnent
 
 ## Installation (utilisateurs)
 
-Téléchargez l'installateur depuis les artefacts de la CI (`crosstalk-windows-x64`) ou depuis une Release :
+Téléchargez l'installateur depuis une Release GitHub :
 
 - `Crosstalk_x.y.z_x64-setup.exe` (NSIS) : installation pour l'utilisateur courant, sans droits administrateur ;
 - `Crosstalk_x.y.z_x64_fr-FR.msi` (WiX) : pour un déploiement géré.
@@ -51,7 +51,8 @@ Prérequis sous Windows 10/11 x64 :
 
 - [Rust](https://rustup.rs) stable (toolchain MSVC) ;
 - Node.js 22 ;
-- les *Build Tools* de Visual Studio, avec la charge de travail « Développement desktop en C++ ».
+- les *Build Tools* de Visual Studio, avec la charge de travail « Développement desktop en C++ » ;
+- LLVM (bindgen de whisper.cpp) et CMake.
 
 ```powershell
 npm install
@@ -63,13 +64,22 @@ npm run app:build   # produit le .exe et les installateurs NSIS / MSI
 
 Les installateurs sont générés dans `src-tauri/target/release/bundle/` (`nsis/` et `msi/`).
 
+**Validation complète** (aucune CI : tout se vérifie en local) :
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\validate.ps1
+```
+
+Le script enchaîne garde anti-triche, typecheck, tests, rustfmt, clippy, build MSVC et installateurs, puis écrit `dist-local\<commit>\validation.md`, le rapport à joindre à la Pull Request.
+
 > `npm run dev` sert uniquement l'interface dans un navigateur, pour des retouches visuelles rapides. Le produit livré est toujours l'application Tauri.
 
 ## Contribution
 
 - `develop` est la branche de développement et la branche par défaut. `main` est la production.
-- Chaque sujet a sa branche (`feat/…`, `fix/…`, `chore/…`), part de `develop` et y revient par Pull Request, avec une CI verte.
+- Chaque sujet a sa branche (`feat/…`, `fix/…`, `chore/…`), part de `develop` et y revient par Pull Request, accompagnée d'un rapport de validation locale.
 - `main` n'accepte que des Pull Requests de release (`develop` → `main`), validées par le propriétaire du dépôt.
-- Les publications se font par tag `vx.y.z` sur `main`, qui produit une Release GitHub en brouillon avec les installateurs.
+- Le projet n'utilise pas GitHub Actions : builds, tests et benchmarks s'exécutent sur un PC Windows. GitHub sert au code, aux branches, aux issues et aux Pull Requests.
+- Les publications se font par tag `vx.y.z` sur `main` ; les installateurs, construits en local, sont joints à une Release GitHub en brouillon.
 
 Le détail est dans [CONTRIBUTING.md](CONTRIBUTING.md).
