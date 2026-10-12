@@ -4,6 +4,7 @@ import { config } from '../config';
 import { fnt } from '../components/atoms';
 import { useAudio, type AudioState } from '../state/audio';
 import { engineSummary, useSpeech } from '../state/speech';
+import { percentile, translationSummary, useTranslation } from '../state/translation';
 import { useApp } from '../state/store';
 
 type DiagState = 'OK' | 'AVERT.' | 'ÉCHEC';
@@ -40,13 +41,20 @@ export function DiagPage() {
   const asrRow: [string, string, DiagState] = sp.native
     ? ['Modèle whisper-' + s.model, `${engine.value} · ${engine.detail}`, sp.status?.state === 'ready' ? 'OK' : sp.status?.state === 'error' ? 'ÉCHEC' : 'AVERT.']
     : ['Modèle whisper-' + s.model, 'Chargé en 1,8 s · ' + s.accel.toUpperCase(), 'OK'];
+  const trStatus = useTranslation((x) => x.status);
+  const trTimes = useTranslation((x) => x.times);
+  const trSum = translationSummary(trStatus);
+  const p50 = percentile(trTimes, 0.5);
+  const trRow: [string, string, DiagState] = sp.native
+    ? ['Traduction locale · Opus-MT', `${trSum.value}${p50 != null ? ` · p50 ${p50} ms` : ''}`, trSum.color === '#7fe0a8' ? 'OK' : trSum.color === '#ff8a7a' ? 'ÉCHEC' : 'AVERT.']
+    : ['Traduction locale · Opus-MT', down ? 'Délai dépassé (5 s) — repli sur l’original' : 'Réponse en 210 ms', down ? 'ÉCHEC' : 'OK'];
   const rows: [string, string, DiagState][] = [
     ['Journal console.log', 'D:\\SteamLibrary\\steamapps\\common\\Counter-Strike Global Offensive\\game\\csgo\\console.log', 'OK'],
     ['Option -condebug', 'Détectée dans les options Steam', 'OK'],
     ['Parseur de chat', 'cs2-2026.09 · 42 fixtures validées', 'OK'],
     ['Process loopback', captureDetail, captureState],
     asrRow,
-    ['Traduction · ' + s.engine, down ? 'Délai dépassé (5 s) — repli sur l’original' : 'Réponse en 210 ms', down ? 'ÉCHEC' : 'OK'],
+    trRow,
     keysFailed.length
       ? ['Raccourcis globaux', `${keysFailed.map((k) => k.keys).join(', ')} déjà utilisé par une autre application`, 'AVERT.']
       : ['Raccourcis globaux', 'Ctrl+Alt+F8 / F9 / F10 · aucun conflit', 'OK'],
@@ -57,7 +65,7 @@ export function DiagPage() {
     ['14:02:12', 'INFO', 'chat-ingest: suivi depuis offset 1 284 330'],
     ['14:02:12', fb ? 'WARN' : 'INFO', fb ? 'audio-win: repli endpoint loopback' : 'audio-win: process loopback pid=18244'],
     ['14:02:13', 'INFO', 'asr: whisper-small chargé (CUDA)'],
-    ['14:02:13', 'INFO', 'translation: DeepL key=[expurgée]'],
+    ['14:02:13', 'INFO', 'translation: opus-mt-ru-fr chargé (local, CPU)'],
     ['14:03:40', 'DEBUG', 'audio-pipeline: segment 3,1 s → asr'],
     ['14:03:41', 'WARN', 'audio-pipeline: segment périmé abandonné'],
     ['14:03:44', 'INFO', 'overlay: 2 blocs affichés'],

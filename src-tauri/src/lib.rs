@@ -22,6 +22,7 @@ mod overlay;
 mod pipeline;
 mod shortcuts;
 pub mod speech;
+pub mod translation;
 mod tray;
 
 use std::sync::Arc;
@@ -32,17 +33,19 @@ use tauri_plugin_autostart::MacosLauncher;
 /// Passed by the autostart entry so Windows login starts Crosstalk in the tray.
 pub const MINIMIZED_FLAG: &str = "--minimized";
 
-/// Capture events go to the UI; a capture that stops also purges the speech
-/// pipeline (no segment survives a stop, an emergency stop or CS2 closing).
+/// Capture events go to the UI; a capture that stops also purges the speech and
+/// translation pipelines (nothing survives a stop, an emergency stop or CS2 closing).
 struct CaptureEvents {
     ui: audio::TauriEvents,
     speech: Arc<speech::SpeechService>,
+    translation: Arc<translation::TranslationService>,
 }
 
 impl audio::AudioEvents for CaptureEvents {
     fn status(&self, status: &audio::CaptureStatus) {
         if status.state != audio::CaptureState::Capturing {
             self.speech.purge();
+            self.translation.purge();
         }
         self.ui.status(status);
     }
@@ -77,11 +80,23 @@ pub fn run() {
             speech::speech_stats,
             speech::speech_models,
             speech::speech_configure,
-            speech::speech_rescan
+            speech::speech_rescan,
+            translation::translation_status,
+            translation::translation_configure,
+            translation::translation_rescan,
+            translation::translation_models,
+            translation::translation_test
         ])
         .setup(|app| {
             let handle = app.handle();
 
+            // Translation decodes one token at a time: one thread is nearly as
+            // fast as four and leaves the CPU to CS2 and Whisper (read by candle).
+            if std::env::var_os("RAYON_NUM_THREADS").is_none() {
+                std::env::set_var("RAYON_NUM_THREADS", "1");
+            }
+            let translation = translation::start(handle);
+            app.manage(translation.clone());
             let speech = speech::start(handle);
             app.manage(speech.clone());
             let audio = Arc::new(audio::AudioService::new(
@@ -89,6 +104,7 @@ pub fn run() {
                 Arc::new(CaptureEvents {
                     ui: audio::TauriEvents(handle.clone()),
                     speech: speech.clone(),
+                    translation: translation.clone(),
                 }),
             ));
             audio.set_sink(Some(Box::new(speech.sink())));

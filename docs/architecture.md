@@ -48,7 +48,7 @@ Le découpage se fait d'abord en **modules** de la crate existante (`src-tauri/s
 | `audio::dsp` | Passe-bande, rééchantillonnage 16 kHz, (exp.) mid/side, DeepFilterNet | thread DSP |
 | `audio::vad` | VAD Silero (ONNX), validation des segments, pré-roll et post-roll, segments ≤ 8 s | thread DSP |
 | `asr` | Trait `Transcriber`, whisper.cpp, filtre anti-hallucinations | **thread dédié**, priorité basse |
-| `translation` | Trait `Translator`, DeepL / Azure / local, glossaire balisé, cache LRU, délai et repli | tâches tokio |
+| `translation` | Opus-MT local (candle, Rust pur) : tokenizer SentencePiece, Marian, glossaire protégé, cache LRU, délai et repli | thread `translate`, priorité basse |
 | `speaker` (exp.) | Windows Graphics Capture, détection de l'indicateur, OCR, corrélation, confiance | thread dédié, ~10 Hz, désactivé par défaut |
 | `gsi` | Serveur HTTP local Game State Integration : carte, phase de round | tâche tokio |
 | `overlay`, `tray`, `shortcuts`, `actions` | Intégration Windows (existants) | thread principal Tauri |

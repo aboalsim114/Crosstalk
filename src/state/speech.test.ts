@@ -50,11 +50,11 @@ describe('speech settings', () => {
   });
 });
 
-describe('real transcripts are never presented as French translations', () => {
+describe('real transcripts are never presented as French before a real translation', () => {
   const entry = transcriptEntry(t, new Date(2026, 9, 11, 14, 2, 3));
 
   it('becomes a voice line with no translation', () => {
-    expect(entry).toMatchObject({ kind: 'voice', src: 'ru', orig: 'Двое идут на B', tr: null, shown: null, status: 'transcrit', lat: 1240, err: false });
+    expect(entry).toMatchObject({ kind: 'voice', src: 'ru', orig: 'Двое идут на B', tr: null, shown: null, status: 'transcrit', lat: 1240, err: false, tid: 3 });
     expect(entry.time).toBe('14:02:03');
   });
 
@@ -64,7 +64,7 @@ describe('real transcripts are never presented as French translations', () => {
     expect(row.langs).toBe('RU · TRANSCRIPTION');
     expect(row.langs).not.toContain('FR');
     expect(row.shown).toBe('Двое идут на B');
-    expect(row.note).toMatch(/traduction en français à venir/);
+    expect(row.note).toMatch(/traduction en cours/);
   });
 
   it('says "transcription" in the big subtitle', () => {

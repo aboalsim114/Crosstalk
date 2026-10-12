@@ -1,0 +1,250 @@
+#!/usr/bin/env python3
+"""Builds src-tauri/tests/fixtures/marian-tiny: a tiny Opus-MT-format model
+(random weights) with its expected outputs computed by Hugging Face
+transformers, the reference the Rust translation engine is checked against.
+
+    python -m venv venv && venv/bin/pip install "transformers==4.46.3" "jax[cpu]" flax sentencepiece numpy
+    venv/bin/python scripts/make-marian-fixture.py [OUT_DIR] [--full-size]
+
+--full-size writes a model with the real Opus-MT dimensions (d_model 512,
+6+6 layers, 64k vocabulary) for timing only: never committed, never accurate.
+
+The weights file is written in PyTorch's zip format (data.pkl + storages)
+without PyTorch, exactly as `torch.save` lays it out.
+"""
+import collections
+import io
+import json
+import os
+import pickle
+import sys
+import tempfile
+import types
+import zipfile
+
+import numpy as np
+import sentencepiece as spm
+
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+FULL = "--full-size" in sys.argv
+args = [a for a in sys.argv[1:] if not a.startswith("--")]
+OUT = args[0] if args else os.path.join(ROOT, "src-tauri", "tests", "fixtures", "marian-tiny")
+
+SOURCE_TEXT = """Двое идут на B, у них снайпер.
+Бомба на A, нужен флеш и смок.
+Раш Б, раш Б, не стоим!
+Я без денег, играем эко.
+Один на миде, он с AWP.
+Сзади, сзади, они обходят!
+Дефуз, кто-нибудь дефузит?
+Two players on B, they have an AWP.
+Bomb planted on A, I need a flash and a smoke.
+Rush B, don't stop!
+I have no money, we play eco.
+One on mid with the AWP.
+Behind us, they are flanking!
+Who is defusing? Defuse the bomb now.
+Хорошо, жду вас на точке. Спасибо, ребята.
+Nice shot, good game everyone.
+"""
+TARGET_TEXT = """Deux joueurs sur B, ils ont un sniper.
+La bombe est sur A, il faut une flash et une smoke.
+Rush B, on ne s'arrête pas !
+Je n'ai plus d'argent, on joue eco.
+Un au milieu avec l'AWP.
+Derrière, derrière, ils nous contournent !
+Qui désamorce ? Désamorcez la bombe maintenant.
+D'accord, je vous attends sur le point. Merci les gars.
+Joli tir, bonne partie à tous.
+"""
+
+TESTS = [
+    "Двое идут на B, у них снайпер.",
+    "Rush B, don't stop!",
+    "  Бомба   на A,\tнужен флеш  ",
+    "Ｆｕｌｌ ｗｉｄｔｈ ＡＷＰ ①",
+    "emoji 😀 unknown ☃☃ chars",
+    "Nice shot everyone",
+    "",
+    "smoke",
+    "ÉTÉ déjà vu, ça marche",
+    "Сзади!!! Они обходят...",
+]
+
+
+def train(text, prefix, vocab):
+    with tempfile.NamedTemporaryFile("w", suffix=".txt", delete=False, encoding="utf-8") as f:
+        f.write(text * 20)
+        path = f.name
+    spm.SentencePieceTrainer.train(
+        input=path, model_prefix=prefix, vocab_size=vocab, model_type="unigram",
+        character_coverage=1.0, hard_vocab_limit=False, minloglevel=2,
+    )
+    os.unlink(path)
+    return spm.SentencePieceProcessor(model_file=prefix + ".model")
+
+
+# ---------- PyTorch zip writer (no torch needed) ----------
+
+class _Storage:  # stands for torch.FloatStorage
+    pass
+
+
+def _rebuild_tensor_v2(*a):  # stands for torch._utils._rebuild_tensor_v2
+    raise RuntimeError("write-only stub")
+
+
+torch_mod = types.ModuleType("torch")
+utils_mod = types.ModuleType("torch._utils")
+_Storage.__module__, _Storage.__qualname__, _Storage.__name__ = "torch", "FloatStorage", "FloatStorage"
+_rebuild_tensor_v2.__module__, _rebuild_tensor_v2.__qualname__ = "torch._utils", "_rebuild_tensor_v2"
+torch_mod.FloatStorage = _Storage
+utils_mod._rebuild_tensor_v2 = _rebuild_tensor_v2
+torch_mod._utils = utils_mod
+
+
+class _Tensor:
+    def __init__(self, key, array):
+        self.key, self.array = key, array
+
+    def __reduce__(self):
+        a = self.array
+        stride = tuple(s // a.itemsize for s in a.strides)
+        return (_rebuild_tensor_v2,
+                (_StorageRef(self.key, a.size), 0, a.shape, stride, False, collections.OrderedDict()))
+
+
+class _StorageRef:
+    def __init__(self, key, numel):
+        self.key, self.numel = key, numel
+
+
+class _Pickler(pickle.Pickler):
+    def persistent_id(self, obj):
+        if isinstance(obj, _StorageRef):
+            return ("storage", _Storage, obj.key, "cpu", obj.numel)
+        return None
+
+
+def save_pth(state, path):
+    sys.modules["torch"], sys.modules["torch._utils"] = torch_mod, utils_mod
+    try:
+        tensors = collections.OrderedDict()
+        blobs = []
+        for i, (name, arr) in enumerate(state.items()):
+            arr = np.ascontiguousarray(arr, dtype=np.float32)
+            tensors[name] = _Tensor(str(i), arr)
+            blobs.append((str(i), arr.tobytes()))
+        buf = io.BytesIO()
+        _Pickler(buf, protocol=2).dump(tensors)
+    finally:
+        del sys.modules["torch"], sys.modules["torch._utils"]
+    with zipfile.ZipFile(path, "w", zipfile.ZIP_STORED) as z:
+        z.writestr("archive/data.pkl", buf.getvalue())
+        z.writestr("archive/byteorder", "little")
+        for key, data in blobs:
+            z.writestr(f"archive/data/{key}", data)
+        z.writestr("archive/version", "3\n")
+
+
+# ---------- model ----------
+
+def flax_to_pt(params):
+    out = collections.OrderedDict()
+
+    def walk(prefix, node):
+        for k, v in node.items():
+            name = f"{prefix}.{k}" if prefix else k
+            if isinstance(v, dict):
+                walk(name, v)
+                continue
+            v = np.asarray(v)
+            if name.endswith(".kernel"):
+                out[name[: -len("kernel")] + "weight"] = v.T
+            elif name.endswith(".scale"):
+                out[name[: -len("scale")] + "weight"] = v
+            elif name.endswith(".embedding"):
+                out[name[: -len("embedding")] + "weight"] = v
+            else:
+                out[name] = v
+    walk("", params)
+    if "final_logits_bias" in out:
+        out["final_logits_bias"] = out["final_logits_bias"].reshape(1, -1)
+    return out
+
+
+def main():
+    from transformers import FlaxMarianMTModel, MarianConfig, MarianTokenizer
+
+    os.makedirs(OUT, exist_ok=True)
+    src = train(SOURCE_TEXT, os.path.join(OUT, "source"), 160)
+    tgt = train(TARGET_TEXT, os.path.join(OUT, "target"), 140)
+    os.replace(os.path.join(OUT, "source.model"), os.path.join(OUT, "source.spm"))
+    os.replace(os.path.join(OUT, "target.model"), os.path.join(OUT, "target.spm"))
+    for f in ("source.vocab", "target.vocab"):
+        os.remove(os.path.join(OUT, f))
+
+    vocab = {"</s>": 0, "<unk>": 1}
+    for sp in (src, tgt):
+        for i in range(sp.get_piece_size()):
+            p = sp.id_to_piece(i)
+            if p not in vocab and p not in ("<s>", "</s>", "<unk>"):
+                vocab[p] = len(vocab)
+    if FULL:
+        while len(vocab) < 64376:
+            vocab[f"<filler{len(vocab)}>"] = len(vocab)
+    vocab["<pad>"] = len(vocab)
+    v = len(vocab)
+    with open(os.path.join(OUT, "vocab.json"), "w", encoding="utf-8") as f:
+        json.dump(vocab, f, ensure_ascii=False, indent=1)
+
+    dims = dict(d_model=512, encoder_layers=6, decoder_layers=6, encoder_attention_heads=8,
+                decoder_attention_heads=8, encoder_ffn_dim=2048, decoder_ffn_dim=2048,
+                max_position_embeddings=512) if FULL else dict(
+                d_model=32, encoder_layers=2, decoder_layers=2, encoder_attention_heads=4,
+                decoder_attention_heads=4, encoder_ffn_dim=64, decoder_ffn_dim=64,
+                max_position_embeddings=128)
+    config = MarianConfig(vocab_size=v, decoder_vocab_size=v, pad_token_id=v - 1, eos_token_id=0,
+                          decoder_start_token_id=v - 1, forced_eos_token_id=0, bos_token_id=0,
+                          activation_function="swish", scale_embedding=True,
+                          share_encoder_decoder_embeddings=True, static_position_embeddings=True,
+                          bad_words_ids=[[v - 1]], init_std=0.5, **dims)
+    model = FlaxMarianMTModel(config, seed=7)
+    rng = np.random.default_rng(3)
+    params = model.params
+    params["final_logits_bias"] = rng.normal(0, 0.5, size=np.asarray(params["final_logits_bias"]).shape).astype(np.float32)
+    model.params = params
+    cfg = config.to_dict()
+    cfg["architectures"] = ["MarianMTModel"]
+    with open(os.path.join(OUT, "config.json"), "w") as f:
+        json.dump(cfg, f, indent=1)
+    save_pth(flax_to_pt(model.params), os.path.join(OUT, "pytorch_model.bin"))
+    if FULL:
+        print("full-size timing model written to", OUT)
+        return
+
+    tok = MarianTokenizer(source_spm=os.path.join(OUT, "source.spm"),
+                          target_spm=os.path.join(OUT, "target.spm"),
+                          vocab=os.path.join(OUT, "vocab.json"))
+    cases = []
+    for text in TESTS:
+        pieces = src.encode(text, out_type=str)
+        ids = tok(text).input_ids
+        case = {"text": text, "normalized": src.normalize(text) if hasattr(src, "normalize") else None,
+                "pieces": pieces, "ids": ids}
+        if len(ids) > 1:
+            gen = model.generate(np.array([ids]), num_beams=1, do_sample=False, max_new_tokens=12,
+                                 bad_words_ids=[[v - 1]]).sequences[0].tolist()
+            case["generated"] = gen
+            case["decoded"] = tok.decode(gen, skip_special_tokens=True)
+        cases.append(case)
+    # The target tokenizer round trip, independent of the random model.
+    tgt_cases = [{"text": t, "pieces": tgt.encode(t, out_type=str),
+                  "decoded": tgt.decode(tgt.encode(t, out_type=str))} for t in TARGET_TEXT.splitlines() if t]
+    with open(os.path.join(OUT, "expected.json"), "w", encoding="utf-8") as f:
+        json.dump({"source": cases, "target": tgt_cases}, f, ensure_ascii=False, indent=1)
+    print("fixture written to", OUT, "vocab", v)
+
+
+if __name__ == "__main__":
+    main()

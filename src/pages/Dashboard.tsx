@@ -3,8 +3,9 @@ import { config } from '../config';
 import { EASE, Seg, fmtSeconds, fnt } from '../components/atoms';
 import { SIGNAL_THRESHOLD_DB, captureSummary, cs2Summary, isCapturing, useAudio } from '../state/audio';
 import { engineSummary, useSpeech } from '../state/speech';
+import { translationSummary, useTranslation } from '../state/translation';
 import { isLive, useApp, type FeedMode } from '../state/store';
-import { feedRow, subtitle, voiceLatency } from './derive';
+import { feedRow, isDemoLine, subtitle, voiceLatency } from './derive';
 
 const MODES: [FeedMode, string][] = [
   ['text', 'Texte'],
@@ -16,8 +17,7 @@ function Subtitle() {
   const f0 = useApp((s) => s.feed[0]);
   const live = useApp(isLive);
   const sub = subtitle(f0, live);
-  // In the desktop app only real transcripts are genuine; anything else (written chat) is still a demo.
-  const demo = useAudio((a) => a.native) && !!f0 && f0.status !== 'transcrit';
+  const demo = isDemoLine(useAudio((a) => a.native), f0);
   return (
     <motion.div
       key={f0?.id ?? 'idle'}
@@ -66,21 +66,23 @@ function Pipeline() {
   const live = isLive(s);
   const audio = useAudio();
   const sp = useSpeech();
+  const tr = useTranslation((x) => x.status);
+  const translating = s.feed.some((f) => f.tid != null && f.status === 'transcrit' && !f.note);
   const fb = config.win10Fallback;
   const captureSub = audio.native ? captureSummary(audio.status).short : fb ? 'loopback' : 'cs2.exe';
   const stages: [string, string][] = [
     ['Capture', captureSub],
     ['VAD', audio.native ? `Silero · seuil ${s.vad} %` : `seuil ${s.vad} %`],
     ['Transcription', audio.native ? `whisper ${s.model} · ${sp.status?.state === 'ready' ? 'prêt' : engineSummary(sp.status).value.toLowerCase()}` : `whisper ${s.model}`],
-    ['Traduction', audio.native ? 'à venir' : `${s.engine} → fr`],
+    ['Traduction', audio.native ? translationSummary(tr).value : 'opus-mt → fr'],
     ['Overlay', s.fmt],
   ];
   return (
     <div className="flex items-center px-2 pb-[22px]">
       {stages.map(([name, sub], i) => {
         const running = live && !s.paused;
-        // Desktop app: real states (capture, voice detected, Whisper running); no translation yet.
-        const nativeActive = [isCapturing(audio.status), sp.activity.speaking, sp.activity.transcribing, false, false][i];
+        // Desktop app: real states (capture, voice detected, Whisper running, a line awaiting its translation).
+        const nativeActive = [isCapturing(audio.status), sp.activity.speaking, sp.activity.transcribing, translating, false][i];
         const active = audio.native ? running && nativeActive : running && (i === 0 || s.stage === i);
         const done = !audio.native && running && i > 0 && s.stage > i;
         const col = i === 0 ? '#7fe0a8' : '#ffa24a';
@@ -111,6 +113,7 @@ function StatusCards() {
   const cs2 = cs2Summary(audio.cs2);
   const capture = captureSummary(audio.status);
   const engine = engineSummary(useSpeech((x) => x.status));
+  const trSum = translationSummary(useTranslation((x) => x.status));
   const cards = [
     audio.native
       ? { label: 'COUNTER-STRIKE 2', value: cs2.value, sub: cs2.detail, dot: cs2.color }
@@ -119,8 +122,8 @@ function StatusCards() {
       ? { label: 'CAPTURE', value: capture.value, sub: capture.detail, dot: capture.color }
       : { label: 'CAPTURE', value: fb ? 'Loopback système' : 'Process loopback', sub: fb ? 'Repli — tout le périphérique' : 'Son de cs2.exe uniquement', dot: fb ? '#ffa24a' : '#7fe0a8' },
     audio.native
-      ? { label: 'TRANSCRIPTION', value: engine.value, sub: `${engine.detail} · traduction à venir`, dot: engine.color }
-      : { label: 'MOTEURS', value: `Whisper ${s.model}`, sub: `${s.accel.toUpperCase()} · ${s.engine}${down ? ' indisponible' : ''}`, dot: down ? '#ff8a7a' : '#7fe0a8' },
+      ? { label: 'TRANSCRIPTION', value: engine.value, sub: `${engine.detail} · traduction ${trSum.value}`, dot: engine.color }
+      : { label: 'MOTEURS', value: `Whisper ${s.model}`, sub: `${s.accel.toUpperCase()} · Opus-MT${down ? ' indisponible' : ''}`, dot: down ? '#ff8a7a' : '#7fe0a8' },
     {
       label: 'LATENCE VOIX',
       value: lat ? `p50 ${fmtSeconds(lat.p50)}` : '—',
@@ -147,7 +150,6 @@ function StatusCards() {
 function ScriptPanel() {
   const feed = useApp((s) => s.feed);
   const mode = useApp((s) => s.mode);
-  const cloud = useApp((s) => s.tg.cloud);
   const live = useApp(isLive);
   const set = useApp((s) => s.set);
   const native = useAudio((a) => a.native);
@@ -159,7 +161,7 @@ function ScriptPanel() {
           <span style={{ font: fnt(400, 10.5, 'mono'), color: '#5a5650' }}>{feed.length ? `${feed.length} répliques` : ''}</span>
           {native && (
             <span
-              title="Les voix sont réellement transcrites (TRANSCRIT, sans traduction). Le chat écrit est encore simulé : ces lignes sont des exemples."
+              title="Les voix sont réellement transcrites puis traduites sur ce PC. Le chat écrit est encore simulé : ces lignes sont des exemples."
               style={{ font: fnt(600, 9, 'mono'), letterSpacing: '.14em', color: '#ffa24a', border: '1px solid rgba(255,162,74,.35)', borderRadius: 999, padding: '2px 7px' }}
             >
               CHAT SIMULÉ
@@ -209,8 +211,8 @@ function ScriptPanel() {
         </AnimatePresence>
       </div>
       <div className="flex items-center gap-2.5 px-[18px] py-3" style={{ borderTop: '1px solid rgba(255,255,255,.05)', font: fnt(400, 11, 'sans', 1.45), color: '#8f8a83' }}>
-        <span style={{ font: fnt(600, 9.5, 'mono'), letterSpacing: '.14em', color: cloud ? '#ffa24a' : '#7fe0a8' }}>{cloud ? 'CLOUD' : 'LOCAL'}</span>
-        <span>{cloud ? 'Segments vocaux envoyés au fournisseur choisi.' : 'Aucune voix transmise. Aucun audio conservé. Micro coupé.'}</span>
+        <span style={{ font: fnt(600, 9.5, 'mono'), letterSpacing: '.14em', color: '#7fe0a8' }}>LOCAL</span>
+        <span>Aucune voix transmise. Aucun audio conservé. Micro coupé.</span>
       </div>
     </div>
   );

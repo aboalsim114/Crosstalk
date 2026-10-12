@@ -1,6 +1,6 @@
 // Real speech recognition, mirrored from the Rust core (`speech://*` events).
-// Transcripts are in the speaker's language: they are never shown as French
-// translations (translation is a later feature).
+// A transcript is shown in the speaker's language until its real French
+// translation arrives (`translation://result`, see state/translation.ts).
 
 import { create } from 'zustand';
 import { isTauri, speech, type ModelInfo, type RejectReason, type SpeechConfig, type SpeechStats, type SpeechStatus, type Transcript, type VoiceActivity } from '../backend';
@@ -36,7 +36,7 @@ export function speechConfigFrom(s: Pick<AppState, 'model' | 'vad' | 'src' | 'gl
   };
 }
 
-/** A real transcript as a Script / overlay line: original text, no translation. */
+/** A real transcript as a Script / overlay line: original text, translation pending. */
 export function transcriptEntry(t: Transcript, now = new Date()): FeedEntry {
   return {
     kind: 'voice',
@@ -44,6 +44,7 @@ export function transcriptEntry(t: Transcript, now = new Date()): FeedEntry {
     orig: t.text,
     tr: null,
     id: t.id + Math.random() / 10,
+    tid: t.id,
     time: now.toLocaleTimeString('fr-FR'),
     status: 'transcrit',
     shown: null,
