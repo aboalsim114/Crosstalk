@@ -2,8 +2,8 @@
 //!
 //! 16 kHz conditioning → Silero VAD → segmentation with shot/explosion guards
 //! → whisper.cpp → hallucination filter → `speech://transcript` events. All
-//! local, on the CPU, below normal priority. Transcripts are in the speaker's
-//! language: translation into French is a later feature.
+//! local, on the CPU, below normal priority. Each accepted transcript is then
+//! translated into French by the translation service (`translation://result`).
 
 pub mod bench;
 pub mod cpu;
@@ -19,7 +19,7 @@ pub mod vad;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-use tauri::{AppHandle, Emitter, State};
+use tauri::{AppHandle, Emitter, Manager, State};
 
 pub use service::{EngineLoader, SpeechEvents, SpeechService};
 pub use types::*;
@@ -93,6 +93,12 @@ impl SpeechEvents for TauriEvents {
     }
     fn transcript(&self, transcript: &Transcript) {
         let _ = self.0.emit(TRANSCRIPT_EVENT, transcript);
+        if let Some(t) = self
+            .0
+            .try_state::<Arc<crate::translation::TranslationService>>()
+        {
+            t.submit(transcript.id, transcript.lang.code(), &transcript.text);
+        }
     }
     fn activity(&self, activity: VoiceActivity) {
         let _ = self.0.emit(ACTIVITY_EVENT, activity);
