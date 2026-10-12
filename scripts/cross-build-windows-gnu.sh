@@ -35,7 +35,7 @@ fix_archives() {
 build() { (cd src-tauri && cargo build --release --locked --target $target "$@"); }
 
 # First pass builds whisper.cpp (and fails at link), second pass links.
-build --example asr_bench --example audio_probe || { fix_archives; build --example asr_bench --example audio_probe; }
+build --example asr_bench --example audio_probe --example translate || { fix_archives; build --example asr_bench --example audio_probe --example translate; }
 fix_archives
 # The app itself through the Tauri CLI (builds and embeds the UI). No bundle:
 # the NSIS installer would download the WebView2 bootstrapper.
@@ -47,6 +47,7 @@ rm -rf "$out" && mkdir -p "$out"
 cp "$rel/crosstalk.exe" "$out/"
 cp "$rel/examples/asr_bench.exe" "$out/crosstalk-asr-bench.exe"
 cp "$rel/examples/audio_probe.exe" "$out/crosstalk-audio-probe.exe"
+cp "$rel/examples/translate.exe" "$out/crosstalk-translate.exe"
 cp "$rel/WebView2Loader.dll" "$out/"
 gcc_dir=$(dirname "$(x86_64-w64-mingw32-g++-posix -print-libgcc-file-name)")
 cp "$gcc_dir/libstdc++-6.dll" "$gcc_dir/libgcc_s_seh-1.dll" /usr/x86_64-w64-mingw32/lib/libwinpthread-1.dll "$out/"

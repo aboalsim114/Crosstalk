@@ -1,10 +1,13 @@
-# Downloads the speech models used by Crosstalk into %LOCALAPPDATA%\Crosstalk\models
-# and checks them. In-app download arrives with feat/settings-persistence (#15).
+# Downloads the speech and translation models used by Crosstalk into
+# %LOCALAPPDATA%\Crosstalk\models and checks them. All of them run on the PC:
+# no API key, no subscription. In-app download arrives with feat/settings-persistence (#15).
 #
-#   powershell -ExecutionPolicy Bypass -File scripts\download-models.ps1            # base + VAD
+#   powershell -ExecutionPolicy Bypass -File scripts\download-models.ps1                 # base + VAD
+#   powershell -ExecutionPolicy Bypass -File scripts\download-models.ps1 -Translation    # + Opus-MT ru/en -> fr (~620 Mo)
 #   powershell -ExecutionPolicy Bypass -File scripts\download-models.ps1 -Models tiny,base,small
 param(
   [string[]]$Models = @('base'),
+  [switch]$Translation,
   [string]$Dir = (Join-Path $env:LOCALAPPDATA 'Crosstalk\models')
 )
 $ErrorActionPreference = 'Stop'
@@ -45,5 +48,21 @@ foreach ($m in $Models) {
   $spec = $catalog[$m]
   if (-not $spec) { throw "modele inconnu : $m (choix : $($catalog.Keys -join ', '))" }
   Get-Model "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/$($spec.File)" (Join-Path $Dir $spec.File) $spec.Size $spec.Sha1
+}
+
+# Translation: Helsinki-NLP Opus-MT (Apache-2.0), files used as published.
+# Exact sizes from Hugging Face; the SHA-256 is printed for the test report.
+$pairs = @{
+  'opus-mt-ru-fr' = @{ 'config.json' = 1416; 'vocab.json' = 2658919; 'source.spm' = 1063848; 'target.spm' = 820963; 'pytorch_model.bin' = 310806561 }
+  'opus-mt-en-fr' = @{ 'config.json' = 1416; 'vocab.json' = 1339166; 'source.spm' = 778395; 'target.spm' = 802397; 'pytorch_model.bin' = 300827685 }
+}
+if ($Translation) {
+  foreach ($pair in $pairs.Keys) {
+    $pairDir = Join-Path $Dir $pair
+    New-Item -ItemType Directory -Force -Path $pairDir | Out-Null
+    foreach ($file in $pairs[$pair].Keys) {
+      Get-Model "https://huggingface.co/Helsinki-NLP/$pair/resolve/main/$file" (Join-Path $pairDir $file) $pairs[$pair][$file] $null
+    }
+  }
 }
 Write-Host "Modeles installes dans $Dir. Dans Crosstalk : Audio & IA > Rechercher les modeles."
