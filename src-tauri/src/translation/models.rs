@@ -97,10 +97,9 @@ mod tests {
     }
 
     #[test]
-    fn every_pair_targets_french_from_a_speech_language() {
+    fn every_pair_targets_french() {
         for p in CATALOG {
             assert!(p.repo.ends_with(&format!("{}-fr", p.source)));
-            assert!(crate::speech::Lang::from_code(p.source).is_some());
         }
     }
 }

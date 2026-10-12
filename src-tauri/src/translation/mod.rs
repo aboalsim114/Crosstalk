@@ -99,6 +99,14 @@ mod fixture_tests {
     }
 
     #[test]
+    fn every_translation_pair_comes_from_a_speech_language() {
+        // Kept here: models.rs is also compiled into the installer, without speech.
+        for p in super::models::CATALOG {
+            assert!(crate::speech::Lang::from_code(p.source).is_some());
+        }
+    }
+
+    #[test]
     fn source_pieces_match_sentencepiece() {
         let sp =
             SentencePiece::from_bytes(&std::fs::read(dir().join("source.spm")).unwrap()).unwrap();

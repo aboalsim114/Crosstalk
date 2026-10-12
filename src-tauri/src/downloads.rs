@@ -326,7 +326,7 @@ fn part_path(path: &Path) -> PathBuf {
     PathBuf::from(p)
 }
 
-fn partial_len(f: &FileSpec) -> u64 {
+pub fn partial_len(f: &FileSpec) -> u64 {
     std::fs::metadata(part_path(&f.path))
         .map(|m| m.len())
         .unwrap_or(0)
@@ -571,56 +571,4 @@ mod tests {
         .unwrap();
         assert_eq!(missing(&d, "base", false).len(), 1);
     }
-}
-
-// ---------- Tauri ----------
-
-pub const EVENT: &str = "models://download";
-
-/// Progress to every window; once complete, the engines pick the files up.
-pub struct TauriDownloadEvents(pub tauri::AppHandle);
-
-impl DownloadEvents for TauriDownloadEvents {
-    fn progress(&self, status: &DownloadStatus) {
-        use tauri::Emitter;
-        let _ = self.0.emit(EVENT, status);
-    }
-    fn finished(&self) {
-        use tauri::Manager;
-        if let Some(s) = self.0.try_state::<Arc<crate::speech::SpeechService>>() {
-            s.rescan();
-        }
-        if let Some(t) = self
-            .0
-            .try_state::<Arc<crate::translation::TranslationService>>()
-        {
-            t.rescan();
-        }
-    }
-}
-
-#[tauri::command]
-pub fn models_download_status(
-    d: tauri::State<'_, Arc<Downloader>>,
-    model: String,
-    translation: bool,
-) -> DownloadStatus {
-    d.status(&whisper::models_dir(), &model, translation)
-}
-
-/// Starts fetching the missing models (no-op if complete or already running).
-#[tauri::command]
-pub fn models_download_start(
-    d: tauri::State<'_, Arc<Downloader>>,
-    model: String,
-    translation: bool,
-) -> DownloadStatus {
-    let dir = whisper::models_dir();
-    d.start(dir.clone(), &model, translation);
-    d.status(&dir, &model, translation)
-}
-
-#[tauri::command]
-pub fn models_download_cancel(d: tauri::State<'_, Arc<Downloader>>) {
-    d.cancel();
 }

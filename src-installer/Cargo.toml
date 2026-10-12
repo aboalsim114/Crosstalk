@@ -1,0 +1,43 @@
+[package]
+name = "crosstalk-setup"
+version = "0.2.0"
+description = "Installateur de Crosstalk"
+authors = ["Crosstalk contributors"]
+license = "MIT"
+edition = "2021"
+rust-version = "1.80"
+
+# Built with its own lock file and the app's target directory (shared
+# dependencies compile once): see scripts/cross-build-windows-gnu.sh.
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+flate2 = { version = "1", default-features = false, features = ["rust_backend"] }
+serde_json = "1"
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-dialog = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+# Same download code as the app (src-tauri/src/downloads.rs).
+ureq = "2.12"
+sha1_smol = "1"
+flate2 = { version = "1", default-features = false, features = ["rust_backend"] }
+
+[target.'cfg(windows)'.dependencies]
+winreg = "0.56"
+mslnk = "0.1"
+windows = { version = "0.62", features = [
+  "Win32_Foundation",
+  "Win32_Storage_FileSystem",
+  "Win32_System_Com",
+  "Win32_UI_Shell",
+] }
+
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = "s"
+panic = "abort"
+strip = true
