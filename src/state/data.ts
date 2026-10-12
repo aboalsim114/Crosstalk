@@ -100,7 +100,7 @@ export const LICENSES: [string, string][] = [
 ];
 
 /** `status: 'transcrit'` marks a real transcript shown in its original language. */
-export type OverlayLine = Pick<SimEvent, 'kind' | 'src' | 'orig' | 'ch' | 'sender'> & { shown: string | null; status?: string };
+export type OverlayLine = Pick<SimEvent, 'kind' | 'src' | 'orig' | 'ch' | 'sender'> & { shown: string | null; status?: string; live?: boolean };
 
 /** Placeholder lines for the overlay preview before any live line exists. */
 export const SAMPLE_OVERLAY: OverlayLine[] = [

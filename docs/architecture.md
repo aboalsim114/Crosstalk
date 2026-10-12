@@ -106,6 +106,8 @@ Annuler pendant les deux premières phases supprime le dossier temporaire : une 
 | `audio.level` | niveau RMS, `speaking` (≤ 15 Hz) | anneau d'onde 3D, indicateur VAD |
 | `diagnostic` | composant, niveau, message expurgé | écran Diagnostic |
 
+Événements déjà en place pour la voix : `speech://transcript` (`id` d'énoncé, `partial`, texte, langue, latences). Pendant la parole, des transcriptions **partielles** (`partial: true`, environ une par seconde dès 1,5 s, quand Whisper est libre) partagent l'`id` de la transcription finale, qui les remplace. Seule la finale est traduite. Si le segment est finalement rejeté, `speech://retract` (`id`) retire la ligne en direct.
+
 Commandes (interface → Rust) : `session_start`, `session_stop`, `session_pause`, `emergency_stop`, `settings_get` / `settings_set`, `glossary_*`, `model_download`, `audio_test`, `diagnostics_run`, plus `overlay_configure` (existante).
 
 Exemple :

@@ -9,6 +9,7 @@ import { sceneFx, useApp } from './store';
 
 const t: Transcript = {
   id: 3,
+  partial: false,
   text: 'Двое идут на B',
   lang: 'ru',
   langProb: 0.97,
@@ -133,6 +134,41 @@ describe('store with real voices', () => {
     expect(sceneFx).toContain('ember');
     useApp.setState({ mode: 'text', feed: [] });
     useApp.getState().addLine(transcriptEntry(t));
+    expect(useApp.getState().feed).toHaveLength(0);
+  });
+
+  it('shows live words while the player speaks, then the final line in place', () => {
+    const { upsertTranscript } = useApp.getState();
+    upsertTranscript(transcriptEntry({ ...t, partial: true, text: 'Двое' }));
+    let [line] = useApp.getState().feed;
+    expect(line.live).toBe(true);
+    const row = feedRow(line);
+    expect(row.status).toBe('EN DIRECT');
+    expect(row.shown).toBe('Двое …');
+    expect(row.note).toMatch(/écoute/);
+    expect(subtitle(line, true).text).toBe('« Двое … »');
+    expect(overlayBlocks([line], 3)[0].line).toBe('[RU] « Двое … »');
+
+    upsertTranscript(transcriptEntry({ ...t, partial: true, text: 'Двое идут' }));
+    upsertTranscript(transcriptEntry(t));
+    const feed = useApp.getState().feed;
+    expect(feed).toHaveLength(1);
+    [line] = feed;
+    expect(line.live).toBe(false);
+    expect(line.orig).toBe('Двое идут на B');
+    expect(feedRow(line).status).toBe('TRANSCRIT');
+  });
+
+  it('only translates the final line, and drops live lines on retraction or stop', () => {
+    const { upsertTranscript, applyTranslation, retractTranscript } = useApp.getState();
+    upsertTranscript(transcriptEntry({ ...t, partial: true, text: 'Двое' }));
+    applyTranslation({ id: t.id, lang: 'ru', original: 'Двое', translated: 'Deux', error: null, ms: 1, queueMs: 0, cached: false, glossary: false });
+    expect(useApp.getState().feed[0].status).toBe('transcrit');
+    retractTranscript(t.id);
+    expect(useApp.getState().feed).toHaveLength(0);
+
+    upsertTranscript(transcriptEntry({ ...t, id: 4, partial: true, text: 'Бомба' }));
+    useApp.getState().emergency();
     expect(useApp.getState().feed).toHaveLength(0);
   });
 });

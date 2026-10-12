@@ -208,7 +208,10 @@ export interface SpeechStatus {
 
 /** A transcription in the speaker's language (not a translation). */
 export interface Transcript {
+  /** Utterance id: live (partial) transcripts and the final one share it. */
   id: number;
+  /** Live words of a segment still being spoken; the final transcript replaces them. */
+  partial: boolean;
   text: string;
   lang: SpeechLang;
   langProb: number;
@@ -326,6 +329,8 @@ export const speech = {
   rescan: (): Promise<SpeechStatus | null> => (isTauri ? invoke<SpeechStatus>('speech_rescan') : Promise.resolve(null)),
   onStatus: (cb: (s: SpeechStatus) => void) => (isTauri ? listen<SpeechStatus>('speech://status', (e) => cb(e.payload)) : Promise.resolve(noop)),
   onTranscript: (cb: (t: Transcript) => void) => (isTauri ? listen<Transcript>('speech://transcript', (e) => cb(e.payload)) : Promise.resolve(noop)),
+  /** The live line of this utterance must go (its segment was finally rejected). */
+  onRetract: (cb: (id: number) => void) => (isTauri ? listen<number>('speech://retract', (e) => cb(e.payload)) : Promise.resolve(noop)),
   onActivity: (cb: (a: VoiceActivity) => void) => (isTauri ? listen<VoiceActivity>('speech://activity', (e) => cb(e.payload)) : Promise.resolve(noop)),
   onStats: (cb: (s: SpeechStats) => void) => (isTauri ? listen<SpeechStats>('speech://stats', (e) => cb(e.payload)) : Promise.resolve(noop)),
 };

@@ -7,7 +7,7 @@ import { transcriptEntry } from './speech';
 import { useApp, withTranslation } from './store';
 import { pairSummary, percentile, recordTime, translationConfigFrom, translationSummary, useTranslation } from './translation';
 
-const transcript = { id: 9, text: 'Двое идут на B', lang: 'ru' as const, langProb: 0.97, audioMs: 1800, latencyMs: 1200, asrMs: 600, avgLogprob: -0.3, noSpeechProb: 0.02, model: 'base' };
+const transcript = { id: 9, partial: false, text: 'Двое идут на B', lang: 'ru' as const, langProb: 0.97, audioMs: 1800, latencyMs: 1200, asrMs: 600, avgLogprob: -0.3, noSpeechProb: 0.02, model: 'base' };
 const result = (over: Partial<Translation> = {}): Translation => ({
   id: 9, lang: 'ru', original: 'Двое идут на B', translated: 'Deux vont sur B', error: null, ms: 320, queueMs: 40, cached: false, glossary: true, ...over,
 });

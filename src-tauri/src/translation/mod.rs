@@ -5,6 +5,7 @@ pub mod glossary;
 pub mod marian;
 pub mod models;
 mod network;
+mod pth;
 pub mod service;
 
 pub use service::{Translation, TranslationConfig, TranslationService, TranslationStatus};
@@ -138,7 +139,29 @@ mod fixture_tests {
 
     #[test]
     fn ids_generation_and_decoding_match_transformers() {
-        let mut m = Marian::load(&dir(), Mode::Exact).unwrap();
+        matches_transformers(&dir());
+    }
+
+    /// Same reference outputs with the weights in PyTorch's legacy format,
+    /// the format of the real Opus-MT checkpoints.
+    #[test]
+    fn legacy_checkpoint_matches_transformers() {
+        let tmp = std::env::temp_dir().join(format!("crosstalk-legacy-{}", std::process::id()));
+        std::fs::create_dir_all(&tmp).unwrap();
+        for f in ["config.json", "vocab.json", "source.spm", "target.spm"] {
+            std::fs::copy(dir().join(f), tmp.join(f)).unwrap();
+        }
+        std::fs::copy(
+            dir().join("pytorch_model.legacy.bin"),
+            tmp.join("pytorch_model.bin"),
+        )
+        .unwrap();
+        matches_transformers(&tmp);
+        std::fs::remove_dir_all(&tmp).unwrap();
+    }
+
+    fn matches_transformers(model_dir: &std::path::Path) {
+        let mut m = Marian::load(model_dir, Mode::Exact).unwrap();
         for case in expected()["source"].as_array().unwrap() {
             let text = case["text"].as_str().unwrap();
             let ids: Vec<u32> = case["ids"]

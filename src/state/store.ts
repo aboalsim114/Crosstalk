@@ -21,6 +21,8 @@ export interface FeedEntry extends SimEvent {
   tid?: number;
   /** Why a real transcript stays untranslated (model missing, disabled…). */
   note?: string;
+  /** Live words of an utterance still being spoken (partial transcript). */
+  live?: boolean;
   time: string;
   status: FeedStatus;
   shown: string | null;
@@ -92,6 +94,10 @@ export interface AppActions {
   clearFeed: () => void;
   /** Adds a real line (speech transcript) to the Script and the overlay. */
   addLine: (entry: FeedEntry) => void;
+  /** A real transcript: replaces the live line of the same utterance, or is added. */
+  upsertTranscript: (entry: FeedEntry) => void;
+  /** Removes the live line of an utterance finally rejected. */
+  retractTranscript: (tid: number) => void;
   /** Attaches the French translation (or its failure) to the transcript line. */
   applyTranslation: (t: Translation) => void;
   flash: (msg: string) => void;
@@ -239,7 +245,7 @@ export const useApp = create<AppState & AppActions>()((set, get) => {
       const s = get();
       if (isRunning(s)) {
         clearTimers();
-        set({ session: 'STOPPING', speaking: false, stage: 0, paused: false });
+        set((st) => ({ session: 'STOPPING', speaking: false, stage: 0, paused: false, feed: st.feed.filter((f) => !f.live) }));
         later(() => set({ session: 'STOPPED' }), 500);
         return;
       }
@@ -265,7 +271,7 @@ export const useApp = create<AppState & AppActions>()((set, get) => {
 
     emergency: () => {
       clearTimers();
-      set({ session: 'STOPPED', paused: false, speaking: false, stage: 0, level: 0 });
+      set((st) => ({ session: 'STOPPED', paused: false, speaking: false, stage: 0, level: 0, feed: st.feed.filter((f) => !f.live) }));
       get().flash('Toutes les captures arrêtées · tampons audio purgés');
     },
 
@@ -321,8 +327,14 @@ export const useApp = create<AppState & AppActions>()((set, get) => {
       sceneFx.push('ember');
       set((st) => ({ feed: [entry, ...st.feed].slice(0, 40), seg: st.seg + 1 }));
     },
+    upsertTranscript: (entry) => {
+      const i = get().feed.findIndex((f) => f.tid === entry.tid && f.live);
+      if (i < 0) return get().addLine(entry);
+      set((st) => ({ feed: st.feed.map((f, k) => (k === i ? { ...entry, id: f.id } : f)) }));
+    },
+    retractTranscript: (tid) => set((st) => ({ feed: st.feed.filter((f) => !(f.tid === tid && f.live)) })),
     applyTranslation: (t) =>
-      set((st) => ({ feed: st.feed.map((f) => (f.tid === t.id && f.status === 'transcrit' ? withTranslation(f, t) : f)) })),
+      set((st) => ({ feed: st.feed.map((f) => (f.tid === t.id && f.status === 'transcrit' && !f.live ? withTranslation(f, t) : f)) })),
 
     flash: (msg) => {
       clearTimeout(toastTimer);

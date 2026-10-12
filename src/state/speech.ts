@@ -48,8 +48,9 @@ export function transcriptEntry(t: Transcript, now = new Date()): FeedEntry {
     time: now.toLocaleTimeString('fr-FR'),
     status: 'transcrit',
     shown: null,
-    lat: t.latencyMs,
+    lat: t.partial ? null : t.latencyMs,
     err: false,
+    live: t.partial,
   };
 }
 

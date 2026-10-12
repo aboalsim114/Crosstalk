@@ -68,8 +68,10 @@ impl Marian {
         let unk_id = *vocab.get("<unk>").ok_or("vocab.json sans <unk>")?;
         let device = Device::Cpu;
         let err = |e: candle_core::Error| format!("pytorch_model.bin : {e}");
-        let vb = VarBuilder::from_pth(dir.join("pytorch_model.bin"), DType::F32, &device)
-            .map_err(err)?;
+        // Opus-MT checkpoints use PyTorch's legacy (pre-1.6) format.
+        let weights = super::pth::load(&dir.join("pytorch_model.bin"), &device)
+            .map_err(|e| format!("pytorch_model.bin : {e}"))?;
+        let vb = VarBuilder::from_tensors(weights, DType::F32, &device);
         let model =
             Network::new(&config, vb.clone()).map_err(|e| format!("modèle Marian : {e}"))?;
         let shared = model.shared().clone();
