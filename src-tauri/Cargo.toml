@@ -51,6 +51,14 @@ windows = { version = "0.62", features = [
 ] }
 windows-core = "0.62"
 
+# whisper.cpp is built by CMake with the profile's opt-level: "s" would map to
+# MinSizeRel (MSVC /O1, less vectorised). Inference code gets full optimisation.
+[profile.release.package.whisper-rs-sys]
+opt-level = 3
+
+[profile.release.package.whisper-rs]
+opt-level = 3
+
 [profile.release]
 codegen-units = 1
 lto = true
