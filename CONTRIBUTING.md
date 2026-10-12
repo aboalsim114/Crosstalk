@@ -73,7 +73,7 @@ powershell -ExecutionPolicy Bypass -File scripts\validate.ps1 -SkipBundle  # san
 | Interface | `npm run typecheck`, `npm test`, `npm run build` |
 | Rust | `cargo fmt --all -- --check`, `cargo clippy --all-targets --locked -- -D warnings`, `cargo test --all-targets --locked` |
 | Windows | `npx tauri build --target x86_64-pc-windows-msvc` (NSIS + MSI) |
-| Outils | `crosstalk-audio-probe`, `crosstalk-asr-bench` (release, MSVC) |
+| Outils | `crosstalk-audio-probe`, `crosstalk-asr-bench`, `crosstalk-translate` (release, MSVC) |
 
 Le script s'arrête à la première erreur et écrit `dist-local\<commit>\` : exécutables, `SHA256SUMS.txt` et `validation.md`.
 
