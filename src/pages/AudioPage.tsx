@@ -1,10 +1,12 @@
 import { config } from '../config';
+import { TranslationCard } from '../components/TranslationCard';
 import { Radio, Seg, Slider, Toggle, ToggleRow, fnt } from '../components/atoms';
 import { LevelMeter } from '../components/LevelMeter';
 import { captureSummary, cs2Summary, isCapturing, refreshDevices, runCaptureTest, testMessage, useAudio } from '../state/audio';
 import { MODELS, type ModelId } from '../state/data';
 import { engineSummary, formatMs, rescanModels, statsLine, useSpeech } from '../state/speech';
 import { useApp, type Accel, type CaptureSource, type Engine } from '../state/store';
+import { useTranslation } from '../state/translation';
 
 const ACCELS: [Accel, string][] = [
   ['cpu', 'CPU'],
@@ -300,9 +302,11 @@ function ModelCard() {
 }
 
 function EngineCard() {
+  const nativeTranslation = useTranslation((s) => s.native);
   const engine = useApp((s) => s.engine);
   const cloud = useApp((s) => s.tg.cloud);
   const { set, toggle } = useApp.getState();
+  if (nativeTranslation) return <TranslationCard />;
   return (
     <div className="glass flex flex-col gap-3 p-5">
       <div className="lbl">MOTEUR DE TRADUCTION</div>
