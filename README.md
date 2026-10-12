@@ -11,6 +11,15 @@ Ce n'est pas un site web : l'application se lance depuis un `.exe` et s'installe
 
 > Crosstalk est un outil externe. Il n'injecte rien dans `cs2.exe`, ne lit pas la mémoire du jeu et n'intercepte pas le trafic réseau.
 
+## Télécharger
+
+**[⬇ Télécharger la dernière version de test (Windows x64, portable)](https://github.com/aboalsim114/Crosstalk/releases/download/develop-latest/crosstalk-windows-x64-portable.zip)**
+
+- Ce lien ne change jamais : il pointe toujours vers la dernière version de `develop`, republiée après chaque modification. Le commit, la date et l'empreinte SHA-256 du zip sont indiqués sur la [page de la version](https://github.com/aboalsim114/Crosstalk/releases/tag/develop-latest).
+- Dézippez, lisez `LISEZMOI-TEST.txt`, installez les modèles (`download-models.ps1 -Models base -Translation`, environ 770 Mo), puis lancez `crosstalk.exe`.
+- Version de test : compilée avec MinGW/gcc, non signée (SmartScreen affiche un avertissement). Les installateurs officiels (MSVC, NSIS et MSI) seront publiés dans les Releases à chaque version stable.
+- Le dépôt est privé : le lien fonctionne pour les comptes GitHub qui y ont accès.
+
 ## État du projet
 
 - **Voix réelles** : capture du son de CS2 (WASAPI process loopback), détection de parole (Silero VAD), transcription russe/anglaise (whisper.cpp), puis **traduction en français sur le PC** (Opus-MT). Tout est local : aucune clé API, aucun abonnement, aucun envoi en ligne. Les modèles s'installent avec `scripts\download-models.ps1 -Translation`.
@@ -39,7 +48,7 @@ Ce n'est pas un site web : l'application se lance depuis un `.exe` et s'installe
 
 ## Installation (utilisateurs)
 
-Téléchargez l'installateur depuis une Release GitHub :
+Pour une version stable, téléchargez l'installateur depuis une Release GitHub (la version de test est décrite plus haut, dans « Télécharger ») :
 
 - `Crosstalk_x.y.z_x64-setup.exe` (NSIS) : installation pour l'utilisateur courant, sans droits administrateur ;
 - `Crosstalk_x.y.z_x64_fr-FR.msi` (WiX) : pour un déploiement géré.

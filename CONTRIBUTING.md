@@ -79,6 +79,16 @@ Le script s'arrête à la première erreur et écrit `dist-local\<commit>\` : ex
 
 Restent manuels, selon le sujet : capture et reconnaissance vocale avec CS2, mesures Whisper (latence, CPU), FPS ; protocoles dans `docs/testing/`.
 
+### Version de test téléchargeable
+
+Après **chaque fusion dans `develop`**, republier la version de test depuis un `develop` à jour et propre :
+
+```bash
+scripts/publish-dev-build.sh
+```
+
+Le script construit le paquet portable Windows (`scripts/cross-build-windows-gnu.sh`) et remplace le fichier de la pré-version `develop-latest`. Le lien du README ne change pas ; les notes de la version indiquent le commit, la date et le SHA-256.
+
 ### Rapport à joindre à chaque Pull Request
 
 - le commit exact validé et la machine (Windows, processeur, RAM) ;

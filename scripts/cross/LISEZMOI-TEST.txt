@@ -1,12 +1,14 @@
-CROSSTALK - VERSION DE TEST (commit @COMMIT@, branche feat/speech-recognition)
-==========================================================================
+CROSSTALK - VERSION DE TEST (commit @COMMIT@, branche develop)
+==============================================================
 
 Ce que contient ce dossier
 --------------------------
 - crosstalk.exe              l'application (version portable, sans installateur)
 - crosstalk-asr-bench.exe    banc d'essai : test en direct sur CS2, mesures
 - crosstalk-audio-probe.exe  diagnostic de la capture audio (déjà validé)
-- download-models.ps1        installe le modèle Whisper et la VAD Silero
+- crosstalk-translate.exe    test de la traduction locale en ligne de commande
+- download-models.ps1        installe Whisper, la VAD Silero et (option
+                             -Translation) les modèles de traduction Opus-MT
 - fetch-asr-corpus.py        corpus de référence FLEURS (facultatif)
 - WebView2Loader.dll, libstdc++-6.dll, libgcc_s_seh-1.dll, libwinpthread-1.dll
                              DLL nécessaires : gardez-les à côté des .exe
@@ -22,13 +24,18 @@ IMPORTANT, à lire avant de tester
    (« Informations complémentaires » > « Exécuter quand même »).
 3. Fermez la version installée de Crosstalk (icône de la zone de
    notification > Quitter). Sinon, l'instance unique ouvre l'ancienne.
-4. Rien n'est enregistré ni envoyé : audio en mémoire, transcription locale.
+4. Rien n'est enregistré ni envoyé : audio en mémoire, transcription et
+   traduction locales. Aucune clé API, aucun abonnement.
 
-1. Installer le modèle Whisper base et la VAD (environ 150 Mo)
--------------------------------------------------------------
+1. Installer les modèles (Whisper base + VAD + traduction : environ 770 Mo)
+--------------------------------------------------------------------------
 PowerShell, dans ce dossier :
 
-    powershell -ExecutionPolicy Bypass -File .\download-models.ps1 -Models base
+    powershell -ExecutionPolicy Bypass -File .\download-models.ps1 -Models base -Translation
+
+Test rapide de la traduction (CS2 fermé) :
+
+    .\crosstalk-translate.exe --lang ru "Двое идут на B, у них AWP."
 
 Les fichiers vont dans %LOCALAPPDATA%\Crosstalk\models. Le script vérifie la
 taille exacte et le SHA-1 officiel, puis affiche le SHA-256 : notez celui de
