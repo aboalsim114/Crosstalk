@@ -1,8 +1,9 @@
 // Wires the store to the native side: global shortcuts / tray actions in, and the
 // in-game overlay window out. Only active inside the Tauri app.
 
-import { audioCapture, cs2, isTauri, onNativeAction, overlayWindow, speech, type CaptureStatus, type NativeAction, type OverlayWindowConfig } from './backend';
+import { audioCapture, cs2, isTauri, onNativeAction, overlayWindow, speech, translation, type CaptureStatus, type NativeAction, type OverlayWindowConfig } from './backend';
 import { refreshModels, speechConfigFrom, transcriptEntry, useSpeech } from './state/speech';
+import { recordTime, translationConfigFrom, useTranslation } from './state/translation';
 import { captureModeFor, levelToUnit, recordTestLevel, refreshDevices, useAudio } from './state/audio';
 import { isRunning, useApp, type AppState, type FeedEntry, type Session } from './state/store';
 
@@ -109,6 +110,34 @@ function startAudioBridge(): Promise<() => void>[] {
 export const speechConfigKey = (s: AppState) => JSON.stringify(speechConfigFrom(s));
 
 /** Mirrors the Rust speech recognition: status, real transcripts, voice activity. */
+/** Settings that the Rust translation service needs, as a comparable key. */
+export const translationConfigKey = (s: AppState) => JSON.stringify(translationConfigFrom(s));
+
+/** Mirrors the local translation: model states, and each French line onto its transcript. */
+function startTranslationBridge(): Promise<() => void>[] {
+  const unlisten: Promise<() => void>[] = [];
+  translation.status().then((status) => status && useTranslation.setState({ status }));
+  unlisten.push(translation.onStatus((status) => useTranslation.setState({ status })));
+  unlisten.push(
+    translation.onResult((t) => {
+      recordTime(t);
+      useApp.getState().applyTranslation(t);
+    }),
+  );
+  let lastKey = '';
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const push = (s: AppState) => {
+    const key = translationConfigKey(s);
+    if (key === lastKey) return;
+    lastKey = key;
+    clearTimeout(timer);
+    timer = setTimeout(() => translation.configure(translationConfigFrom(s)).then((status) => status && useTranslation.setState({ status })), 250);
+  };
+  push(useApp.getState());
+  unlisten.push(Promise.resolve(useApp.subscribe((s) => push(s))));
+  return unlisten;
+}
+
 function startSpeechBridge(): Promise<() => void>[] {
   const unlisten: Promise<() => void>[] = [];
   speech.status().then((status) => useSpeech.setState({ status }));
@@ -150,6 +179,7 @@ export function startNativeBridge(): () => void {
   unlisten.push(onNativeAction(applyNativeAction));
   unlisten.push(...startAudioBridge());
   unlisten.push(...startSpeechBridge());
+  unlisten.push(...startTranslationBridge());
 
   const push = () => overlayWindow.pushState(overlayPayload(useApp.getState()));
   unlisten.push(overlayWindow.onReady(push));

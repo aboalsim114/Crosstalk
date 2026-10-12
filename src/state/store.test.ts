@@ -98,8 +98,8 @@ describe('simulated pipeline', () => {
 
 describe('settings', () => {
   it('toggles switches and source languages', () => {
-    s().toggle('cloud');
-    expect(s().tg.cloud).toBe(true);
+    s().toggle('hist');
+    expect(s().tg.hist).toBe(true);
     s().toggleSource('de');
     expect(s().src.de).toBe(true);
   });

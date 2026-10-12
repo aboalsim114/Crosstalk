@@ -94,3 +94,30 @@ describe('speech recognition cards in the desktop app', () => {
     expect(screen.getByTestId('asr-metrics')).toHaveTextContent('Latence p50 1,1 s · p95 1,9 s · RTF 0,40 · CPU 9 % de la machine');
   });
 });
+
+describe('local translation card', () => {
+  it('shows the model pairs in the desktop app and no API key field', async () => {
+    const { useTranslation } = await import('../state/translation');
+    useTranslation.setState({
+      native: true,
+      status: {
+        config: { enabled: true, glossary: [] },
+        pairs: [
+          { source: 'ru', repo: 'Helsinki-NLP/opus-mt-ru-fr', state: 'ready', error: null, loadMs: 1200 },
+          { source: 'en', repo: 'Helsinki-NLP/opus-mt-en-fr', state: 'missing', error: null, loadMs: null },
+        ],
+        modelsDir: 'C:\\m',
+        queued: 0,
+      },
+      times: [310, 420],
+    });
+    render(<AudioPage />);
+    expect(screen.getByTestId('pair-ru')).toHaveTextContent('prêt · chargé en 1200 ms');
+    expect(screen.getByTestId('pair-en')).toHaveTextContent('modèle absent');
+    expect(screen.getByTestId('translation-metrics')).toHaveTextContent('Traduction p50 420 ms');
+    expect(screen.getByTestId('translation-card')).toHaveTextContent('Aucune clé API');
+    expect(screen.queryByText(/DeepL|Azure|cloud/i)).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('switch', { name: 'Traduire les voix en français' }));
+    expect(useApp.getState().tg.translate).toBe(false);
+  });
+});

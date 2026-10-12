@@ -245,6 +245,56 @@ export interface ModelInfo {
   url: string;
 }
 
+// ---------- local translation (Opus-MT, no API key) ----------
+
+export interface TranslationTerm {
+  source: string;
+  /** Imposed French rendering; null keeps the term as spoken. */
+  target: string | null;
+}
+export interface TranslationConfig {
+  enabled: boolean;
+  glossary: TranslationTerm[];
+}
+export type PairState = 'missing' | 'loading' | 'ready' | 'error';
+export interface PairStatus {
+  source: 'ru' | 'en';
+  repo: string;
+  state: PairState;
+  error: string | null;
+  loadMs: number | null;
+}
+export interface TranslationStatus {
+  config: TranslationConfig;
+  pairs: PairStatus[];
+  modelsDir: string;
+  queued: number;
+}
+/** French translation of a transcript (matched by `id`), or why it is missing. */
+export interface Translation {
+  id: number;
+  lang: string;
+  original: string;
+  translated: string | null;
+  error: string | null;
+  ms: number;
+  queueMs: number;
+  cached: boolean;
+  glossary: boolean;
+}
+
+export const translation = {
+  status: (): Promise<TranslationStatus | null> => (isTauri ? invoke<TranslationStatus>('translation_status') : Promise.resolve(null)),
+  configure: (config: TranslationConfig): Promise<TranslationStatus | null> =>
+    isTauri ? invoke<TranslationStatus>('translation_configure', { config }) : Promise.resolve(null),
+  rescan: (): Promise<TranslationStatus | null> => (isTauri ? invoke<TranslationStatus>('translation_rescan') : Promise.resolve(null)),
+  test: (lang: string, text: string): Promise<Translation | null> =>
+    isTauri ? invoke<Translation>('translation_test', { lang, text }) : Promise.resolve(null),
+  onStatus: (cb: (s: TranslationStatus) => void) =>
+    isTauri ? listen<TranslationStatus>('translation://status', (e) => cb(e.payload)) : Promise.resolve(noop),
+  onResult: (cb: (t: Translation) => void) => (isTauri ? listen<Translation>('translation://result', (e) => cb(e.payload)) : Promise.resolve(noop)),
+};
+
 export const speech = {
   status: (): Promise<SpeechStatus | null> => (isTauri ? invoke<SpeechStatus>('speech_status') : Promise.resolve(null)),
   stats: (): Promise<SpeechStats | null> => (isTauri ? invoke<SpeechStats>('speech_stats') : Promise.resolve(null)),

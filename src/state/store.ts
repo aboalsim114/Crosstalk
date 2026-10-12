@@ -1,22 +1,26 @@
 import { create } from 'zustand';
+import type { Translation } from '../backend';
 import { config } from '../config';
 import { isCapturing, useAudio } from './audio';
 import { EVENTS, GLOSSARY, type GlossEntry, type ModelId, type PageId, type SimEvent } from './data';
 
 export type Session = 'IDLE' | 'INITIALIZING' | 'LISTENING' | 'DEGRADED' | 'PAUSED' | 'STOPPING' | 'STOPPED';
-/** 'transcrit': real speech recognition in the original language, not translated yet. */
+/** 'transcrit': real speech recognition in the original language, not (yet) translated. */
 export type FeedStatus = 'provisoire' | 'final' | 'original' | 'erreur' | 'transcrit';
 export type FeedMode = 'text' | 'voice' | 'mixed';
 export type OverlayFormat = 'minimal' | 'bilingue' | 'accessible';
 export type Corner = 'tl' | 'tr' | 'bl' | 'br';
 export type CaptureSource = 'process' | 'device' | 'wav';
 export type Accel = 'cpu' | 'cuda';
-export type Engine = 'DeepL' | 'Azure' | 'Local';
-export type ToggleKey = 'click' | 'noise' | 'cloud' | 'hist' | 'skipFr';
+export type ToggleKey = 'click' | 'noise' | 'translate' | 'hist' | 'skipFr';
 export type SourceLang = 'ru' | 'en' | 'de' | 'es' | 'pt' | 'pl';
 
 export interface FeedEntry extends SimEvent {
   id: number;
+  /** Id of the real transcript, to attach its translation. */
+  tid?: number;
+  /** Why a real transcript stays untranslated (model missing, disabled…). */
+  note?: string;
   time: string;
   status: FeedStatus;
   shown: string | null;
@@ -53,7 +57,6 @@ export interface AppState {
   vad: number;
   model: ModelId;
   accel: Accel;
-  engine: Engine;
   src: Record<SourceLang, boolean>;
   gloss: GlossEntry[];
   newTerm: string;
@@ -89,6 +92,8 @@ export interface AppActions {
   clearFeed: () => void;
   /** Adds a real line (speech transcript) to the Script and the overlay. */
   addLine: (entry: FeedEntry) => void;
+  /** Attaches the French translation (or its failure) to the transcript line. */
+  applyTranslation: (t: Translation) => void;
   flash: (msg: string) => void;
 }
 
@@ -110,12 +115,11 @@ const initial: AppState = {
   maxBlocks: 3,
   overlayOn: true,
   repos: false,
-  tg: { click: true, noise: false, cloud: false, hist: false, skipFr: true },
+  tg: { click: true, noise: false, translate: true, hist: false, skipFr: true },
   capture: 'process',
   vad: 55,
   model: 'base',
   accel: 'cuda',
-  engine: 'DeepL',
   src: { ru: true, en: true, de: false, es: false, pt: false, pl: false },
   gloss: GLOSSARY,
   newTerm: '',
@@ -317,6 +321,8 @@ export const useApp = create<AppState & AppActions>()((set, get) => {
       sceneFx.push('ember');
       set((st) => ({ feed: [entry, ...st.feed].slice(0, 40), seg: st.seg + 1 }));
     },
+    applyTranslation: (t) =>
+      set((st) => ({ feed: st.feed.map((f) => (f.tid === t.id && f.status === 'transcrit' ? withTranslation(f, t) : f)) })),
 
     flash: (msg) => {
       clearTimeout(toastTimer);
@@ -345,4 +351,19 @@ export function startMeter(): () => void {
     useApp.setState({ level: v, now: Date.now() });
   }, 90);
   return () => clearInterval(iv);
+}
+
+/** Untranslated on purpose: the original stays, with the reason, not as an error. */
+const QUIET_FAILURES = ['traduction désactivée', 'modèle de traduction absent', 'langue non gérée'];
+
+/** A transcript line once its translation arrived: French text, or the original with why. */
+export function withTranslation(f: FeedEntry, t: Translation): FeedEntry {
+  const total = (f.lat ?? 0) + t.queueMs + t.ms;
+  if (t.translated) {
+    if (t.lang === 'fr') return { ...f, status: 'original', shown: null, tr: null };
+    return { ...f, status: 'final', tr: t.translated, shown: t.translated, lat: total, err: false };
+  }
+  const why = t.error ?? 'moteur indisponible';
+  if (QUIET_FAILURES.includes(why)) return { ...f, note: why };
+  return { ...f, status: 'erreur', shown: null, err: true, lat: total, note: why };
 }

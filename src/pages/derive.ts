@@ -12,8 +12,21 @@ export const STATUS_COLOR: Record<FeedStatus, string> = {
   transcrit: '#7fd4ff',
 };
 
-/** Shown under every real transcript: it is the original text, not a French translation. */
-export const TRANSCRIPT_NOTE = 'Transcription en langue originale — traduction en français à venir';
+/** Shown under a real transcript while its French translation is computed. */
+export const TRANSCRIPT_NOTE = 'Transcription en langue originale — traduction en cours';
+
+/**
+ * In the desktop app, only lines born from a real transcript (voice, transcribed
+ * then translated on the PC) are genuine; the written chat is still simulated.
+ */
+export function isDemoLine(native: boolean, f: FeedEntry | undefined): boolean {
+  return native && !!f && f.tid == null;
+}
+
+/** Under a transcript that stays untranslated, with the reason. */
+export function transcriptNote(f: FeedEntry): string {
+  return f.note ? `Non traduit — ${f.note}` : TRANSCRIPT_NOTE;
+}
 
 export interface FeedRow {
   id: number;
@@ -46,7 +59,7 @@ export function feedRow(f: FeedEntry): FeedRow {
       shown: f.orig,
       trColor: '#ece6dc',
       italic: false,
-      note: TRANSCRIPT_NOTE,
+      note: transcriptNote(f),
       noteColor: '#6e6961',
       status: 'TRANSCRIT',
       statusColor: STATUS_COLOR.transcrit,
@@ -67,7 +80,7 @@ export function feedRow(f: FeedEntry): FeedRow {
     shown: f.shown || f.orig,
     trColor: prov ? '#8f8a83' : '#ece6dc',
     italic: prov,
-    note: fr ? 'Déjà en français — non traduit' : f.err ? 'Moteur indisponible — original affiché' : '',
+    note: fr ? 'Déjà en français — non traduit' : f.err ? `Moteur indisponible — original affiché${f.note ? ` (${f.note})` : ''}` : '',
     noteColor: f.err ? '#ff8a7a' : '#5a5650',
     status: f.status.toUpperCase(),
     statusColor: STATUS_COLOR[f.status],
@@ -110,7 +123,7 @@ export function subtitle(f0: FeedEntry | undefined, live: boolean): Subtitle {
       text: '« ' + f0.orig + ' »',
       italic: false,
       trColor: '#f3ede3',
-      note: TRANSCRIPT_NOTE,
+      note: transcriptNote(f0),
       noteColor: '#6e6961',
     };
   }

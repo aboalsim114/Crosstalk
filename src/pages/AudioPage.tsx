@@ -1,19 +1,17 @@
 import { config } from '../config';
+import { useState } from 'react';
+import { translation as nativeTranslation, type Translation } from '../backend';
 import { Radio, Seg, Slider, Toggle, ToggleRow, fnt } from '../components/atoms';
 import { LevelMeter } from '../components/LevelMeter';
 import { captureSummary, cs2Summary, isCapturing, refreshDevices, runCaptureTest, testMessage, useAudio } from '../state/audio';
 import { MODELS, type ModelId } from '../state/data';
 import { engineSummary, formatMs, rescanModels, statsLine, useSpeech } from '../state/speech';
-import { useApp, type Accel, type CaptureSource, type Engine } from '../state/store';
+import { useApp, type Accel, type CaptureSource } from '../state/store';
+import { pairSummary, percentile, rescanTranslation, useTranslation } from '../state/translation';
 
 const ACCELS: [Accel, string][] = [
   ['cpu', 'CPU'],
   ['cuda', 'CUDA'],
-];
-const ENGINES: [Engine, string][] = [
-  ['DeepL', 'DeepL'],
-  ['Azure', 'Azure'],
-  ['Local', 'Local (bêta)'],
 ];
 
 function CaptureCard() {
@@ -299,17 +297,100 @@ function ModelCard() {
   );
 }
 
-function EngineCard() {
-  const engine = useApp((s) => s.engine);
-  const cloud = useApp((s) => s.tg.cloud);
-  const { set, toggle } = useApp.getState();
+const TEST_SAMPLES: Record<'ru' | 'en', string> = {
+  ru: 'Двое идут на B, у них AWP.',
+  en: 'Two players on B, they have an AWP.',
+};
+
+/** Local translation: Opus-MT on this PC, no API key, nothing sent online. */
+export function TranslationCard() {
+  const on = useApp((s) => s.tg.translate);
+  const toggle = useApp((s) => s.toggle);
+  const tr = useTranslation();
+  const [lang, setLang] = useState<'ru' | 'en'>('ru');
+  const [text, setText] = useState(TEST_SAMPLES.ru);
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState<Translation | null>(null);
+  const p50 = percentile(tr.times, 0.5);
+  const p95 = percentile(tr.times, 0.95);
+  const test = async () => {
+    setBusy(true);
+    setResult(null);
+    try {
+      setResult(await nativeTranslation.test(lang, text));
+    } finally {
+      setBusy(false);
+    }
+  };
   return (
-    <div className="glass flex flex-col gap-3 p-5">
-      <div className="lbl">MOTEUR DE TRADUCTION</div>
-      <Seg options={ENGINES} value={engine} onChange={(v) => set({ engine: v })} grid={3} item={{ padding: '6px 0', textAlign: 'center', font: fnt(500, 11.5) }} />
-      <div style={{ font: fnt(400, 11, 'sans', 1.5), color: '#6e6961' }}>Clé API dans le Gestionnaire d’identification Windows — jamais dans config.json ni dans les journaux.</div>
-      <ToggleRow title="Transcription cloud (opt-in)" sub="Pour CPU/GPU insuffisants" on={cloud} onClick={() => toggle('cloud')} />
-      {cloud && <div className="warn-box">Les segments vocaux détectés seront envoyés au fournisseur choisi. Coût estimé : ~0,36 € / heure de parole.</div>}
+    <div className="glass flex flex-col gap-3 p-5" data-testid="translation-card">
+      <div className="flex items-center justify-between">
+        <span className="lbl">TRADUCTION LOCALE · OPUS-MT</span>
+        <span style={{ font: fnt(500, 9.5, 'mono'), letterSpacing: '.12em', color: '#6e6961' }}>CPU · SANS CLÉ API</span>
+      </div>
+      <div style={{ font: fnt(400, 11, 'sans', 1.5), color: '#8f8a83' }}>
+        Les voix russes et anglaises sont traduites en français sur ce PC. Aucune clé API, aucun abonnement, rien n’est envoyé en ligne.
+      </div>
+      <ToggleRow title="Traduire les voix en français" sub="Sinon, la transcription reste en langue originale" on={on} onClick={() => toggle('translate')} />
+      {tr.native ? (
+        <>
+          {(tr.status?.pairs ?? []).map((p) => {
+            const sum = pairSummary(p);
+            return (
+              <div key={p.source} className="flex items-baseline justify-between gap-3" data-testid={`pair-${p.source}`}>
+                <span style={{ font: fnt(500, 12.5), color: '#ece6dc' }}>{sum.label}</span>
+                <span className="truncate text-right" title={p.repo} style={{ font: fnt(400, 11), color: sum.color }}>
+                  {sum.value}
+                </span>
+              </div>
+            );
+          })}
+          {p50 != null && (
+            <div style={{ font: fnt(400, 11, 'sans', 1.5), color: '#8f8a83' }} data-testid="translation-metrics">
+              Traduction p50 {formatMs(p50)} · p95 {formatMs(p95 ?? p50)} · {tr.times.length} phrases
+            </div>
+          )}
+          <div className="flex flex-col gap-2 pt-1">
+            <div className="flex items-center gap-2">
+              <Seg
+                options={[
+                  ['ru', 'RU'],
+                  ['en', 'EN'],
+                ]}
+                value={lang}
+                onChange={(v) => {
+                  setLang(v);
+                  setText(TEST_SAMPLES[v]);
+                  setResult(null);
+                }}
+                item={{ padding: '4px 10px', font: fnt(500, 11) }}
+              />
+              <input className="text-input min-w-0 flex-1" aria-label="Phrase à traduire" value={text} maxLength={500} onChange={(e) => setText(e.target.value)} />
+              <div className="pill pill-ember flex-none px-3.5 py-[7px]" role="button" aria-disabled={busy || !text.trim()} onClick={() => !busy && text.trim() && test()} style={{ font: fnt(500, 11.5) }}>
+                {busy ? 'Traduction…' : 'Traduire'}
+              </div>
+            </div>
+            {result && (
+              <div role="status" data-testid="translation-result" style={{ font: fnt(400, 12, 'sans', 1.5), color: result.translated ? '#ece6dc' : '#ff8a7a' }}>
+                {result.translated ? `« ${result.translated} » · ${formatMs(result.ms)}${result.cached ? ' · cache' : ''}` : `Non traduit : ${result.error}`}
+              </div>
+            )}
+          </div>
+          <div className="flex items-center gap-3">
+            <div className="pill pill-ghost flex-none px-3.5 py-[7px]" role="button" onClick={() => rescanTranslation()} style={{ font: fnt(500, 11.5) }}>
+              Rechercher les modèles
+            </div>
+            <span className="min-w-0 truncate" style={{ font: fnt(400, 10.5, 'mono'), color: '#5a5650' }}>
+              opus-mt-ru-fr · opus-mt-en-fr
+            </span>
+          </div>
+          <div style={{ font: fnt(400, 10.5, 'sans', 1.5), color: '#5a5650' }}>
+            Installation : scripts\download-models.ps1 -Translation (environ 620 Mo). Modèles Helsinki-NLP Opus-MT, licence Apache-2.0.
+          </div>
+        </>
+      ) : (
+        <div style={{ font: fnt(400, 11, 'sans', 1.5), color: '#6e6961' }}>Disponible dans l’application Windows : modèles Opus-MT installés sur le PC.</div>
+      )}
     </div>
   );
 }
@@ -323,7 +404,7 @@ export function AudioPage() {
       </div>
       <div className="flex flex-col gap-4">
         <ModelCard />
-        <EngineCard />
+        <TranslationCard />
       </div>
     </div>
   );

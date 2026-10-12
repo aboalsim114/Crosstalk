@@ -1,5 +1,8 @@
 import { motion, type Variants } from 'motion/react';
+import { useAudio } from '../state/audio';
+import { engineSummary, useSpeech } from '../state/speech';
 import { useApp } from '../state/store';
+import { translationSummary, useTranslation } from '../state/translation';
 import { EASE, fnt } from './atoms';
 
 // Each [data-reveal] element of the mockup fades up out of a blur, 160 ms apart, after 500 ms.
@@ -9,8 +12,23 @@ const reveal: Variants = {
   show: { opacity: 1, y: 0, filter: 'blur(0px)', transition: { duration: 1.3, ease: EASE } },
 };
 
+/** The readiness line under the title: real states in the desktop app. */
+export function introStatus(
+  native: boolean,
+  cs2Running: boolean | undefined,
+  engine: { value: string },
+  translation: { value: string },
+): string[] {
+  if (!native) return ['CS2 DÉTECTÉ', 'CONSOLE.LOG ACTIF', 'WHISPER SMALL PRÊT'];
+  return [cs2Running ? 'CS2 DÉTECTÉ' : 'CS2 NON LANCÉ', engine.value.toUpperCase(), `TRADUCTION ${translation.value.toUpperCase()}`];
+}
+
 export function Intro() {
   const entered = useApp((s) => s.entered);
+  const audio = useAudio();
+  const engine = engineSummary(useSpeech((x) => x.status));
+  const tr = translationSummary(useTranslation((x) => x.status));
+  const status = introStatus(audio.native, audio.cs2?.running, engine, tr);
   const { enter, enterStart } = useApp.getState();
   return (
     <motion.div
@@ -52,11 +70,12 @@ export function Intro() {
         </motion.div>
       </div>
       <motion.div variants={reveal} className="flex justify-center gap-7" style={{ font: fnt(500, 10, 'mono'), letterSpacing: '.18em', color: '#5a5650' }}>
-        <span>CS2 DÉTECTÉ</span>
-        <span>·</span>
-        <span>CONSOLE.LOG ACTIF</span>
-        <span>·</span>
-        <span>WHISPER SMALL PRÊT</span>
+        {status.map((t, i) => (
+          <span key={t} className="flex gap-7">
+            {i > 0 && <span>·</span>}
+            <span>{t}</span>
+          </span>
+        ))}
       </motion.div>
     </motion.div>
   );
