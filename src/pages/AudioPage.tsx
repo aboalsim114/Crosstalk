@@ -157,7 +157,7 @@ function VadCard() {
       <Slider label="Seuil de détection" unit="%" min={20} max={90} value={vad} onChange={(v) => set({ vad: v })} hint="Plus haut = ignore davantage les tirs et bruitages" />
       {native ? (
         <div className="flex flex-col gap-1.5" style={{ font: fnt(400, 11, 'sans', 1.5), color: '#6e6961' }}>
-          <span>Pré-roll 256 ms · post-roll 416 ms · 8 s max · rejet des tirs et explosions · segments de plus de 6 s abandonnés.</span>
+          <span>Pré-roll 256 ms · post-roll 416 ms · 5 s max · rejet des tirs et explosions · une phrase en retard reprend le texte affiché en direct.</span>
           <span data-testid="speech-stats" style={{ color: '#8f8a83' }}>
             {statsLine(stats)}
           </span>

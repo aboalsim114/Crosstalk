@@ -109,3 +109,13 @@ describe('summaries', () => {
     expect(percentile([], 0.5)).toBeNull();
   });
 });
+
+describe('a translation made only of kept CS terms', () => {
+  it('says the terms were kept, so it does not look untranslated', async () => {
+    const { KEPT_NOTE } = await import('./store');
+    const line = withTranslation(transcriptEntry({ ...transcript, text: 'B, mid, smoke.' }), result({ original: 'B, mid, smoke.', translated: 'B, mid, smoke' }));
+    expect(line.note).toBe(KEPT_NOTE);
+    expect(feedRow(line).note).toBe(KEPT_NOTE);
+    expect(withTranslation(transcriptEntry(transcript), result()).note).toBeUndefined();
+  });
+});

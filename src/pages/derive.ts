@@ -96,7 +96,7 @@ export function feedRow(f: FeedEntry): FeedRow {
     shown: f.shown || f.orig,
     trColor: prov ? '#8f8a83' : '#ece6dc',
     italic: prov,
-    note: fr ? 'Déjà en français — non traduit' : f.err ? `Moteur indisponible — original affiché${f.note ? ` (${f.note})` : ''}` : '',
+    note: fr ? 'Déjà en français — non traduit' : f.err ? `Moteur indisponible — original affiché${f.note ? ` (${f.note})` : ''}` : (f.note ?? ''),
     noteColor: f.err ? '#ff8a7a' : '#5a5650',
     status: f.status.toUpperCase(),
     statusColor: STATUS_COLOR[f.status],
@@ -154,7 +154,7 @@ export function subtitle(f0: FeedEntry | undefined, live: boolean): Subtitle {
     text: '« ' + (f0.shown || f0.orig) + ' »',
     italic: prov,
     trColor: prov ? '#a49d92' : '#f3ede3',
-    note: prov ? 'Transcription provisoire — correction en cours' : f0.err ? 'Moteur de traduction indisponible — original affiché' : '',
+    note: prov ? 'Transcription provisoire — correction en cours' : f0.err ? 'Moteur de traduction indisponible — original affiché' : (f0.note ?? ''),
     noteColor: f0.err ? '#ff8a7a' : '#6e6961',
   };
 }
