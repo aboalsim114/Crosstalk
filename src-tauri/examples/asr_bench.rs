@@ -18,6 +18,9 @@
 //! `--vad-only` runs the VAD and segmenter without Whisper (no model needed).
 //! Options: `--models-dir DIR` (default: the app's folder), `--threads N`,
 //! `--lang ru,en`, `--vad-threshold 0.55`, `--combat-peak-db -3`, `--markdown out.md`.
+//! `--verbose` prints raw offline results, rejection reasons, language/full timings.
+//! Live diagnostics: set CROSSTALK_SPEECH_DIAGNOSTICS=1 (stderr; raw text included).
+//! `--live` requires CS2 process capture; there is no output-device fallback.
 //! Nothing is uploaded; audio is never written unless `--export-mix DIR` is given.
 
 use std::io::Write as _;
@@ -30,7 +33,7 @@ use crosstalk_lib::speech::bench::{
     write_wav_i16, SegmentResult,
 };
 use crosstalk_lib::speech::cpu::process_cpu_time;
-use crosstalk_lib::speech::engine::{default_threads, Recognizer};
+use crosstalk_lib::speech::engine::{default_threads, logical_threads, Recognizer};
 use crosstalk_lib::speech::vad::VoiceDetector;
 use crosstalk_lib::speech::{
     models, EngineLoader, Lang, RejectReason, SpeechConfig, WhisperLoader,
@@ -183,11 +186,10 @@ fn run_corpus(
                 "  [{scenario}] {} → « {hyp} »",
                 clip.path.file_name().unwrap_or_default().to_string_lossy()
             );
-            for r in results.iter().filter(|r| r.outcome.is_err()) {
+            for r in &results {
                 println!(
-                    "      rejeté {:?} ({} ms)",
-                    r.outcome.as_ref().unwrap_err(),
-                    r.audio_ms
+                    "      audio_ms={} inference_ms={} timing={:?} outcome={:?} recognition={:?}",
+                    r.audio_ms, r.asr_ms, r.timing, r.outcome, r.recognition
                 );
             }
         }
@@ -252,7 +254,7 @@ fn main() {
             "{}",
             include_str!("asr_bench.rs")
                 .lines()
-                .take(18)
+                .take_while(|line| line.starts_with("//!"))
                 .collect::<Vec<_>>()
                 .join("\n")
         );
@@ -262,7 +264,18 @@ fn main() {
         .map(PathBuf::from)
         .unwrap_or_else(models::models_dir);
     let threads = arg(&args, "--threads")
-        .and_then(|t| t.parse().ok())
+        .map(|t| {
+            let n = t
+                .parse::<usize>()
+                .unwrap_or_else(|_| fail("--threads exige un entier positif"));
+            if n == 0 || n > logical_threads() {
+                fail(&format!(
+                    "--threads doit être entre 1 et {}",
+                    logical_threads()
+                ));
+            }
+            n
+        })
         .unwrap_or_else(default_threads);
     let mut config = SpeechConfig::default();
     if let Some(l) = arg(&args, "--lang") {
@@ -291,7 +304,7 @@ fn main() {
         .unwrap_or_else(|e| fail(&format!("VAD : {e}")));
 
     if let Some(secs) = arg(&args, "--live").and_then(|s| s.parse::<u64>().ok()) {
-        return live(secs, &dir, &model_list, config);
+        return live(secs, &dir, &model_list, config, threads);
     }
 
     if args.iter().any(|a| a == "--vad-only") {
@@ -313,10 +326,7 @@ fn main() {
         let t0 = Instant::now();
         let mut recognizer = match loader.load_recognizer(&dir, model) {
             Ok(r) => r,
-            Err(e) => {
-                eprintln!("modèle {model} ignoré : {e}");
-                continue;
-            }
+            Err(e) => fail(&format!("modèle {model} : {e}")),
         };
         let load_ms = t0.elapsed().as_millis();
         println!("\n== whisper {model} (chargé en {load_ms} ms)");
@@ -463,7 +473,7 @@ fn vad_only(args: &[String], detector: &mut dyn VoiceDetector, config: &SpeechCo
 }
 
 /// Real capture of CS2 (or the output device) through the app's services.
-fn live(secs: u64, dir: &Path, model: &str, config: SpeechConfig) {
+fn live(secs: u64, dir: &Path, model: &str, config: SpeechConfig, threads: usize) {
     use crosstalk_lib::audio::{self, AudioService, CaptureMode, StopReason};
     use crosstalk_lib::game::Cs2Watcher;
     use crosstalk_lib::speech::{
@@ -512,7 +522,7 @@ fn live(secs: u64, dir: &Path, model: &str, config: SpeechConfig) {
     }
 
     let console = Arc::new(Console(Mutex::new(None)));
-    let speech = SpeechService::start(
+    let speech = SpeechService::start_with_threads(
         console.clone(),
         Arc::new(WhisperLoader),
         dir.to_path_buf(),
@@ -520,6 +530,7 @@ fn live(secs: u64, dir: &Path, model: &str, config: SpeechConfig) {
             model: model.split(',').next().unwrap_or("base").into(),
             ..config
         },
+        threads,
     );
     let end = Instant::now() + Duration::from_secs(60);
     while speech.status().state == crosstalk_lib::speech::EngineState::Loading
@@ -527,11 +538,18 @@ fn live(secs: u64, dir: &Path, model: &str, config: SpeechConfig) {
     {
         std::thread::sleep(Duration::from_millis(50));
     }
+    if speech.status().state != crosstalk_lib::speech::EngineState::Ready {
+        fail(&format!("moteur indisponible : {:?}", speech.status()));
+    }
     let watcher = Cs2Watcher::default();
     watcher.poll();
     let audio = AudioService::new(audio::default_backend(), Arc::new(Quiet));
     audio.set_sink(Some(Box::new(speech.sink())));
-    let st = audio.start(CaptureMode::Auto, None, watcher.status().pid);
+    let pid = watcher
+        .status()
+        .pid
+        .unwrap_or_else(|| fail("CS2 absent : --live exige cs2.exe"));
+    let st = audio.start(CaptureMode::Process, None, Some(pid));
     if st.state != audio::CaptureState::Capturing {
         fail(&format!("capture impossible : {:?}", st.error));
     }
@@ -543,7 +561,8 @@ fn live(secs: u64, dir: &Path, model: &str, config: SpeechConfig) {
         _ => f64::NAN,
     };
     audio.stop(StopReason::User);
-    std::thread::sleep(Duration::from_millis(300));
+    speech.purge();
+    println!("Arrêt : les segments en attente et résultats encore en calcul sont purgés ; bilan des résultats terminés avant arrêt.");
     let s = speech.stats();
     println!(
         "\nRésultat : {} segments, {} transcrits, rejets {:?}, latence p50 {:?} ms / p95 {:?} ms, blocs perdus {}, CPU moyen {:.0} % d'un cœur ({:.1} % de la machine)",
