@@ -34,7 +34,10 @@ whisper-rs = { version = "0.16.0", optional = true }
 candle-core = "0.11"
 candle-nn = "0.11"
 candle-transformers = "0.11"
-unicode-normalization = "0.1"
+# First-run download of the models (Hugging Face, HTTPS with rustls, no
+# OpenSSL), checked by exact size and published SHA-1.
+ureq = "2.12"
+sha1_smol = "1"
 
 [features]
 default = ["whisper"]

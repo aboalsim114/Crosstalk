@@ -13,16 +13,19 @@ Ce n'est pas un site web : l'application se lance depuis un `.exe` et s'installe
 
 ## Télécharger
 
-**[⬇ Télécharger la dernière version de test (Windows x64, portable)](https://github.com/aboalsim114/Crosstalk/raw/downloads/crosstalk-windows-x64-portable.zip)**
+**[⬇ Télécharger l'installateur de Crosstalk pour Windows (x64)](https://github.com/aboalsim114/Crosstalk/raw/downloads/Crosstalk-setup.exe)**
 
-- Ce lien ne change jamais : il pointe toujours vers la dernière version de `develop`, republiée après chaque modification. Le commit, la date et l'empreinte SHA-256 du zip sont indiqués dans la [fiche de la version](https://github.com/aboalsim114/Crosstalk/blob/downloads/VERSION.md).
-- Dézippez, lisez `LISEZMOI-TEST.txt`, installez les modèles (`download-models.ps1 -Models base -Translation`, environ 770 Mo), puis lancez `crosstalk.exe`.
-- Version de test : compilée avec MinGW/gcc, non signée (SmartScreen affiche un avertissement). Les installateurs officiels (MSVC, NSIS et MSI) seront publiés dans les Releases à chaque version stable.
-- Le dépôt est privé : le lien fonctionne pour les comptes GitHub qui y ont accès.
+1. Lancez `Crosstalk-setup.exe` : il installe Crosstalk pour votre compte (sans droits administrateur), avec un raccourci dans le menu Démarrer et sur le bureau.
+2. Ouvrez **Crosstalk**. Au premier lancement, l'application télécharge elle-même ses modèles de reconnaissance vocale et de traduction (environ 780 Mo, une seule fois, avec une barre de progression). Ensuite, tout fonctionne hors ligne : aucune clé API, aucun abonnement.
+
+- Ce lien ne change jamais : il pointe toujours vers la dernière version de `develop`, republiée après chaque modification. Le commit, la date et les empreintes SHA-256 sont indiqués dans la [fiche de la version](https://github.com/aboalsim114/Crosstalk/blob/downloads/VERSION.md).
+- Version de test : non signée, Windows SmartScreen affiche un avertissement (« Informations complémentaires » > « Exécuter quand même »). WebView2, présent sur tout Windows 11, est installé automatiquement s'il manque.
+- Pour les tests avancés : [outils en ligne de commande](https://github.com/aboalsim114/Crosstalk/raw/downloads/crosstalk-windows-x64-portable.zip) (banc d'essai, sonde audio, test de traduction).
+- Le dépôt est privé : les liens fonctionnent pour les comptes GitHub qui y ont accès.
 
 ## État du projet
 
-- **Voix réelles** : capture du son de CS2 (WASAPI process loopback), détection de parole (Silero VAD), transcription russe/anglaise (whisper.cpp), puis **traduction en français sur le PC** (Opus-MT). Tout est local : aucune clé API, aucun abonnement, aucun envoi en ligne. Les modèles s'installent avec `scripts\download-models.ps1 -Translation`.
+- **Voix réelles** : capture du son de CS2 (WASAPI process loopback), détection de parole (Silero VAD), transcription russe/anglaise (whisper.cpp), puis **traduction en français sur le PC** (Opus-MT). Tout est local : aucune clé API, aucun abonnement, aucun envoi en ligne. Les modèles se téléchargent automatiquement au premier lancement.
 - **Chat écrit** : encore simulé dans l'interface (lignes d'exemple).
 
 ## Dépôt
@@ -48,7 +51,7 @@ Ce n'est pas un site web : l'application se lance depuis un `.exe` et s'installe
 
 ## Installation (utilisateurs)
 
-Pour une version stable, téléchargez l'installateur depuis une Release GitHub (la version de test est décrite plus haut, dans « Télécharger ») :
+Pour une version stable, téléchargez l'installateur depuis une Release GitHub (la version de développement est décrite plus haut, dans « Télécharger ») :
 
 - `Crosstalk_x.y.z_x64-setup.exe` (NSIS) : installation pour l'utilisateur courant, sans droits administrateur ;
 - `Crosstalk_x.y.z_x64_fr-FR.msi` (WiX) : pour un déploiement géré.

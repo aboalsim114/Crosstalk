@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # Test build for Windows x64 from Linux with MinGW-w64 (gcc), used when no
-# Windows build machine (MSVC) is at hand. Produces a portable folder, not an installer:
+# Windows build machine (MSVC) is at hand. Produces the NSIS installer and a
+# portable folder with the command-line tools:
+#   dist-test/Crosstalk-<commit>-setup.exe
 #   dist-test/crosstalk-<commit>-windows-x64-gcc-test/
 #
 # Requirements (Ubuntu 24.04): apt install mingw-w64 nsis libclang-dev cmake
@@ -37,19 +39,33 @@ build() { (cd src-tauri && cargo build --release --locked --target $target "$@")
 # First pass builds whisper.cpp (and fails at link), second pass links.
 build --example asr_bench --example audio_probe --example translate || { fix_archives; build --example asr_bench --example audio_probe --example translate; }
 fix_archives
-# The app itself through the Tauri CLI (builds and embeds the UI). No bundle:
-# the NSIS installer would download the WebView2 bootstrapper.
-npx tauri build --target $target --no-bundle
+# The app and its NSIS installer through the Tauri CLI (builds and embeds the
+# UI). MinGW builds need libstdc++ and WebView2Loader.dll next to the exe: the
+# installer ships them. WebView2 itself is on every Windows 11 (and fetched by
+# the installer when missing) instead of being embedded at build time.
+gcc_dir=$(dirname "$(x86_64-w64-mingw32-g++-posix -print-libgcc-file-name)")
+rel="src-tauri/target/$target/release"
+overlay=$(mktemp --suffix=.json)
+cat > "$overlay" <<JSON
+{"bundle":{"targets":["nsis"],
+  "windows":{"webviewInstallMode":{"type":"downloadBootstrapper"}},
+  "resources":{"$gcc_dir/libstdc++-6.dll":"libstdc++-6.dll","$gcc_dir/libgcc_s_seh-1.dll":"libgcc_s_seh-1.dll",
+               "/usr/x86_64-w64-mingw32/lib/libwinpthread-1.dll":"libwinpthread-1.dll"}}}
+JSON
+npx tauri build --target $target --bundles nsis --config "$overlay"
+rm -f "$overlay"
+setup=$(ls -t "$rel"/bundle/nsis/*-setup.exe | head -1)
+mkdir -p dist-test
+cp "$setup" "dist-test/Crosstalk-$commit-setup.exe"
+echo "installateur : dist-test/Crosstalk-$commit-setup.exe"
 
 out="dist-test/crosstalk-$commit-windows-x64-gcc-test"
-rel="src-tauri/target/$target/release"
 rm -rf "$out" && mkdir -p "$out"
 cp "$rel/crosstalk.exe" "$out/"
 cp "$rel/examples/asr_bench.exe" "$out/crosstalk-asr-bench.exe"
 cp "$rel/examples/audio_probe.exe" "$out/crosstalk-audio-probe.exe"
 cp "$rel/examples/translate.exe" "$out/crosstalk-translate.exe"
 cp "$rel/WebView2Loader.dll" "$out/"
-gcc_dir=$(dirname "$(x86_64-w64-mingw32-g++-posix -print-libgcc-file-name)")
 cp "$gcc_dir/libstdc++-6.dll" "$gcc_dir/libgcc_s_seh-1.dll" /usr/x86_64-w64-mingw32/lib/libwinpthread-1.dll "$out/"
 cp scripts/download-models.ps1 scripts/fetch-asr-corpus.py "$out/"
 sed "s/@COMMIT@/$commit/g; s/\$/\r/" scripts/cross/LISEZMOI-TEST.txt > "$out/LISEZMOI-TEST.txt"

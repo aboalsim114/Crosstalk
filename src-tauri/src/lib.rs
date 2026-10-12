@@ -15,6 +15,7 @@
 mod actions;
 pub mod audio;
 mod commands;
+pub mod downloads;
 pub mod game;
 mod overlay;
 // Traits and helpers for the upcoming native pipeline; wired in later phases.
@@ -85,7 +86,10 @@ pub fn run() {
             translation::translation_configure,
             translation::translation_rescan,
             translation::translation_models,
-            translation::translation_test
+            translation::translation_test,
+            downloads::models_download_status,
+            downloads::models_download_start,
+            downloads::models_download_cancel
         ])
         .setup(|app| {
             let handle = app.handle();
@@ -95,6 +99,10 @@ pub fn run() {
             if std::env::var_os("RAYON_NUM_THREADS").is_none() {
                 std::env::set_var("RAYON_NUM_THREADS", "1");
             }
+            app.manage(downloads::Downloader::new(
+                Arc::new(downloads::HttpFetcher),
+                Arc::new(downloads::TauriDownloadEvents(handle.clone())),
+            ));
             let translation = translation::start(handle);
             app.manage(translation.clone());
             let speech = speech::start(handle);

@@ -6,6 +6,7 @@ import { startNativeBridge } from './native';
 import { EASE } from './components/atoms';
 import { Intro, Letterbox, Toast } from './components/Intro';
 import { PageHeader } from './components/PageHeader';
+import { SetupBanner } from './components/SetupBanner';
 import { Sidebar } from './components/Sidebar';
 import { TitleBar } from './components/TitleBar';
 import { AboutPage } from './pages/AboutPage';
@@ -86,6 +87,7 @@ export default function App() {
           <Sidebar />
           <main className="flex min-w-0 flex-1 flex-col">
             <PageHeader />
+            <SetupBanner />
             <motion.div
               key={page}
               initial={{ opacity: 0, y: 14, filter: 'blur(8px)' }}

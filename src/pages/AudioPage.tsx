@@ -204,13 +204,13 @@ function NativeModelCard() {
             role="radio"
             aria-checked={on}
             aria-disabled={!m.installed}
-            onClick={() => m.installed && s.set({ model: m.id as ModelId })}
+            onClick={() => s.set({ model: m.id as ModelId })}
             className="grid items-center gap-3 rounded-[10px] px-3 py-2.5"
             style={{
               gridTemplateColumns: '15px minmax(0,1fr) auto',
               border: `1px solid ${on ? 'rgba(255,162,74,.35)' : 'rgba(255,255,255,.05)'}`,
               background: on ? 'rgba(255,162,74,.06)' : 'transparent',
-              cursor: m.installed ? 'pointer' : 'not-allowed',
+              cursor: 'pointer',
               opacity: m.installed || on ? 1 : 0.55,
               transition: 'all .3s',
             }}
@@ -222,7 +222,7 @@ function NativeModelCard() {
             </div>
             <div className="flex flex-col items-end gap-0.5">
               <span style={{ font: fnt(400, 11, 'mono'), color: '#8f8a83' }}>{m.sizeMb >= 1000 ? `${(m.sizeMb / 1000).toFixed(1).replace('.', ',')} Go` : `${m.sizeMb} Mo`}</span>
-              <span style={{ font: fnt(500, 10.5), color: on ? '#ffa24a' : m.installed ? '#7fe0a8' : '#6e6961' }}>{on ? (m.installed ? 'Actif' : 'Sélectionné · absent') : m.installed ? 'Installé' : 'Non installé'}</span>
+              <span style={{ font: fnt(500, 10.5), color: on ? '#ffa24a' : m.installed ? '#7fe0a8' : '#6e6961' }}>{on ? (m.installed ? 'Actif' : 'Sélectionné · téléchargement') : m.installed ? 'Installé' : 'Télécharger'}</span>
             </div>
           </div>
         );
@@ -243,7 +243,7 @@ function NativeModelCard() {
         </span>
       </div>
       <div style={{ font: fnt(400, 10.5, 'sans', 1.5), color: '#5a5650' }}>
-        Installation : scripts\download-models.ps1 (téléchargement depuis Hugging Face, vérification SHA-1). Le téléchargement intégré arrive avec les réglages persistants.
+        Les modèles se téléchargent automatiquement (Hugging Face, vérification SHA-1) : choisissez-en un autre pour le récupérer.
       </div>
     </div>
   );
@@ -385,7 +385,7 @@ export function TranslationCard() {
             </span>
           </div>
           <div style={{ font: fnt(400, 10.5, 'sans', 1.5), color: '#5a5650' }}>
-            Installation : scripts\download-models.ps1 -Translation (environ 620 Mo). Modèles Helsinki-NLP Opus-MT, licence Apache-2.0.
+            Modèles téléchargés automatiquement au premier lancement (environ 620 Mo). Helsinki-NLP Opus-MT, licence Apache-2.0.
           </div>
         </>
       ) : (
