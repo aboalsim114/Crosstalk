@@ -15,11 +15,12 @@ Ce n'est pas un site web : l'application se lance depuis un `.exe` et s'installe
 
 **[⬇ Télécharger l'installateur de Crosstalk pour Windows (x64)](https://github.com/aboalsim114/Crosstalk/raw/downloads/Crosstalk-setup.exe)**
 
-1. Lancez `Crosstalk-setup.exe` : il installe Crosstalk pour votre compte (sans droits administrateur), avec un raccourci dans le menu Démarrer et sur le bureau.
-2. Ouvrez **Crosstalk**. Au premier lancement, l'application télécharge elle-même ses modèles de reconnaissance vocale et de traduction (environ 780 Mo, une seule fois, avec une barre de progression). Ensuite, tout fonctionne hors ligne : aucune clé API, aucun abonnement.
+1. Lancez `Crosstalk-setup.exe` : l'installateur de Crosstalk s'ouvre. Choisissez le dossier (par défaut `%LOCALAPPDATA%\Crosstalk`, sans droits administrateur) et les raccourcis, puis **Installer Crosstalk**.
+2. L'installateur copie l'application **et télécharge ses modèles** de reconnaissance vocale et de traduction (environ 780 Mo, une seule fois), avec la progression réelle. À la fin : **Lancer Crosstalk**. Ensuite, tout fonctionne hors ligne : aucune clé API, aucun abonnement.
 
 - Ce lien ne change jamais : il pointe toujours vers la dernière version de `develop`, republiée après chaque modification. Le commit, la date et les empreintes SHA-256 sont indiqués dans la [fiche de la version](https://github.com/aboalsim114/Crosstalk/blob/downloads/VERSION.md).
 - Version de test : non signée, Windows SmartScreen affiche un avertissement (« Informations complémentaires » > « Exécuter quand même »). WebView2, présent sur tout Windows 11, est installé automatiquement s'il manque.
+- Désinstallation : *Paramètres Windows › Applications › Crosstalk* (ou `uninstall.exe` dans le dossier d'installation). Les modèles sont conservés, sauf si vous demandez leur suppression.
 - Pour les tests avancés : [outils en ligne de commande](https://github.com/aboalsim114/Crosstalk/raw/downloads/crosstalk-windows-x64-portable.zip) (banc d'essai, sonde audio, test de traduction).
 - Le dépôt est privé : les liens fonctionnent pour les comptes GitHub qui y ont accès.
 
@@ -32,7 +33,8 @@ Ce n'est pas un site web : l'application se lance depuis un `.exe` et s'installe
 
 | Dossier | Contenu |
 | --- | --- |
-| `src-tauri/` | Cœur Rust : application Tauri v2, commandes natives, configuration de l'installateur. |
+| `src-tauri/` | Cœur Rust : application Tauri v2, commandes natives. |
+| `src-installer/` | Installateur Windows (Tauri, design « Crosstalk Installer ») : copie de l'application, téléchargement des modèles, raccourcis ; son interface est dans `src/installer/`. |
 | `src/` | Interface React + TypeScript (Tailwind CSS, Motion, Three.js), embarquée dans l'exécutable. |
 | `docs/` | **Cahier des charges v2.0** ([cahier-des-charges.md](docs/cahier-des-charges.md)) et **architecture** ([architecture.md](docs/architecture.md)) : les documents de référence. |
 | `design/` | Maquette d'origine (Claude Design), cahier des charges v1.0 et transcriptions de conception. Référence historique. |

@@ -48,7 +48,7 @@ cp "$root/$setup" "$setup_asset"
   echo "| SHA-256 de l'installateur | \`$setup_sha\` |"
   echo "| SHA-256 des outils (zip) | \`$zip_sha\` |"
   echo
-  echo "Installateur Windows (x64) : installe Crosstalk (menu Démarrer, bureau), qui télécharge lui-même ses modèles au premier lancement (environ 780 Mo, une seule fois). Compilé avec MinGW/gcc (\`scripts/cross-build-windows-gnu.sh\`). La version officielle reste celle compilée avec MSVC par \`scripts\\validate.ps1\`. Non signée : SmartScreen affiche un avertissement (« Informations complémentaires » > « Exécuter quand même »)."
+  echo "Installateur Windows (x64), design « Crosstalk Installer » : installe Crosstalk (menu Démarrer, bureau) et télécharge ses modèles pendant l'installation (environ 780 Mo, une seule fois). Compilé avec MinGW/gcc (\`scripts/cross-build-windows-gnu.sh\`). La version officielle reste celle compilée avec MSVC par \`scripts\\validate.ps1\`. Non signée : SmartScreen affiche un avertissement (« Informations complémentaires » > « Exécuter quand même »)."
   echo
   echo "Tout est local : aucune clé API, aucun abonnement, aucun envoi en ligne. Le zip contient les outils de test en ligne de commande (\`LISEZMOI-TEST.txt\`)."
 } > VERSION.md
