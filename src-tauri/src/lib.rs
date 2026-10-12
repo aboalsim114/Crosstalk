@@ -22,6 +22,7 @@ mod overlay;
 mod pipeline;
 mod shortcuts;
 pub mod speech;
+pub mod translation;
 mod tray;
 
 use std::sync::Arc;
@@ -77,10 +78,16 @@ pub fn run() {
             speech::speech_stats,
             speech::speech_models,
             speech::speech_configure,
-            speech::speech_rescan
+            speech::speech_rescan,
+            translation::translation_status,
+            translation::translation_configure,
+            translation::translation_set_key,
+            translation::translation_delete_key,
+            translation::translation_test
         ])
         .setup(|app| {
             let handle = app.handle();
+            app.manage(Arc::new(translation::TranslationService::native()));
 
             let speech = speech::start(handle);
             app.manage(speech.clone());

@@ -23,6 +23,12 @@ tauri-plugin-global-shortcut = "2"
 tauri-plugin-autostart = "2"
 tauri-plugin-single-instance = "2"
 thiserror = "2"
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json", "stream"] }
+tokio = { version = "1", features = ["sync", "time", "macros", "rt"] }
+# 1.9 raises MSRV beyond this crate's declared 1.80.
+zeroize = "=1.8.2"
+roxmltree = "0.20"
+regex = "1"
 # whisper.cpp bindings: speech recognition and the Silero VAD (ggml port), both
 # run locally on the CPU. Optional so the Windows target can be type-checked
 # from Linux (`--no-default-features`), where whisper.cpp cannot be cross-built.
@@ -40,6 +46,7 @@ windows = { version = "0.62", features = [
   "Win32_Media_Audio",
   "Win32_System_Com",
   "Win32_Security",
+  "Win32_Security_Credentials",
   "Win32_System_Com_StructuredStorage",
   "Win32_System_Diagnostics_ToolHelp",
   "Win32_System_SystemInformation",
