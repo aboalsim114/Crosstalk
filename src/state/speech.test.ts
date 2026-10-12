@@ -34,6 +34,10 @@ const status = (over: Partial<SpeechStatus> = {}): SpeechStatus => ({
 });
 
 describe('speech settings', () => {
+  it('starts on the same model as the Rust engine so a fresh install can transcribe', () => {
+    expect(speechConfigFrom(useApp.getInitialState()).model).toBe('base');
+  });
+
   it('maps the UI settings to the Rust config', () => {
     const c = speechConfigFrom({ model: 'small', vad: 55, src: { ru: true, en: false, de: true, es: false, pt: false, pl: false }, gloss: GLOSSARY.slice(0, 2) });
     expect(c).toEqual({ model: 'small', languages: ['ru'], vadThreshold: 0.55, glossary: ['rush B', 'mid'] });
