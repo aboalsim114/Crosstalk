@@ -51,6 +51,7 @@ cp "$rel/WebView2Loader.dll" "$out/"
 gcc_dir=$(dirname "$(x86_64-w64-mingw32-g++-posix -print-libgcc-file-name)")
 cp "$gcc_dir/libstdc++-6.dll" "$gcc_dir/libgcc_s_seh-1.dll" /usr/x86_64-w64-mingw32/lib/libwinpthread-1.dll "$out/"
 cp scripts/download-models.ps1 scripts/fetch-asr-corpus.py "$out/"
+sed "s/@COMMIT@/$commit/g; s/\$/\r/" scripts/cross/LISEZMOI-TEST.txt > "$out/LISEZMOI-TEST.txt"
 (cd "$out" && sha256sum ./*.exe ./*.dll > SHA256SUMS.txt)
 (cd dist-test && rm -f "$(basename "$out").zip" && zip -qr "$(basename "$out").zip" "$(basename "$out")")
 echo "paquet : $out.zip"
