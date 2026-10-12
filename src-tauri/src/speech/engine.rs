@@ -119,11 +119,39 @@ mod whisper_impl {
                 .create_state()
                 .map_err(|e| SpeechError::Model(format!("état Whisper : {e}")))?;
             let eot = ctx.token_eot();
-            Ok(Self {
+            let mut recognizer = Self {
                 state,
                 eot,
                 timing: InferenceTiming::default(),
-            })
+            };
+            recognizer.warm_up(default_threads())?;
+            Ok(recognizer)
+        }
+
+        /// One short pass on silence while the model loads. whisper.cpp's
+        /// language detection encodes with the window of the previous `full`
+        /// call, the whole 30 s before any: without this, the first callout of
+        /// a session spent seconds detecting its language (measured 5 to 8 s
+        /// in a CS2 game) and was dropped as stale.
+        fn warm_up(&mut self, threads: usize) -> Result<(), SpeechError> {
+            let silence = vec![0.0f32; crate::speech::dsp::SAMPLE_RATE as usize];
+            let mut p = FullParams::new(SamplingStrategy::Greedy { best_of: 1 });
+            p.set_n_threads(threads as i32);
+            p.set_language(Some("en"));
+            p.set_no_context(true);
+            p.set_single_segment(true);
+            p.set_no_timestamps(true);
+            p.set_print_special(false);
+            p.set_print_progress(false);
+            p.set_print_realtime(false);
+            p.set_print_timestamps(false);
+            p.set_max_tokens(1);
+            if let Some(ctx) = audio_ctx_for(silence.len(), true) {
+                p.set_audio_ctx(ctx);
+            }
+            self.state
+                .full(p, &silence)
+                .map_err(|e| SpeechError::Model(format!("préchauffage Whisper : {e}")))
         }
 
         fn detect_language(
