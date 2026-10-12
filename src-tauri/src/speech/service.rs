@@ -23,7 +23,7 @@ use std::time::{Duration, Instant};
 
 use super::cpu::{lower_current_thread_priority, CpuMeter};
 use super::dsp::{Conditioner, SAMPLE_RATE};
-use super::engine::{default_threads, RecognizeOptions, Recognizer};
+use super::engine::{default_threads, sanitize_threads, RecognizeOptions, Recognizer};
 use super::filter::{judge, prompt_from};
 use super::segmenter::{Outcome, Segment, Segmenter, SegmenterConfig};
 use super::types::{
@@ -66,14 +66,15 @@ enum FrontMsg {
         mono: Vec<f32>,
         rate: u32,
         at: Instant,
+        generation: u64,
     },
-    Threshold(f32),
     Detector(Box<dyn VoiceDetector>),
 }
 
 struct Job {
     segment: Segment,
     voice_end: Instant,
+    queued_at: Instant,
     generation: u64,
 }
 
@@ -167,6 +168,7 @@ struct Inner {
     dropped_blocks: AtomicU64,
     /// Bumped by `purge`: older segments and results are discarded.
     generation: AtomicU64,
+    publication: Mutex<()>,
     next_id: AtomicU64,
     speaking: AtomicBool,
     transcribing: AtomicBool,
@@ -246,6 +248,17 @@ impl SpeechService {
         models_dir: PathBuf,
         config: SpeechConfig,
     ) -> Arc<Self> {
+        Self::start_with_threads(events, loader, models_dir, config, default_threads())
+    }
+
+    /// Explicit worker count for reproducible live benchmarks.
+    pub fn start_with_threads(
+        events: Arc<dyn SpeechEvents>,
+        loader: Arc<dyn EngineLoader>,
+        models_dir: PathBuf,
+        config: SpeechConfig,
+        threads: usize,
+    ) -> Arc<Self> {
         let inner = Arc::new(Inner {
             events,
             loader,
@@ -266,12 +279,13 @@ impl SpeechService {
             stats: Mutex::new(StatsAcc::default()),
             dropped_blocks: AtomicU64::new(0),
             generation: AtomicU64::new(0),
+            publication: Mutex::new(()),
             next_id: AtomicU64::new(1),
             speaking: AtomicBool::new(false),
             transcribing: AtomicBool::new(false),
             last_audio: Mutex::new(None),
             shutdown: AtomicBool::new(false),
-            threads: default_threads(),
+            threads: sanitize_threads(threads),
         });
         let (tx, rx) = sync_channel(CHANNEL_BLOCKS);
         let svc = Arc::new(Self { inner, front: tx });
@@ -319,10 +333,8 @@ impl SpeechService {
             *c = config.clone();
             changed
         };
-        let _ = self
-            .front
-            .try_send(FrontMsg::Threshold(config.vad_threshold));
         if model_changed {
+            self.purge();
             self.reload(false);
         }
         self.inner.publish_status();
@@ -352,40 +364,50 @@ impl SpeechService {
             .name("speech-load".into())
             .spawn(move || {
                 let started = Instant::now();
-                let model = inner.config.lock().unwrap().model.clone();
-                let mut error = None;
+                let mut detector_error = None;
                 if with_vad {
                     match inner.loader.load_detector(&inner.models_dir) {
                         Ok(d) => {
-                            // Blocking send: the detector must reach the VAD thread.
-                            let _ = front.send(FrontMsg::Detector(d));
-                            inner.engine.lock().unwrap().vad_ready = true;
+                            if front.send(FrontMsg::Detector(d)).is_ok() {
+                                inner.engine.lock().unwrap().vad_ready = true;
+                            }
                         }
-                        Err(e) => error = Some(e),
+                        Err(e) => detector_error = Some(e),
                     }
                 }
-                let loaded = match inner.loader.load_recognizer(&inner.models_dir, &model) {
-                    Ok(r) => {
-                        *inner.recognizer.lock().unwrap() = Some(r);
-                        true
+                loop {
+                    let model = inner.config.lock().unwrap().model.clone();
+                    let result = inner.loader.load_recognizer(&inner.models_dir, &model);
+                    // Configuration may change during a slow load. Never install a
+                    // superseded model, and keep loading until the current one wins.
+                    // Wait for in-flight inference without holding the settings
+                    // lock: status/configure must remain responsive.
+                    let mut recognizer = inner.recognizer.lock().unwrap();
+                    let config = inner.config.lock().unwrap();
+                    if config.model != model {
+                        continue;
                     }
-                    Err(e) => {
-                        error.get_or_insert(e);
-                        false
+                    let mut error = detector_error.take();
+                    match result {
+                        Ok(r) => {
+                            *recognizer = Some(r);
+                            let mut e = inner.engine.lock().unwrap();
+                            e.loaded_model = Some(model);
+                            e.load_ms = Some(started.elapsed().as_millis() as u32);
+                        }
+                        Err(err) => {
+                            *recognizer = None;
+                            inner.engine.lock().unwrap().loaded_model = None;
+                            error.get_or_insert(err);
+                        }
                     }
-                };
-                {
                     let mut e = inner.engine.lock().unwrap();
                     e.loading = false;
-                    if loaded {
-                        e.loaded_model = Some(model);
-                        e.load_ms = Some(started.elapsed().as_millis() as u32);
-                    }
-                    // A missing file is a normal state (shown as such), not an error.
                     e.error = match error {
                         Some(SpeechError::NotInstalled(_)) | None => None,
                         Some(err) => Some(err.to_string()),
                     };
+                    break;
                 }
                 inner.publish_status();
             })
@@ -394,6 +416,7 @@ impl SpeechService {
 
     /// Drops everything in flight: open segment, queued segments, running result.
     pub fn purge(&self) {
+        let _publication = self.inner.publication.lock().unwrap();
         self.inner.generation.fetch_add(1, Ordering::SeqCst);
         self.inner.queue.clear();
         *self.inner.last_audio.lock().unwrap() = None;
@@ -422,11 +445,12 @@ pub struct SpeechSink {
 }
 
 impl SpeechSink {
-    fn send(&self, mono: Vec<f32>, rate: u32) {
+    fn send(&self, mono: Vec<f32>, rate: u32, generation: u64) {
         let msg = FrontMsg::Audio {
             mono,
             rate,
             at: Instant::now(),
+            generation,
         };
         if let Err(TrySendError::Full(_)) = self.tx.try_send(msg) {
             self.inner.dropped_blocks.fetch_add(1, Ordering::Relaxed);
@@ -436,14 +460,16 @@ impl SpeechSink {
 
 impl BlockSink for SpeechSink {
     fn block(&mut self, block: &AudioBlock) {
+        let generation = self.inner.generation.load(Ordering::SeqCst);
         let mono: Vec<f32> =
             crate::audio::convert::mono_frames(block.samples, block.channels).collect();
-        self.send(mono, block.sample_rate);
+        self.send(mono, block.sample_rate, generation);
     }
 
     fn silence(&mut self, frames: usize, _channels: u16, sample_rate: u32) {
         // Silence must flow too: it is what closes a segment.
-        self.send(vec![0.0; frames], sample_rate);
+        let generation = self.inner.generation.load(Ordering::SeqCst);
+        self.send(vec![0.0; frames], sample_rate, generation);
     }
 }
 
@@ -525,14 +551,26 @@ fn front_loop(inner: &Inner, rx: Receiver<FrontMsg>) {
                 d.reset();
             }
         }
+        st.segmenter
+            .set_threshold(inner.config.lock().unwrap().vad_threshold);
         match msg {
-            FrontMsg::Threshold(t) => st.segmenter.set_threshold(t),
             FrontMsg::Detector(d) => {
                 detector = Some(d);
                 st = Front::new(st.segmenter.config().threshold, generation);
             }
-            FrontMsg::Audio { mono, rate, at } => {
-                *inner.last_audio.lock().unwrap() = Some(at);
+            FrontMsg::Audio {
+                mono,
+                rate,
+                at,
+                generation: captured_generation,
+            } => {
+                {
+                    let _publication = inner.publication.lock().unwrap();
+                    if captured_generation != inner.generation.load(Ordering::SeqCst) {
+                        continue;
+                    }
+                    *inner.last_audio.lock().unwrap() = Some(at);
+                }
                 let Some(det) = detector.as_mut() else {
                     continue; // no VAD model: nothing can be segmented
                 };
@@ -564,12 +602,17 @@ fn run_vad(inner: &Inner, det: &mut dyn VoiceDetector, st: &mut Front) {
                 vec![0.0; VAD_HOP_FRAMES]
             }
         };
+        let _publication = inner.publication.lock().unwrap();
+        if st.generation != inner.generation.load(Ordering::SeqCst) {
+            return;
+        }
         for (frame, prob) in chunk.chunks_exact(FRAME).zip(probs) {
             let outcome = st.segmenter.push(frame, prob);
             inner.set_activity(Some(st.segmenter.is_speaking()), None);
             match outcome {
                 None => {}
                 Some(Outcome::Rejected(r)) => {
+                    diagnostic_rejection(r, 0, 0);
                     {
                         let mut s = inner.stats.lock().unwrap();
                         s.segments += 1;
@@ -583,15 +626,27 @@ fn run_vad(inner: &Inner, det: &mut dyn VoiceDetector, st: &mut Front) {
                     let dropped = inner.queue.push(Job {
                         segment,
                         voice_end,
+                        queued_at: Instant::now(),
                         generation: st.generation,
                     });
-                    if dropped.is_some() {
+                    if let Some(dropped) = dropped {
+                        diagnostic_rejection(
+                            RejectReason::Overflow,
+                            dropped.segment.duration_ms(),
+                            dropped.queued_at.elapsed().as_millis(),
+                        );
                         inner.stats.lock().unwrap().reject(RejectReason::Overflow);
                         inner.publish_stats();
                     }
                 }
             }
         }
+    }
+}
+
+fn diagnostic_rejection(reason: RejectReason, audio_ms: u32, queue_ms: u128) {
+    if std::env::var_os("CROSSTALK_SPEECH_DIAGNOSTICS").is_some_and(|v| v == "1") {
+        eprintln!("crosstalk speech diagnostic: outcome={reason:?} audio_ms={audio_ms} queue_ms={queue_ms} inference=not_run raw=None");
     }
 }
 
@@ -618,6 +673,11 @@ fn asr_loop(inner: &Inner) {
             continue;
         }
         if job.voice_end.elapsed() > STALE_AFTER {
+            diagnostic_rejection(
+                RejectReason::Stale,
+                job.segment.duration_ms(),
+                job.queued_at.elapsed().as_millis(),
+            );
             inner.stats.lock().unwrap().reject(RejectReason::Stale);
             inner.publish_stats();
             continue;
@@ -626,14 +686,46 @@ fn asr_loop(inner: &Inner) {
     }
 }
 
+/// Judge again after inference: a fresh queue entry may expire during computation.
+fn judge_current(
+    rec: &super::filter::Recognition,
+    audio_ms: u32,
+    age: Duration,
+) -> Result<String, RejectReason> {
+    if age > STALE_AFTER {
+        Err(RejectReason::Stale)
+    } else {
+        judge(rec, audio_ms)
+    }
+}
+
 fn transcribe(inner: &Inner, job: Job) {
     let config = inner.config.lock().unwrap().clone();
     let prompt = prompt_from(&config.glossary);
     let mut slot = inner.recognizer.lock().unwrap();
+    if inner.engine.lock().unwrap().loaded_model.as_deref() != Some(config.model.as_str()) {
+        return;
+    }
     let Some(recognizer) = slot.as_mut() else {
         return; // model not installed or loading
     };
+    let publication = inner.publication.lock().unwrap();
+    if job.generation != inner.generation.load(Ordering::SeqCst) {
+        return;
+    }
+    if job.voice_end.elapsed() > STALE_AFTER {
+        diagnostic_rejection(
+            RejectReason::Stale,
+            job.segment.duration_ms(),
+            job.queued_at.elapsed().as_millis(),
+        );
+        inner.stats.lock().unwrap().reject(RejectReason::Stale);
+        inner.publish_stats();
+        return;
+    }
+    let queue_ms = job.queued_at.elapsed().as_millis();
     inner.set_activity(None, Some(true));
+    drop(publication);
     let started = Instant::now();
     let result = recognizer.recognize(
         &job.segment.samples,
@@ -644,9 +736,11 @@ fn transcribe(inner: &Inner, job: Job) {
             fast_encoder: config.fast_encoder,
         },
     );
+    let timing = recognizer.timing();
     drop(slot);
     let asr_ms = started.elapsed().as_millis() as u32;
     inner.set_activity(None, Some(false));
+    let _publication = inner.publication.lock().unwrap();
     if job.generation != inner.generation.load(Ordering::SeqCst) {
         return; // purged while transcribing
     }
@@ -657,11 +751,20 @@ fn transcribe(inner: &Inner, job: Job) {
         Ok(r) => r,
         Err(e) => {
             drop(stats);
+            if std::env::var_os("CROSSTALK_SPEECH_DIAGNOSTICS").is_some_and(|v| v == "1") {
+                eprintln!("crosstalk speech diagnostic: inference_error={e:?} audio_ms={audio_ms} queue_ms={queue_ms} inference_ms={asr_ms} timing={timing:?}");
+            }
             eprintln!("crosstalk: {e}");
             return;
         }
     };
-    match judge(&rec, audio_ms) {
+    let outcome = judge_current(&rec, audio_ms, job.voice_end.elapsed());
+    if std::env::var_os("CROSSTALK_SPEECH_DIAGNOSTICS").is_some_and(|v| v == "1") {
+        eprintln!("crosstalk speech diagnostic: model={} encoder={} audio_ms={} queue_ms={} inference_ms={} timing={:?} lang={:?} lang_prob={} logprob={} no_speech={} outcome={:?} raw={:?}",
+            config.model, if config.fast_encoder { "reduced" } else { "full" }, audio_ms, queue_ms,
+            asr_ms, timing, rec.lang, rec.lang_prob, rec.avg_logprob, rec.no_speech_prob, outcome, rec.text);
+    }
+    match outcome {
         Err(reason) => {
             stats.reject(reason);
             drop(stats);
@@ -926,6 +1029,7 @@ mod tests {
                 forced: false,
             },
             voice_end: Instant::now(),
+            queued_at: Instant::now(),
             generation: 0,
         };
         for n in 0..QUEUE_CAPACITY as u64 {
@@ -964,5 +1068,235 @@ mod tests {
         assert_eq!(st.state, EngineState::Ready);
         assert_eq!(st.config.languages, vec![Lang::En]);
         assert_eq!(st.config.vad_threshold, 0.7);
+    }
+    #[test]
+    fn result_expiring_during_inference_is_rejected() {
+        let rec = Recognition {
+            text: "Двое на B".into(),
+            lang: Lang::Ru,
+            lang_prob: 1.0,
+            avg_logprob: -0.2,
+            no_speech_prob: 0.01,
+        };
+        assert!(judge_current(&rec, 800, STALE_AFTER).is_ok());
+        assert_eq!(
+            judge_current(&rec, 800, STALE_AFTER + Duration::from_nanos(1)),
+            Err(RejectReason::Stale)
+        );
+    }
+
+    #[test]
+    fn explicit_live_threads_are_preserved() {
+        struct CheckThreads;
+        impl Recognizer for CheckThreads {
+            fn recognize(
+                &mut self,
+                _: &[f32],
+                opts: &RecognizeOptions,
+            ) -> Result<Recognition, SpeechError> {
+                assert_eq!(opts.threads, sanitize_threads(2));
+                Ok(Recognition {
+                    text: "Двое на B".into(),
+                    lang: Lang::Ru,
+                    lang_prob: 1.0,
+                    avg_logprob: -0.2,
+                    no_speech_prob: 0.01,
+                })
+            }
+        }
+        let (tx, rx) = channel();
+        let svc = SpeechService::start_with_threads(
+            Arc::new(Events(Mutex::new(tx))),
+            Arc::new(FakeLoader {
+                text: "x".into(),
+                delay: Duration::ZERO,
+                calls: Arc::new(AtomicU64::new(0)),
+                has_model: true,
+            }),
+            PathBuf::from("models"),
+            SpeechConfig::default(),
+            2,
+        );
+        wait_ready(&svc);
+        assert_eq!(svc.status().threads, sanitize_threads(2) as u32);
+        *svc.inner.recognizer.lock().unwrap() = Some(Box::new(CheckThreads));
+        transcribe(
+            &svc.inner,
+            Job {
+                segment: Segment {
+                    samples: vec![0.1; 12_800],
+                    start_frame: 0,
+                    last_voiced_frame: 24,
+                    voiced_frames: 25,
+                    forced: false,
+                },
+                voice_end: Instant::now(),
+                queued_at: Instant::now(),
+                generation: 0,
+            },
+        );
+        assert_eq!(next_transcript(&rx).unwrap().text, "Двое на B");
+    }
+
+    #[test]
+    fn reload_follows_configuration_changed_during_load() {
+        struct GatedLoader {
+            entered: Mutex<Sender<()>>,
+            release: Mutex<Receiver<()>>,
+            models: Mutex<Vec<String>>,
+        }
+        impl EngineLoader for GatedLoader {
+            fn load_detector(&self, _: &Path) -> Result<Box<dyn VoiceDetector>, SpeechError> {
+                Ok(Box::new(EnergyDetector {
+                    threshold_db: -40.0,
+                }))
+            }
+            fn load_recognizer(
+                &self,
+                _: &Path,
+                model: &str,
+            ) -> Result<Box<dyn Recognizer>, SpeechError> {
+                let first = {
+                    let mut models = self.models.lock().unwrap();
+                    models.push(model.to_string());
+                    models.len() == 1
+                };
+                if first {
+                    self.entered.lock().unwrap().send(()).unwrap();
+                    self.release.lock().unwrap().recv().unwrap();
+                }
+                Ok(Box::new(EchoRecognizer {
+                    text: "x".into(),
+                    delay: Duration::ZERO,
+                    calls: Arc::new(AtomicU64::new(0)),
+                }))
+            }
+            fn model_path(&self, _: &Path, _: &str) -> Option<PathBuf> {
+                None
+            }
+            fn backend(&self) -> String {
+                "test".into()
+            }
+        }
+        let (entered_tx, entered_rx) = channel();
+        let (release_tx, release_rx) = channel();
+        let loader = Arc::new(GatedLoader {
+            entered: Mutex::new(entered_tx),
+            release: Mutex::new(release_rx),
+            models: Mutex::new(Vec::new()),
+        });
+        let (tx, _) = channel();
+        let svc = SpeechService::start(
+            Arc::new(Events(Mutex::new(tx))),
+            loader.clone(),
+            PathBuf::from("models"),
+            SpeechConfig::default(),
+        );
+        entered_rx
+            .recv_timeout(Duration::from_secs(5))
+            .expect("first load entered");
+        let initial = svc.status().config.model;
+        let next = if initial == "tiny" { "base" } else { "tiny" };
+        svc.configure(SpeechConfig {
+            model: next.into(),
+            ..svc.status().config
+        });
+        release_tx.send(()).unwrap();
+        wait_ready(&svc);
+        assert_eq!(
+            svc.inner.engine.lock().unwrap().loaded_model.as_deref(),
+            Some(next)
+        );
+        assert_eq!(*loader.models.lock().unwrap(), vec![initial, next.into()]);
+    }
+
+    #[test]
+    fn purged_capture_blocks_cannot_be_relabelled_as_new_audio() {
+        let (svc, _, calls) = service("Двое на B", 0, true);
+        wait_ready(&svc);
+        // Consume a complete pre-purge utterance synchronously after purge.
+        let old = svc.inner.generation.load(Ordering::SeqCst);
+        let (tx, rx) = sync_channel(256);
+        tx.send(FrontMsg::Detector(Box::new(EnergyDetector {
+            threshold_db: -40.0,
+        })))
+        .unwrap();
+        for i in 0..100 {
+            let mono = (0..480)
+                .map(|j| 0.3 * ((i * 480 + j) as f32 * 0.06).sin())
+                .collect();
+            tx.send(FrontMsg::Audio {
+                mono,
+                rate: 48_000,
+                at: Instant::now(),
+                generation: old,
+            })
+            .unwrap();
+        }
+        for _ in 0..70 {
+            tx.send(FrontMsg::Audio {
+                mono: vec![0.0; 480],
+                rate: 48_000,
+                at: Instant::now(),
+                generation: old,
+            })
+            .unwrap();
+        }
+        svc.purge();
+        drop(tx);
+        front_loop(&svc.inner, rx);
+        assert_eq!(svc.stats().segments, 0);
+        assert_eq!(calls.load(Ordering::SeqCst), 0);
+        assert!(svc.inner.last_audio.lock().unwrap().is_none());
+    }
+    #[test]
+    fn purge_during_vad_cannot_restore_old_speaking_activity() {
+        struct GatedDetector {
+            entered: Sender<()>,
+            release: Receiver<()>,
+            first: bool,
+        }
+        impl VoiceDetector for GatedDetector {
+            fn probabilities(&mut self, samples: &[f32]) -> Result<Vec<f32>, SpeechError> {
+                if self.first {
+                    self.first = false;
+                    self.entered.send(()).unwrap();
+                    self.release.recv().unwrap();
+                }
+                Ok(vec![1.0; samples.len() / FRAME])
+            }
+            fn reset(&mut self) {}
+        }
+        let (svc, _, _) = service("Двое на B", 0, true);
+        wait_ready(&svc);
+        let (entered_tx, entered_rx) = channel();
+        let (release_tx, release_rx) = channel();
+        let (tx, rx) = sync_channel(32);
+        tx.send(FrontMsg::Detector(Box::new(GatedDetector {
+            entered: entered_tx,
+            release: release_rx,
+            first: true,
+        })))
+        .unwrap();
+        for _ in 0..20 {
+            tx.send(FrontMsg::Audio {
+                mono: vec![0.3; 480],
+                rate: 48_000,
+                at: Instant::now(),
+                generation: 0,
+            })
+            .unwrap();
+        }
+        drop(tx);
+        let inner = svc.inner.clone();
+        let worker = std::thread::spawn(move || front_loop(&inner, rx));
+        entered_rx
+            .recv_timeout(Duration::from_secs(5))
+            .expect("VAD entered");
+        svc.purge();
+        release_tx.send(()).unwrap();
+        worker.join().unwrap();
+        assert!(!svc.inner.speaking.load(Ordering::SeqCst));
+        assert_eq!(svc.stats().segments, 0);
     }
 }
