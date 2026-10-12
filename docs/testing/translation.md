@@ -7,7 +7,7 @@
 ## 0. Préparation
 
 1. Construire le commit testé : `powershell -ExecutionPolicy Bypass -File scripts\validate.ps1`. Le dossier `dist-local\<commit>\` contient `crosstalk-translate.exe`.
-2. Installer les modèles (environ 620 Mo en plus de Whisper) :
+2. Dans l'application, les modèles se téléchargent seuls au premier lancement (bannière « Préparation de Crosstalk »). Pour les outils en ligne de commande, on peut aussi les installer (environ 620 Mo en plus de Whisper) avec :
    ```powershell
    powershell -ExecutionPolicy Bypass -File scripts\download-models.ps1 -Translation
    ```
