@@ -51,7 +51,7 @@ Ces cibles sont des **objectifs**, pas des performances démontrées. Elles sero
 | Leur choix | Ce que l'on retient |
 | --- | --- |
 | Capture audio au niveau du système, sans intégration au jeu | Même principe externe. Option « tout le son du PC » (F-21), capture ciblée sur `cs2.exe` par défaut. |
-| Reconnaissance vocale sur l'appareil, audio non envoyé sans opt-in | Confirme le choix de Whisper en local, avec le cloud en option (F-24, F-28). |
+| Reconnaissance vocale sur l'appareil, audio non envoyé sans opt-in | Confirme le choix de Whisper en local. Crosstalk va plus loin : tout reste local, transcription et traduction (F-24, F-30). |
 | Overlay en fenêtré sans bordures, widget Game Bar en plein écran exclusif | MVP en fenêtré sans bordures. Widget Game Bar en P2 (F-47). |
 | Modèles adaptés au vocabulaire de CS | Glossaire étendu aux callouts de cartes et normalisation des annonces (F-36). |
 | Latence annoncée d'environ 1 s | Cible initiale p50 ≤ 2 s, à resserrer après mesures. |
@@ -133,7 +133,7 @@ Statut : ✅ réalisé dans le dépôt (interface et données simulées comprise
 | F-25 | Transcription provisoire pendant la parole (fenêtre glissante), remplacée par la version finale. Adoptée seulement si son coût GPU/CPU reste compatible avec la cible FPS. | P1 | — |
 | F-26 | Détection de langue restreinte aux langues sources préférées (ru, en par défaut). | P0 | — |
 | F-27 | Abandonner les segments périmés (plus de 6 s d'attente) pour éviter l'accumulation de retard. | P0 | — |
-| F-28 | Transcription cloud en option (opt-in), avec le coût estimé affiché, pour les machines insuffisantes. | P2 | — |
+| F-28 | ~~Transcription cloud en option~~ : abandonnée (décision du 12/10/2026, aucun service payant ni clé API pour l'utilisateur). | — | abandonnée |
 | F-29 | Chaîne de nettoyage audio avant la VAD (détails §4.3 bis) : traitements légers en P0, traitements coûteux en Exp. | P0 | — |
 
 ### 4.3 bis Séparation de la voix et des bruits de jeu
@@ -187,12 +187,12 @@ Chaque étape est désactivable et mesurable dans l'écran Diagnostic.
 
 | ID | Exigence | Prio. | Statut |
 | --- | --- | --- | --- |
-| F-30 | Moteurs interchangeables derrière un trait `Translator` : DeepL (par défaut), Azure Translator, moteur local (bêta, par ex. Opus-MT ou NLLB via CTranslate2/ONNX). | P0 | ◐ trait défini |
+| F-30 | **Traduction locale uniquement**, sur le CPU du joueur : Helsinki-NLP Opus-MT ru→fr et en→fr (Apache-2.0, utilisable dans un produit vendu), exécuté par candle (Rust). **Aucune clé API, aucun abonnement, aucun envoi en ligne** (décision du 12/10/2026 : l'utilisateur paie l'application et rien d'autre). NLLB est exclu (licence non commerciale). | P0 | ✅ |
 | F-31 | Détection de langue restreinte aux langues sources préférées pour les messages courts. | P0 | — |
-| F-32 | Ne pas traduire les messages déjà en français : l'original est affiché et aucun appel n'est fait. | P0 | ◐ règle et test |
-| F-33 | Glossaire CS : termes conservés (smoke, flash, eco, rush B…) protégés par balises avant traduction, et termes traduits avec un rendu imposé. Modifiable par l'utilisateur. | P0 | ◐ interface |
-| F-34 | Délai maximal de 5 s, 1 nouvelle tentative, puis affichage de l'original avec la mention « moteur indisponible ». | P0 | — |
-| F-35 | Cache LRU des traductions (1 000 entrées) pour les messages répétés (« gg », « nt »…). | P1 | — |
+| F-32 | Ne pas traduire les messages déjà en français : l'original est affiché et aucun appel n'est fait. | P0 | ✅ |
+| F-33 | Glossaire CS : termes conservés (smoke, flash, eco, rush B…) remplacés par des repères avant traduction puis restaurés (insensible à la casse, mots entiers), et termes traduits avec un rendu imposé. Si le modèle perd un repère, la phrase est retraduite sans protection. Modifiable par l'utilisateur. | P0 | ✅ (fiabilité à mesurer sur les vrais modèles) |
+| F-34 | Une ligne qui attend plus de 5 s, ou une file pleine, est affichée en original avec la mention « moteur indisponible ». | P0 | ✅ |
+| F-35 | Cache LRU des traductions (1 000 entrées) pour les messages répétés (« gg », « nt »…). | P1 | ✅ |
 | F-36 | Normalisation des annonces : callouts de cartes, économie et utilitaires traduits comme des annonces courtes. **Aucune information absente de l'original ne doit être ajoutée.** Glossaire par carte. | P1 | — |
 
 ### 4.5 Overlay en jeu
@@ -218,7 +218,7 @@ Sept écrans, conformes à la maquette *v2 Cinematic*. **Réalisés en React ave
 | --- | --- |
 | Accueil | État de la session, dernier sous-titre, progression du pipeline vocal, statut CS2, capture, moteurs et latence, flux « Script » filtrable (Texte, Voix, Mixte). |
 | Overlay | Aperçu à l'échelle et réglages F-43 à F-45. |
-| Audio & IA | Source de capture, test audio de 10 s, seuil VAD, choix et téléchargement des modèles Whisper, CPU/GPU, moteur de traduction, clé API. Option d'identification expérimentale du locuteur. |
+| Audio & IA | Source de capture, test audio de 10 s, seuil VAD, choix et téléchargement des modèles Whisper, CPU/GPU, modèles de traduction locaux et test de traduction. Option d'identification expérimentale du locuteur. |
 | Langues & glossaire | Langue cible, langues sources préférées, option « ignorer le français », édition du glossaire. |
 | Historique | Désactivé par défaut ; recherche, export TXT/JSON, effacement. |
 | Diagnostic | Tests intégrés (journal, -condebug, parseur, capture, modèle, traduction, raccourcis, indicateur vocal), journal expurgé, export d'un rapport. |
@@ -278,7 +278,7 @@ La solution retenue est donc l'**analyse du HUD par capture d'image et OCR**.
 | Ressources | RAM ≤ 300 Mo hors modèle ; CPU au repos ≤ 1 % ; VRAM ≤ 1,2 Go avec whisper-small. |
 | Configuration minimale | CPU 6 cœurs (2018+), 16 Go de RAM. Recommandée : GPU NVIDIA 6 Go+ (CUDA) ou AMD/Intel (Vulkan). |
 | Fiabilité | Une panne de capture, de transcription, de traduction ou d'identification ne fait jamais planter l'application. Reconnexion automatique quand CS2 redémarre. |
-| Sécurité | Clés API dans le Gestionnaire d'identification Windows (crate `keyring`), jamais dans les fichiers ni les journaux. HTTPS uniquement. Exécutable et installateurs signés (Authenticode). CSP stricte sur le WebView. |
+| Sécurité | Aucune clé API ni secret : transcription et traduction sont locales. Les seuls téléchargements (modèles) passent en HTTPS avec contrôle de taille et d'empreinte. Exécutable et installateurs signés (Authenticode). CSP stricte sur le WebView. |
 | Confidentialité | Aucun audio ni image écrit sur disque ou envoyé sans opt-in. Historique désactivé par défaut et purgé après 7 jours. Pseudos expurgés des journaux. Aucune télémétrie par défaut. |
 | Accessibilité | Contraste 4,5:1 minimum, navigation complète au clavier, format d'overlay Accessible, respect du réglage Windows « réduire les animations ». |
 | Localisation | Interface en français ; chaînes externalisées pour ajouter d'autres langues. |
@@ -309,7 +309,7 @@ fenêtre CS2 ─► capture HUD ─► indicateur ─► OCR ─► corrélation
 | Audio | `rubato` (rééchantillonnage), `ort` (VAD Silero ONNX), `biquad`. Expérimental : `deep_filter`, `nnnoiseless` |
 | Reconnaissance vocale | `whisper-rs` (whisper.cpp, CUDA / Vulkan), à confirmer par le banc d'essai |
 | Locuteur (exp.) | Windows Graphics Capture, Windows.Media.Ocr via `windows-rs` |
-| Données | `serde` + JSON (config), `rusqlite` (historique), `keyring` (secrets) |
+| Données | `serde` + JSON (config), `rusqlite` (historique) |
 | Journaux | `tracing`, rotation quotidienne, expurgation des clés et pseudos |
 | Distribution | Bundler Tauri (NSIS par utilisateur + MSI), WebView2 embarqué, mises à jour signées (`tauri-plugin-updater`), workflow de release sur tag |
 
@@ -367,7 +367,7 @@ Le casque 3D réactif (Three.js) et le verre dépoli sont livrés. Ils doivent r
 | L3 · Interface branchée | Écrans reliés aux données réelles, diagnostic réel, historique SQLite, téléchargement des modèles | 2 semaines |
 | L4 · Locuteur expérimental | Préalable (corpus HUD), puis capture, indicateur, OCR, corrélation, « Joueur inconnu » | 3 semaines, après validation du préalable |
 | L5 · Industrialisation | Signature, mises à jour, tests 20 h, bêta fermée | 3 semaines |
-| P2 | Widget Xbox Game Bar, transcription cloud, traduction de ses annonces, Discord, regroupement des voix | — |
+| P2 | Widget Xbox Game Bar, traduction de ses annonces, Discord, regroupement des voix | — |
 | V2 · Modèle CS2 | Corpus bruité, fine-tuning Whisper (A-10), évaluation | 6 à 8 semaines |
 
 **Total indicatif :** version 1.0 sans locuteur à la fin de L3 + L5, environ 13 à 14 semaines. Avec le locuteur expérimental, environ 16 à 17 semaines.
@@ -376,7 +376,7 @@ Le casque 3D réactif (Three.js) et le verre dépoli sont livrés. Ils doivent r
 
 | Risque | Niveau | Parade |
 | --- | --- | --- |
-| Transcription médiocre (voix compressée, bruit de jeu, argot) | Élevé | Nettoyage P0, corpus réel dès L0, prompt glossaire, banc d'essai, Whisper affiné en V2, option cloud |
+| Transcription médiocre (voix compressée, bruit de jeu, argot) | Élevé | Nettoyage P0, corpus réel dès L0, prompt glossaire, banc d'essai, Whisper affiné en V2 |
 | Process loopback indisponible sous Windows 10 22H2 | Moyen | Repli loopback du périphérique avec avertissement (F-21), vérifié en L0 |
 | HUD sans pseudo lisible ou modifié par une mise à jour | Élevé (pour §4.8) | Préalable de faisabilité, « Joueur inconnu » par défaut, détection dans Diagnostic, fonctionnalité expérimentale |
 | Pseudo erroné affiché | Moyen | Seuil de confiance, rapprochement avec les pseudos connus, jamais d'invention |
@@ -385,7 +385,7 @@ Le casque 3D réactif (Three.js) et le verre dépoli sont livrés. Ils doivent r
 | Faux positif VAC ou des antivirus | Faible à moyen | Aucune interaction interdite (§3), exécutable signé, soumission aux éditeurs d'antivirus |
 | Impact sur les FPS (GPU partagé avec le jeu) | Moyen | Mesure CPU vs GPU, priorité basse, modèle adapté au matériel, mode performance |
 | Concurrent déjà installé (Unitra AI) | Moyen | Se différencier : gratuit, open source, local, sans compte, spécialisé CS2 → français |
-| Coût des API de traduction | Faible | Cache, offre gratuite DeepL, moteur local |
+| Charge CPU de la traduction locale | Moyen | Un seul thread, priorité basse, couche de sortie quantifiée (q8_0) limitée au vocabulaire français, cache LRU |
 
 ## 11. Hors périmètre
 

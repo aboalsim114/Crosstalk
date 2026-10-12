@@ -13,7 +13,8 @@ Ce n'est pas un site web : l'application se lance depuis un `.exe` et s'installe
 
 ## État du projet
 
-Phase 1 : l'interface complète, les animations et les interactions fonctionnent avec des données simulées. L'architecture Rust est prête pour la capture audio, la traduction et l'intégration CS2.
+- **Voix réelles** : capture du son de CS2 (WASAPI process loopback), détection de parole (Silero VAD), transcription russe/anglaise (whisper.cpp), puis **traduction en français sur le PC** (Opus-MT). Tout est local : aucune clé API, aucun abonnement, aucun envoi en ligne. Les modèles s'installent avec `scripts\download-models.ps1 -Translation`.
+- **Chat écrit** : encore simulé dans l'interface (lignes d'exemple).
 
 ## Dépôt
 
