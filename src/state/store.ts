@@ -113,7 +113,7 @@ const initial: AppState = {
   tg: { click: true, noise: false, cloud: false, hist: false, skipFr: true },
   capture: 'process',
   vad: 55,
-  model: 'small',
+  model: 'base',
   accel: 'cuda',
   engine: 'DeepL',
   src: { ru: true, en: true, de: false, es: false, pt: false, pl: false },

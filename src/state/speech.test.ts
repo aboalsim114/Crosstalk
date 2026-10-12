@@ -39,6 +39,10 @@ describe('speech settings', () => {
     expect(c).toEqual({ model: 'small', languages: ['ru'], vadThreshold: 0.55, glossary: ['rush B', 'mid'] });
   });
 
+  it('starts on the same model as the Rust engine (base), so a fresh install works', () => {
+    expect(speechConfigFrom(useApp.getState()).model).toBe('base');
+  });
+
   it('never sends an empty language list or an out-of-range threshold', () => {
     const c = speechConfigFrom({ model: 'base', vad: 5, src: { ru: false, en: false, de: true, es: false, pt: false, pl: false }, gloss: [] });
     expect(c.languages).toEqual(['ru', 'en']);
