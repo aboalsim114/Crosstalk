@@ -295,6 +295,28 @@ export const translation = {
   onResult: (cb: (t: Translation) => void) => (isTauri ? listen<Translation>('translation://result', (e) => cb(e.payload)) : Promise.resolve(noop)),
 };
 
+// ---------- first-run model download (src-tauri/src/downloads.rs) ----------
+
+export type DownloadState = 'idle' | 'downloading' | 'done' | 'error' | 'cancelled';
+export interface DownloadStatus {
+  state: DownloadState;
+  current: string | null;
+  doneBytes: number;
+  totalBytes: number;
+  missingFiles: number;
+  missingBytes: number;
+  error: string | null;
+}
+
+export const modelDownload = {
+  status: (model: string, translation: boolean): Promise<DownloadStatus | null> =>
+    isTauri ? invoke<DownloadStatus>('models_download_status', { model, translation }) : Promise.resolve(null),
+  start: (model: string, translation: boolean): Promise<DownloadStatus | null> =>
+    isTauri ? invoke<DownloadStatus>('models_download_start', { model, translation }) : Promise.resolve(null),
+  cancel: (): Promise<void> => (isTauri ? invoke<void>('models_download_cancel') : Promise.resolve()),
+  onProgress: (cb: (s: DownloadStatus) => void) => (isTauri ? listen<DownloadStatus>('models://download', (e) => cb(e.payload)) : Promise.resolve(noop)),
+};
+
 export const speech = {
   status: (): Promise<SpeechStatus | null> => (isTauri ? invoke<SpeechStatus>('speech_status') : Promise.resolve(null)),
   stats: (): Promise<SpeechStats | null> => (isTauri ? invoke<SpeechStats>('speech_stats') : Promise.resolve(null)),

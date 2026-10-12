@@ -73,13 +73,15 @@ describe('speech recognition cards in the desktop app', () => {
     useApp.setState({ model: 'base' });
     render(<AudioPage />);
     expect(screen.getByTestId('engine-state')).toHaveTextContent('Modèle absent');
-    expect(screen.getByText('Sélectionné · absent')).toBeInTheDocument();
+    expect(screen.getByText('Sélectionné · téléchargement')).toBeInTheDocument();
     expect(screen.getByText('Installé')).toBeInTheDocument();
     expect(screen.getByText('Rechercher les modèles')).toBeInTheDocument();
     expect(screen.getByText(/CPU · AVX2 · SANS GPU/)).toBeInTheDocument();
-    // Picking an installed model selects it; a missing one cannot be picked.
+    // Picking a model selects it; a missing one is then downloaded by the app.
     fireEvent.click(screen.getByText('whisper-tiny'));
     expect(useApp.getState().model).toBe('tiny');
+    fireEvent.click(screen.getByText('whisper-base'));
+    expect(useApp.getState().model).toBe('base');
   });
 
   it('shows the real VAD activity and rejection counters', () => {

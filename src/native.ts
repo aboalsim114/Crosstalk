@@ -1,9 +1,10 @@
 // Wires the store to the native side: global shortcuts / tray actions in, and the
 // in-game overlay window out. Only active inside the Tauri app.
 
-import { audioCapture, cs2, isTauri, onNativeAction, overlayWindow, speech, translation, type CaptureStatus, type NativeAction, type OverlayWindowConfig } from './backend';
+import { audioCapture, cs2, isTauri, modelDownload, onNativeAction, overlayWindow, speech, translation, type CaptureStatus, type NativeAction, type OverlayWindowConfig } from './backend';
 import { refreshModels, speechConfigFrom, transcriptEntry, useSpeech } from './state/speech';
 import { recordTime, translationConfigFrom, useTranslation } from './state/translation';
+import { setupNeeds, startSetup, useSetup } from './state/setup';
 import { captureModeFor, levelToUnit, recordTestLevel, refreshDevices, useAudio } from './state/audio';
 import { isRunning, useApp, type AppState, type FeedEntry, type Session } from './state/store';
 
@@ -110,6 +111,27 @@ function startAudioBridge(): Promise<() => void>[] {
 export const speechConfigKey = (s: AppState) => JSON.stringify(speechConfigFrom(s));
 
 /** Mirrors the Rust speech recognition: status, real transcripts, voice activity. */
+/**
+ * First run: the installer is small, the app downloads its models by itself
+ * (and again when the user picks another Whisper model or turns translation on).
+ */
+function startSetupBridge(): Promise<() => void>[] {
+  const unlisten: Promise<() => void>[] = [];
+  unlisten.push(modelDownload.onProgress((status) => useSetup.setState({ status })));
+  let lastKey = '';
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const push = (s: AppState) => {
+    const key = JSON.stringify(setupNeeds(s));
+    if (key === lastKey) return;
+    lastKey = key;
+    clearTimeout(timer);
+    timer = setTimeout(() => startSetup(s), 300);
+  };
+  push(useApp.getState());
+  unlisten.push(Promise.resolve(useApp.subscribe((s) => push(s))));
+  return unlisten;
+}
+
 /** Settings that the Rust translation service needs, as a comparable key. */
 export const translationConfigKey = (s: AppState) => JSON.stringify(translationConfigFrom(s));
 
@@ -180,6 +202,7 @@ export function startNativeBridge(): () => void {
   unlisten.push(...startAudioBridge());
   unlisten.push(...startSpeechBridge());
   unlisten.push(...startTranslationBridge());
+  unlisten.push(...startSetupBridge());
 
   const push = () => overlayWindow.pushState(overlayPayload(useApp.getState()));
   unlisten.push(overlayWindow.onReady(push));
