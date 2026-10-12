@@ -136,11 +136,6 @@ jobs:
     env:
       LIBCLANG_PATH: C:\Program Files\LLVM\bin
       CROSSTALK_MODELS_DIR: ${{ github.workspace }}\models
-      # Experiment: whisper.cpp built by clang-cl (ggml's CPU kernels are
-      # markedly slower with MSVC). The installer job still uses MSVC.
-      CC: clang-cl
-      CXX: clang-cl
-      CMAKE_GENERATOR: Ninja
     steps:
       - uses: actions/checkout@v4
 
@@ -151,10 +146,6 @@ jobs:
           workspaces: src-tauri -> target
           key: asr-bench
 
-      # Ninja + clang-cl need the MSVC developer environment (linker, SDK).
-      - uses: ilammy/msvc-dev-cmd@v1
-
-      # PowerShell, not bash: Git Bash's /usr/bin/link would shadow MSVC's link.exe.
       - name: Build the bench
         working-directory: src-tauri
         shell: pwsh
