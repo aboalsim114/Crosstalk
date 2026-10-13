@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Crosstalk — sous-titres pour le stream</title>
+<style>
+  html, body { margin: 0; height: 100%; background: transparent; overflow: hidden; }
+  body { font-family: 'Segoe UI', 'Geist', system-ui, sans-serif; --size: 34px; }
+  #stack { position: absolute; left: 50%; bottom: 7%; transform: translateX(-50%); width: min(88vw, 1500px);
+    display: flex; flex-direction: column; align-items: center; gap: 10px; }
+  .line { max-width: 100%; padding: 10px 22px 12px; border-radius: 14px; background: rgba(10, 9, 8, .72);
+    border: 1px solid rgba(255, 255, 255, .08); text-align: center; animation: in .25s ease-out both; transition: opacity .6s, transform .6s; }
+  .line.out { opacity: 0; transform: translateY(6px); }
+  .meta { font-size: calc(var(--size) * .42); letter-spacing: .14em; text-transform: uppercase; font-weight: 600; margin-bottom: 2px; }
+  .voice .meta { color: #ffa24a; } .chat .meta { color: #7fd4ff; }
+  .fr { font-size: var(--size); font-weight: 600; color: #f4efe6; line-height: 1.25; text-shadow: 0 2px 6px rgba(0, 0, 0, .7); }
+  .orig { font-size: calc(var(--size) * .55); color: #b9b2a7; margin-top: 3px; font-style: italic; }
+  #mark { position: absolute; right: 18px; bottom: 14px; font-size: 15px; letter-spacing: .08em; color: rgba(244, 239, 230, .55);
+    text-shadow: 0 1px 3px rgba(0, 0, 0, .8); }
+  #mark b { color: #ffa24a; font-weight: 600; }
+  @keyframes in { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+</style>
+</head>
+<body>
+<div id="stack"></div>
+<div id="mark" hidden>sous-titres traduits en direct · <b>Crosstalk</b></div>
+<script>
+  const stack = document.getElementById('stack');
+  const mark = document.getElementById('mark');
+  const LANG = { ru: 'russe', en: 'anglais', fr: 'français', xx: '' };
+  const CHANNEL = { CT: 'CT', T: 'T', ALL: 'tous' };
+  let cfg = { enabled: false, max: 3, duration: 8, size: 34, watermark: true };
+
+  function el(tag, cls, text) {
+    const e = document.createElement(tag);
+    if (cls) e.className = cls;
+    if (text) e.textContent = text;
+    return e;
+  }
+  function applyConfig(c) {
+    cfg = c;
+    document.body.style.setProperty('--size', c.size + 'px');
+    mark.hidden = !(c.enabled && c.watermark);
+    if (!c.enabled) stack.replaceChildren();
+    trim();
+  }
+  function trim() {
+    while (stack.children.length > cfg.max) stack.firstChild.remove();
+  }
+  function show(l) {
+    if (!cfg.enabled) return;
+    const box = el('div', 'line ' + (l.kind === 'chat' ? 'chat' : 'voice'));
+    const where = l.kind === 'chat' ? 'chat ' + (CHANNEL[l.channel] || '') : 'voix ' + (LANG[l.lang] || l.lang);
+    box.append(el('div', 'meta', (l.test ? 'test · ' : '') + where + (l.sender ? ' · ' + l.sender : '')));
+    box.append(el('div', 'fr', l.translated));
+    if (l.original) box.append(el('div', 'orig', l.original));
+    stack.append(box);
+    trim();
+    setTimeout(() => { box.classList.add('out'); setTimeout(() => box.remove(), 700); }, cfg.duration * 1000);
+  }
+  const es = new EventSource('/events');
+  es.addEventListener('config', (e) => applyConfig(JSON.parse(e.data)));
+  es.addEventListener('line', (e) => show(JSON.parse(e.data)));
+</script>
+</body>
+</html>

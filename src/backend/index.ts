@@ -532,3 +532,29 @@ export const reply = {
   hide: (): Promise<void> => (isTauri ? invoke<void>('reply_hide') : Promise.resolve()),
   onOpen: (cb: (target: ReplyTarget) => void) => (isTauri ? listen<ReplyTarget>(REPLY_OPEN_EVENT, (e) => cb(e.payload)) : Promise.resolve(noop)),
 };
+
+// ---------- mode streamer: subtitles for OBS (src-tauri/src/stream) ----------
+
+export interface StreamLine {
+  kind: 'voice' | 'chat';
+  lang: string;
+  channel?: string;
+  sender?: string;
+  original?: string;
+  translated?: string;
+  test?: boolean;
+}
+export interface StreamStatus {
+  options: import('../state/store').StreamOpts;
+  listening: boolean;
+  url: string;
+  clients: number;
+  sent: number;
+  error: string | null;
+}
+
+export const streamOverlay = {
+  status: (): Promise<StreamStatus | null> => (isTauri ? invoke<StreamStatus>('stream_status') : Promise.resolve(null)),
+  configure: (options: import('../state/store').StreamOpts): Promise<StreamStatus | null> => (isTauri ? invoke<StreamStatus>('stream_configure', { options }) : Promise.resolve(null)),
+  push: (line: StreamLine): Promise<boolean> => (isTauri ? invoke<boolean>('stream_push', { line }) : Promise.resolve(false)),
+};

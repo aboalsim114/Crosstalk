@@ -30,6 +30,7 @@ mod pipeline;
 mod settings;
 mod shortcuts;
 pub mod speech;
+mod stream;
 pub mod translation;
 mod tray;
 mod updater;
@@ -128,7 +129,10 @@ pub fn run() {
             reply::reply_translate,
             reply::reply_models,
             reply::reply_open,
-            reply::reply_hide
+            reply::reply_hide,
+            stream::stream_status,
+            stream::stream_configure,
+            stream::stream_push
         ])
         .setup(|app| {
             let handle = app.handle();
@@ -176,6 +180,7 @@ pub fn run() {
             app.manage(chat.clone());
             let reply = reply::ReplyService::new(speech::models::models_dir());
             app.manage(reply.clone());
+            app.manage(stream::StreamService::new());
             let gsi = gsi::GsiService::new(Arc::new(gsi::TauriGsiEvents {
                 app: handle.clone(),
                 speech: speech.clone(),
