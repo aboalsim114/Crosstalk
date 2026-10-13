@@ -23,6 +23,7 @@ mod gsi;
 mod history;
 mod logs;
 mod overlay;
+mod reply;
 // Traits and helpers for the upcoming native pipeline; wired in later phases.
 #[allow(dead_code)]
 mod pipeline;
@@ -121,7 +122,13 @@ pub fn run() {
             logs::diag_report_issue,
             gsi::gsi_status,
             gsi::gsi_install,
-            gsi::gsi_uninstall
+            gsi::gsi_uninstall,
+            reply::reply_phrases,
+            reply::reply_phrase_text,
+            reply::reply_translate,
+            reply::reply_models,
+            reply::reply_open,
+            reply::reply_hide
         ])
         .setup(|app| {
             let handle = app.handle();
@@ -167,10 +174,13 @@ pub fn run() {
                 chat::user_rules_file(),
             );
             app.manage(chat.clone());
+            let reply = reply::ReplyService::new(speech::models::models_dir());
+            app.manage(reply.clone());
             let gsi = gsi::GsiService::new(Arc::new(gsi::TauriGsiEvents {
                 app: handle.clone(),
                 speech: speech.clone(),
                 translation: translation.clone(),
+                reply,
             }));
             gsi.refresh(
                 chat.status()
@@ -208,6 +218,7 @@ pub fn run() {
             tray::create(handle)?;
             shortcuts::register_all(handle);
             overlay::create(handle)?;
+            reply::create_window(handle)?;
             if !std::env::args().any(|a| a == MINIMIZED_FLAG) {
                 actions::show_main(handle);
             }

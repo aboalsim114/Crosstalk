@@ -360,6 +360,7 @@ pub struct TauriGsiEvents {
     pub app: tauri::AppHandle,
     pub speech: Arc<crate::speech::SpeechService>,
     pub translation: Arc<crate::translation::TranslationService>,
+    pub reply: Arc<crate::reply::ReplyService>,
 }
 
 impl GsiEvents for TauriGsiEvents {
@@ -372,8 +373,9 @@ impl GsiEvents for TauriGsiEvents {
         let info = map.and_then(|m| maps().get(m));
         self.speech
             .set_map_prompt(info.map(|i| i.prompt.clone()).unwrap_or_default());
-        self.translation
-            .set_map_terms(info.map(|i| i.keep.clone()).unwrap_or_default());
+        let keep = info.map(|i| i.keep.clone()).unwrap_or_default();
+        self.reply.set_map_terms(keep.clone());
+        self.translation.set_map_terms(keep);
     }
 }
 

@@ -1,7 +1,8 @@
 // Wires the store to the native side: global shortcuts / tray actions in, and the
 // in-game overlay window out. Only active inside the Tauri app.
 
-import { audioCapture, chat, cs2, isTauri, modelDownload, onNativeAction, overlayWindow, speech, translation, type CaptureStatus, type NativeAction, type OverlayWindowConfig } from './backend';
+import { recentLangs } from './pages/ReplyCard';
+import { audioCapture, chat, cs2, isTauri, modelDownload, onNativeAction, overlayWindow, reply, speech, translation, type CaptureStatus, type NativeAction, type OverlayWindowConfig } from './backend';
 import { refreshModels, speechConfigFrom, transcriptEntry, useSpeech } from './state/speech';
 import { recordTime, translationConfigFrom, useTranslation } from './state/translation';
 import { setupNeeds, startSetup, useSetup } from './state/setup';
@@ -46,7 +47,8 @@ export function overlayConfig(s: AppState, prev?: AppState): OverlayWindowConfig
 
 export function applyNativeAction(a: NativeAction) {
   const s = useApp.getState();
-  ({ overlay: s.toggleOverlay, pause: s.togglePause, emergency: s.emergency, session: s.toggleSession })[a]();
+  const openReply = () => void reply.open(recentLangs(s.feed));
+  ({ overlay: s.toggleOverlay, pause: s.togglePause, emergency: s.emergency, session: s.toggleSession, reply: openReply })[a]();
 }
 
 /** Sessions during which the real capture runs. */

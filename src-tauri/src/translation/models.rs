@@ -8,6 +8,7 @@ use serde::Serialize;
 
 pub struct PairSpec {
     pub source: &'static str,
+    pub target: &'static str,
     pub repo: &'static str,
     pub dir: &'static str,
     /// Exact sizes on Hugging Face: a different size is an interrupted download.
@@ -17,6 +18,7 @@ pub struct PairSpec {
 pub const CATALOG: &[PairSpec] = &[
     PairSpec {
         source: "ru",
+        target: "fr",
         repo: "Helsinki-NLP/opus-mt-ru-fr",
         dir: "opus-mt-ru-fr",
         files: [
@@ -29,6 +31,7 @@ pub const CATALOG: &[PairSpec] = &[
     },
     PairSpec {
         source: "en",
+        target: "fr",
         repo: "Helsinki-NLP/opus-mt-en-fr",
         dir: "opus-mt-en-fr",
         files: [
@@ -40,6 +43,40 @@ pub const CATALOG: &[PairSpec] = &[
         ],
     },
 ];
+
+/// French to the teammates' language ("Réponds dans leur langue", src/reply).
+pub const REPLY: &[PairSpec] = &[
+    PairSpec {
+        source: "fr",
+        target: "en",
+        repo: "Helsinki-NLP/opus-mt-fr-en",
+        dir: "opus-mt-fr-en",
+        files: [
+            ("config.json", 1_416),
+            ("vocab.json", 1_339_166),
+            ("source.spm", 802_397),
+            ("target.spm", 778_395),
+            ("pytorch_model.bin", 300_827_685),
+        ],
+    },
+    PairSpec {
+        source: "fr",
+        target: "ru",
+        repo: "Helsinki-NLP/opus-mt-fr-ru",
+        dir: "opus-mt-fr-ru",
+        files: [
+            ("config.json", 1_381),
+            ("vocab.json", 2_658_919),
+            ("source.spm", 820_963),
+            ("target.spm", 1_063_848),
+            ("pytorch_model.bin", 310_806_561),
+        ],
+    },
+];
+
+pub fn reply_pair(target: &str) -> Option<&'static PairSpec> {
+    REPLY.iter().find(|p| p.target == target)
+}
 
 pub fn pair(source: &str) -> Option<&'static PairSpec> {
     CATALOG.iter().find(|p| p.source == source)
@@ -100,6 +137,13 @@ mod tests {
     fn every_pair_targets_french() {
         for p in CATALOG {
             assert!(p.repo.ends_with(&format!("{}-fr", p.source)));
+            assert_eq!(p.target, "fr");
         }
+        for p in REPLY {
+            assert_eq!(p.source, "fr");
+            assert!(p.repo.ends_with(&format!("fr-{}", p.target)));
+            assert_eq!(p.dir, p.repo.trim_start_matches("Helsinki-NLP/"));
+        }
+        assert!(reply_pair("ru").is_some() && reply_pair("de").is_none());
     }
 }

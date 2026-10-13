@@ -106,7 +106,7 @@ export function DiagPage() {
     trRow,
     keysFailed.length
       ? ['Raccourcis globaux', `${keysFailed.map((k) => k.keys).join(', ')} déjà utilisé par une autre application`, 'AVERT.']
-      : ['Raccourcis globaux', 'Ctrl+Alt+F8 / F9 / F10 · aucun conflit', 'OK'],
+      : ['Raccourcis globaux', 'Ctrl+Alt+F7 / F8 / F9 / F10 · aucun conflit', 'OK'],
   ];
   const demoLogs: [string, string, string][] = [
     ['14:02:11', 'INFO', 'app-shell: instance unique acquise'],

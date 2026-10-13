@@ -3,6 +3,7 @@ import { ToggleRow, fnt } from '../components/atoms';
 import { useApp, type SourceLang } from '../state/store';
 import { ChatCard } from './ChatCard';
 import { GsiCard } from './GsiCard';
+import { ReplyCard } from './ReplyCard';
 
 const COLS = '140px 110px minmax(0,1fr) 24px';
 
@@ -49,6 +50,7 @@ export function LangPage() {
         </div>
         <ChatCard />
         {isTauri && <GsiCard />}
+        {isTauri && <ReplyCard />}
       </div>
 
       <div className="glass flex flex-col overflow-hidden">

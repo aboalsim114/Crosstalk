@@ -11,7 +11,8 @@ use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut,
 
 use crate::actions::{self, Action};
 
-pub const BINDINGS: [(Code, Action, &str); 3] = [
+pub const BINDINGS: [(Code, Action, &str); 4] = [
+    (Code::F7, Action::Reply, "Ctrl+Alt+F7"),
     (Code::F8, Action::Overlay, "Ctrl+Alt+F8"),
     (Code::F9, Action::Pause, "Ctrl+Alt+F9"),
     (Code::F10, Action::Emergency, "Ctrl+Alt+F10"),
