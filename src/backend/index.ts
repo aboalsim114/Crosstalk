@@ -192,6 +192,8 @@ export interface SpeechConfig {
   /** 0.2–0.9. */
   vadThreshold: number;
   glossary: string[];
+  /** Where Whisper runs; auto = GPU only if measured clearly faster than the CPU. */
+  accel: 'cpu' | 'gpu' | 'auto';
 }
 
 export interface SpeechStatus {

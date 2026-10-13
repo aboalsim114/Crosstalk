@@ -10,9 +10,27 @@ import { useApp, type Accel, type CaptureSource } from '../state/store';
 import { pairSummary, percentile, rescanTranslation, useTranslation } from '../state/translation';
 
 const ACCELS: [Accel, string][] = [
+  ['auto', 'AUTO'],
+  ['gpu', 'GPU'],
   ['cpu', 'CPU'],
-  ['cuda', 'CUDA'],
 ];
+
+/** What the engine card says about where Whisper runs. */
+export function accelNote(accel: Accel, backend: string | undefined): string {
+  if (accel === 'auto') {
+    if (!backend) return 'Auto : mesure de la carte graphique et du processeur…';
+    const gpu = /^GPU · (.+?) \(Vulkan\) · auto : (.+)$/.exec(backend);
+    if (gpu) return `Auto : carte graphique ${gpu[1]}, ${gpu[2]}.`;
+    const slow = /auto : carte graphique pas assez rapide \((.+)\)$/.exec(backend);
+    if (slow) return `Auto : processeur (carte graphique pas assez rapide, ${slow[1]}).`;
+    if (backend.includes('aucune carte graphique')) return 'Auto : processeur (aucune carte graphique Vulkan).';
+    return 'Auto : processeur.';
+  }
+  if (accel === 'cpu') return 'Processeur choisi : la carte graphique reste au jeu.';
+  if (backend?.startsWith('GPU')) return 'Carte graphique : transcription bien plus rapide, modèle plus précis possible.';
+  if (!backend) return 'Carte graphique demandée…';
+  return 'Aucune carte graphique Vulkan utilisable : Whisper tourne sur le processeur.';
+}
 
 function CaptureCard() {
   const s = useApp();
@@ -188,8 +206,11 @@ function NativeModelCard() {
     <div className="glass flex flex-col gap-2 p-5">
       <div className="flex items-center justify-between pb-1">
         <span className="lbl">MODÈLE LOCAL · WHISPER</span>
-        <span style={{ font: fnt(500, 9.5, 'mono'), letterSpacing: '.12em', color: '#6e6961' }}>{sp.status?.backend ?? 'CPU'} · SANS GPU</span>
+        <Seg options={ACCELS} value={s.accel} onChange={(v) => s.set({ accel: v })} item={{ padding: '3px 11px', font: fnt(500, 10.5, 'mono') }} />
       </div>
+      <span data-testid="accel-note" style={{ font: fnt(400, 10.5, 'sans', 1.45), color: '#6e6961' }}>
+        {sp.status?.state === 'loading' ? 'Chargement du modèle…' : accelNote(s.accel, sp.status?.backend)}
+      </span>
       <div className="flex items-baseline justify-between gap-3 pb-1" data-testid="engine-state">
         <span style={{ font: fnt(500, 12.5), color: engine.color }}>{engine.value}</span>
         <span className="truncate text-right" style={{ font: fnt(400, 11), color: '#6e6961' }}>

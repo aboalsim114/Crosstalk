@@ -47,6 +47,21 @@ pub struct SpeechConfig {
     /// Not exposed in the UI; the bench compares both (`--full-encoder`).
     #[serde(default = "default_true")]
     pub fast_encoder: bool,
+    /// Where Whisper runs: CPU, graphics card (Vulkan), or the faster of
+    /// both measured when the model loads (default).
+    #[serde(default)]
+    pub accel: Accel,
+}
+
+/// Where Whisper runs.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Accel {
+    Cpu,
+    Gpu,
+    /// GPU only if measured clearly faster than the CPU on this PC.
+    #[default]
+    Auto,
 }
 
 impl Default for SpeechConfig {
@@ -60,6 +75,7 @@ impl Default for SpeechConfig {
                 .map(|s| s.to_string())
                 .collect(),
             fast_encoder: true,
+            accel: Accel::Auto,
         }
     }
 }
@@ -165,7 +181,8 @@ pub struct SpeechStatus {
     pub models_dir: String,
     pub error: Option<String>,
     pub load_ms: Option<u32>,
-    /// Inference backend, e.g. "CPU · AVX2". No GPU in this build.
+    /// Inference backend of the loaded model, e.g. "CPU · AVX2" or
+    /// "GPU · NVIDIA GeForce RTX 3060 (Vulkan)".
     pub backend: String,
     pub threads: u32,
 }
@@ -208,6 +225,7 @@ mod tests {
             vad_threshold: 2.0,
             glossary: vec!["  rush B ".into(), "".into(), "a\0wp".into()],
             fast_encoder: false,
+            accel: Accel::Cpu,
         }
         .sanitized();
         assert_eq!(c.vad_threshold, 0.9);

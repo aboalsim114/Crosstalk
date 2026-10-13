@@ -53,4 +53,11 @@ describe('settings kept between launches', () => {
     expect(useApp.getState().ownName).toBe('Me');
     expect(useApp.getState().gloss).toEqual([['rush B', 'Conserver', 'rush B']]);
   });
+
+  it('turns the old simulated "cuda" choice into the real GPU setting', () => {
+    expect(restore({ version: 1, settings: { accel: 'cuda' } }, useApp.getState()).app.accel).toBe('auto');
+    expect(restore({ version: 1, settings: { accel: 'gpu' } }, useApp.getState()).app.accel).toBe('gpu');
+    expect(restore({ version: 1, settings: { accel: 'cpu' } }, useApp.getState()).app.accel).toBe('cpu');
+    expect(restore({ version: 1, settings: { accel: 'tpu' } }, useApp.getState()).app.accel).toBeUndefined();
+  });
 });

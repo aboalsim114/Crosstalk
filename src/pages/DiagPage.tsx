@@ -114,7 +114,7 @@ export function DiagPage() {
     ['14:02:11', 'INFO', 'cs2-detect: 2 bibliothèques Steam'],
     ['14:02:12', 'INFO', 'chat-ingest: suivi depuis offset 1 284 330'],
     ['14:02:12', fb ? 'WARN' : 'INFO', fb ? 'audio-win: repli endpoint loopback' : 'audio-win: process loopback pid=18244'],
-    ['14:02:13', 'INFO', 'asr: whisper-small chargé (CUDA)'],
+    ['14:02:13', 'INFO', 'asr: whisper-small chargé (GPU)'],
     ['14:02:13', 'INFO', 'translation: opus-mt-ru-fr chargé (local, CPU)'],
     ['14:03:40', 'DEBUG', 'audio-pipeline: segment 3,1 s → asr'],
     ['14:03:41', 'WARN', 'audio-pipeline: segment périmé abandonné'],
