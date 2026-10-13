@@ -84,6 +84,8 @@ pub struct ChatStatus {
     pub messages: u64,
     pub own_ignored: u64,
     pub duplicates: u64,
+    /// Lines that look like chat but match no rule (game format changed?).
+    pub unrecognized: u64,
 }
 
 pub trait ChatEvents: Send + Sync {
@@ -152,6 +154,7 @@ impl ChatService {
             messages: 0,
             own_ignored: 0,
             duplicates: 0,
+            unrecognized: 0,
         };
         Arc::new(Self {
             inner: Arc::new(Inner {
@@ -266,6 +269,22 @@ fn follow(inner: &Inner, log: &Path, generation: u64) {
 
 fn handle_line(inner: &Inner, line: &str, dedup: &mut Dedup, generation: u64) {
     let Some(chat) = inner.rules.lock().unwrap().parse_line(line) else {
+        if let Some(shape) = parser::chat_shape(line) {
+            let n = {
+                let mut n = 0;
+                inner.publish(|s| {
+                    s.unrecognized += 1;
+                    n = s.unrecognized;
+                });
+                n
+            };
+            if n <= 5 {
+                crate::logs::warn(
+                    "chat",
+                    &format!("ligne de chat non reconnue, forme : {shape}"),
+                );
+            }
+        }
         return;
     };
     if !dedup.fresh(&chat, Instant::now()) {

@@ -377,6 +377,8 @@ export interface ChatStatus {
   messages: number;
   ownIgnored: number;
   duplicates: number;
+  /** Lines that look like chat but match no rule. */
+  unrecognized: number;
 }
 
 export const chat = {

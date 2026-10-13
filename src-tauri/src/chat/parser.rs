@@ -129,6 +129,46 @@ impl Rules {
     }
 }
 
+/// The shape of a line that looks like chat (`[TAG] … : …`) but matched no
+/// rule, for the journal: the tag is kept (it is the game's label), letters
+/// become `x` and digits `9`, so no name or message is ever written.
+pub fn chat_shape(line: &str) -> Option<String> {
+    let line = line.trim();
+    let rest =
+        line.trim_start_matches(|c: char| c.is_ascii_digit() || matches!(c, '/' | ':' | '.' | ' '));
+    let rest = rest.strip_prefix('[')?;
+    let (tag, tail) = rest.split_once(']')?;
+    let tag_ok = !tag.is_empty()
+        && tag.chars().count() <= 16
+        && tag
+            .chars()
+            .all(|c| c.is_uppercase() || matches!(c, '(' | ')' | '-' | ' '));
+    if !tag_ok || !tail.contains(':') || tail.trim().is_empty() {
+        return None;
+    }
+    let mut shape = format!("[{tag}]");
+    let mut last_x = false;
+    for c in tail.chars().take(120) {
+        if matches!(c, '\u{200e}' | '\u{200f}') {
+            continue;
+        }
+        if c.is_alphabetic() {
+            if !last_x {
+                shape.push('x');
+            }
+            last_x = true;
+            continue;
+        }
+        last_x = false;
+        shape.push(match c {
+            '0'..='9' => '9',
+            c if c.is_control() => '?',
+            c => c,
+        });
+    }
+    Some(shape)
+}
+
 /// Drops a message repeated by the same player within 2 s (F-12).
 #[derive(Default)]
 pub struct Dedup {
@@ -185,6 +225,46 @@ mod tests {
     }
 
     #[test]
+    fn reads_the_french_and_russian_game_formats() {
+        // French CS2: [GÉNÉRAL] / [AT], "[MORT(E)]", "@Lieu", space before the colon.
+        let l = p("[AT] Боец_7 @Départ AT : идём на Б").unwrap();
+        assert_eq!(
+            (
+                l.channel,
+                l.sender.as_str(),
+                l.location.as_deref(),
+                l.message.as_str(),
+                l.dead
+            ),
+            (Channel::Ct, "Боец_7", Some("Départ AT"), "идём на Б", false)
+        );
+        let l = p("[AT] Боец_7 [MORT(E)] : один лоу").unwrap();
+        assert_eq!(
+            (l.sender.as_str(), l.message.as_str(), l.dead),
+            ("Боец_7", "один лоу", true)
+        );
+        let l = p("[GÉNÉRAL] Игрок2 : гг").unwrap();
+        assert_eq!(
+            (l.channel, l.sender.as_str(), l.message.as_str()),
+            (Channel::All, "Игрок2", "гг")
+        );
+        let l = p("[AT] • Player One @Départ AT : rotate A").unwrap();
+        assert_eq!(
+            (l.sender.as_str(), l.message.as_str()),
+            ("Player One", "rotate A")
+        );
+        let l = p("[T] *MORT* Bob : eco").unwrap();
+        assert!(l.dead && l.channel == Channel::T && l.sender == "Bob");
+        let l = p("[ВСЕ] Саша [МЁРТВ]: гг").unwrap();
+        assert_eq!(
+            (l.channel, l.sender.as_str(), l.dead),
+            (Channel::All, "Саша", true)
+        );
+        let l = p("[КТ] Саша: раш б").unwrap();
+        assert_eq!(l.channel, Channel::Ct);
+    }
+
+    #[test]
     fn ignores_everything_that_is_not_chat() {
         for line in [
             "Damage Given to \"Bot Gary\" - 27 in 1 hit",
@@ -218,6 +298,17 @@ mod tests {
         assert_eq!(r.version, Rules::embedded().version);
         assert!(warn.unwrap().contains("channel"));
         std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn unknown_chat_lines_are_logged_by_shape_only() {
+        assert_eq!(
+            chat_shape("[ÉQUIPE] Jean Dupont @Milieu : on rush 2 fois").as_deref(),
+            Some("[ÉQUIPE] x x @x : x x 9 x")
+        );
+        assert_eq!(chat_shape("Damage Given to \"Bot\" - 27 in 1 hit"), None);
+        assert_eq!(chat_shape("[Client] CL: x"), None);
+        assert_eq!(chat_shape("+2900 $ à l'équipe pour avoir perdu."), None);
     }
 
     #[test]

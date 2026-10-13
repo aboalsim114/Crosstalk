@@ -100,6 +100,7 @@ export function chatCounts(st: ChatStatus | null): string {
   if (!st) return '';
   const parts = [`${st.messages} message${st.messages > 1 ? 's' : ''}`];
   if (st.ownIgnored) parts.push(`${st.ownIgnored} des vôtres ignoré${st.ownIgnored > 1 ? 's' : ''}`);
+  if (st.unrecognized) parts.push(`${st.unrecognized} non reconnue${st.unrecognized > 1 ? 's' : ''} (voir Diagnostic)`);
   if (st.duplicates) parts.push(`${st.duplicates} doublon${st.duplicates > 1 ? 's' : ''}`);
   return parts.join(' · ');
 }

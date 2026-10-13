@@ -43,3 +43,10 @@ Commit : …   Windows : …   Steam : bibliothèques … · CS2 dans …
 2.1 – 2.11 : ✅/❌ + remarques (sans le texte des joueurs)
 Règles : intégrées / fichier utilisateur · lignes reconnues : … / …
 ```
+
+## Jeu en français (ou en russe)
+
+| # | Action | Résultat attendu |
+| --- | --- | --- |
+| F1 | CS2 en français, partie avec chat d'équipe et général | Les lignes `[AT] Nom @Lieu : message`, `[GÉNÉRAL] Nom : message` et `Nom [MORT(E)] : message` apparaissent dans le Script, traduites (russe/anglais → français). |
+| F2 | Diagnostic › Parseur de chat | Règles `cs2-2026.10b`. Si une ligne de chat n'est pas reconnue : avertissement et, dans le journal, sa **forme** seulement (`[TAG] x @x : x`), jamais le texte ni le pseudo. |
