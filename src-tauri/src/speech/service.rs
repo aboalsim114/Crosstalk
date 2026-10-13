@@ -1253,7 +1253,10 @@ mod tests {
             assert!(Instant::now() < end);
             std::thread::sleep(Duration::from_millis(5));
         }
-        assert!(svc.dictate(&[0.0; 16]).unwrap_err().contains("pas encore chargé"));
+        assert!(svc
+            .dictate(&[0.0; 16])
+            .unwrap_err()
+            .contains("pas encore chargé"));
         let (svc, _rx, _) = service("unused", 0, true);
         wait_ready(&svc);
         assert_eq!(svc.dictate(&[0.0; 16_000]).unwrap(), "fr:16000");

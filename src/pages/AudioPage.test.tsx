@@ -134,5 +134,8 @@ describe('where Whisper runs', () => {
     expect(accelNote('auto', 'GPU · NVIDIA GeForce RTX 3060 (Vulkan) · auto : 4,2× plus rapide que le processeur')).toBe('Auto : carte graphique NVIDIA GeForce RTX 3060, 4,2× plus rapide que le processeur.');
     expect(accelNote('auto', 'CPU · AVX2 · auto : carte graphique pas assez rapide (1,1×)')).toBe('Auto : processeur (carte graphique pas assez rapide, 1,1×).');
     expect(accelNote('auto', 'CPU · AVX2 · auto (aucune carte graphique Vulkan)')).toBe('Auto : processeur (aucune carte graphique Vulkan).');
+    // The driver crashed in the separate test process: said plainly.
+    expect(accelNote('auto', 'CPU · AVX2 · auto (le pilote graphique a planté pendant le test)')).toBe('Auto : processeur (le pilote graphique a planté pendant le test).');
+    expect(accelNote('gpu', 'CPU · AVX2 · GPU (Crosstalk s\'est fermé brutalement en utilisant la carte graphique)')).toMatch(/^Carte graphique non utilisée : Crosstalk s'est fermé brutalement/);
   });
 });
