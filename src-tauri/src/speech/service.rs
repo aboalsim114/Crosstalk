@@ -77,7 +77,7 @@ pub trait EngineLoader: Send + Sync + 'static {
         &self,
         dir: &Path,
         model: &str,
-        gpu: bool,
+        accel: super::types::Accel,
     ) -> Result<Box<dyn Recognizer>, SpeechError>;
     /// Path of the model file if installed (for the status).
     fn model_path(&self, dir: &Path, model: &str) -> Option<PathBuf>;
@@ -429,7 +429,7 @@ impl SpeechService {
         let config = config.sanitized();
         let model_changed = {
             let mut c = self.inner.config.lock().unwrap();
-            let changed = c.model != config.model || c.gpu != config.gpu;
+            let changed = c.model != config.model || c.accel != config.accel;
             *c = config.clone();
             changed
         };
@@ -476,18 +476,20 @@ impl SpeechService {
                     }
                 }
                 loop {
-                    let (model, gpu) = {
+                    let (model, accel) = {
                         let c = inner.config.lock().unwrap();
-                        (c.model.clone(), c.gpu)
+                        (c.model.clone(), c.accel)
                     };
-                    let result = inner.loader.load_recognizer(&inner.models_dir, &model, gpu);
+                    let result = inner
+                        .loader
+                        .load_recognizer(&inner.models_dir, &model, accel);
                     // Configuration may change during a slow load. Never install a
                     // superseded model, and keep loading until the current one wins.
                     // Wait for in-flight inference without holding the settings
                     // lock: status/configure must remain responsive.
                     let mut recognizer = inner.recognizer.lock().unwrap();
                     let config = inner.config.lock().unwrap();
-                    if config.model != model || config.gpu != gpu {
+                    if config.model != model || config.accel != accel {
                         continue;
                     }
                     let mut error = detector_error.take();
@@ -1174,7 +1176,7 @@ mod tests {
             &self,
             _dir: &Path,
             model: &str,
-            _gpu: bool,
+            _accel: crate::speech::types::Accel,
         ) -> Result<Box<dyn Recognizer>, SpeechError> {
             if !self.has_model {
                 return Err(SpeechError::NotInstalled(model.into()));
@@ -1654,7 +1656,7 @@ mod tests {
                 &self,
                 _: &Path,
                 model: &str,
-                _: bool,
+                _: crate::speech::types::Accel,
             ) -> Result<Box<dyn Recognizer>, SpeechError> {
                 let first = {
                     let mut models = self.models.lock().unwrap();

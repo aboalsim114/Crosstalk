@@ -23,7 +23,7 @@ const t: Transcript = {
 
 const status = (over: Partial<SpeechStatus> = {}): SpeechStatus => ({
   state: 'ready',
-  config: { model: 'base', languages: ['ru', 'en'], vadThreshold: 0.55, glossary: [], gpu: true },
+  config: { model: 'base', languages: ['ru', 'en'], vadThreshold: 0.55, glossary: [], accel: 'auto' },
   modelPath: 'C:\\m\\ggml-base.bin',
   vadReady: true,
   modelsDir: 'C:\\m',
@@ -37,8 +37,8 @@ const status = (over: Partial<SpeechStatus> = {}): SpeechStatus => ({
 describe('speech settings', () => {
   it('maps the UI settings to the Rust config', () => {
     const c = speechConfigFrom({ model: 'small', vad: 55, src: { ru: true, en: false, de: true, es: false, pt: false, pl: false }, gloss: GLOSSARY.slice(0, 2) });
-    expect(c).toEqual({ model: 'small', languages: ['ru'], vadThreshold: 0.55, glossary: ['rush B', 'mid'], gpu: true });
-    expect(speechConfigFrom({ model: 'small', vad: 55, src: { ru: true, en: false, de: false, es: false, pt: false, pl: false }, gloss: [], accel: 'cpu' }).gpu).toBe(false);
+    expect(c).toEqual({ model: 'small', languages: ['ru'], vadThreshold: 0.55, glossary: ['rush B', 'mid'], accel: 'auto' });
+    expect(speechConfigFrom({ model: 'small', vad: 55, src: { ru: true, en: false, de: false, es: false, pt: false, pl: false }, gloss: [], accel: 'cpu' }).accel).toBe('cpu');
   });
 
   it('starts on the same model as the Rust engine (base), so a fresh install works', () => {

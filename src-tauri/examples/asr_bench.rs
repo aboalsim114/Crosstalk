@@ -13,7 +13,9 @@
 //! crosstalk-asr-bench --live 120 --model base
 //! ```
 //!
-//! `--gpu` runs Whisper on the graphics card (Vulkan builds; CPU otherwise).
+//! `--gpu-info` prints the Vulkan GPU Whisper would use (or none) and exits.
+//! `--accel cpu|gpu|auto` (default cpu): where Whisper runs (Vulkan builds;
+//! `auto` measures both and keeps the GPU if clearly faster).
 //! `--full-encoder` encodes Whisper's full 30 s window instead of the segment
 //! duration (the app's default), to compare speed and accuracy.
 //! `--vad-only` runs the VAD and segmenter without Whisper (no model needed).
@@ -37,7 +39,7 @@ use crosstalk_lib::speech::cpu::process_cpu_time;
 use crosstalk_lib::speech::engine::{default_threads, logical_threads, Recognizer};
 use crosstalk_lib::speech::vad::VoiceDetector;
 use crosstalk_lib::speech::{
-    models, EngineLoader, Lang, RejectReason, SpeechConfig, WhisperLoader,
+    models, Accel, EngineLoader, Lang, RejectReason, SpeechConfig, WhisperLoader,
 };
 
 fn arg(args: &[String], name: &str) -> Option<String> {
@@ -250,6 +252,14 @@ const HEADER: &str = "| Modèle | Scénario | WER ru | CER ru | WER en | CER en 
 
 fn main() {
     let args: Vec<String> = std::env::args().collect();
+    #[cfg(feature = "whisper")]
+    if args.iter().any(|a| a == "--gpu-info") {
+        match crosstalk_lib::speech::engine::vulkan_gpu() {
+            Some(name) => println!("GPU Vulkan : {name}"),
+            None => println!("GPU Vulkan : aucun (Whisper sur le processeur)"),
+        }
+        return;
+    }
     if args.iter().any(|a| a == "--help" || a == "-h") {
         println!(
             "{}",
@@ -283,7 +293,11 @@ fn main() {
         config.languages = parse_langs(&l);
     }
     config.fast_encoder = !args.iter().any(|a| a == "--full-encoder");
-    config.gpu = args.iter().any(|a| a == "--gpu");
+    config.accel = match arg(&args, "--accel").as_deref() {
+        Some("gpu") => Accel::Gpu,
+        Some("auto") => Accel::Auto,
+        _ => Accel::Cpu,
+    };
     if let Some(v) = arg(&args, "--vad-threshold").and_then(|v| v.parse().ok()) {
         config.vad_threshold = v;
     }
@@ -326,7 +340,7 @@ fn main() {
         .filter(|m| !m.is_empty())
     {
         let t0 = Instant::now();
-        let mut recognizer = match loader.load_recognizer(&dir, model, config.gpu) {
+        let mut recognizer = match loader.load_recognizer(&dir, model, config.accel) {
             Ok(r) => r,
             Err(e) => fail(&format!("modèle {model} : {e}")),
         };

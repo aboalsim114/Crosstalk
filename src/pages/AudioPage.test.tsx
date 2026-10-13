@@ -56,7 +56,7 @@ describe('speech recognition cards in the desktop app', () => {
       native: true,
       status: {
         state: 'missing',
-        config: { model: 'base', languages: ['ru', 'en'], vadThreshold: 0.55, glossary: [], gpu: true },
+        config: { model: 'base', languages: ['ru', 'en'], vadThreshold: 0.55, glossary: [], accel: 'auto' },
         modelPath: null,
         vadReady: true,
         modelsDir: 'C:\\Users\\x\\AppData\\Local\\Crosstalk\\models',
@@ -76,8 +76,8 @@ describe('speech recognition cards in the desktop app', () => {
     expect(screen.getByText('Sélectionné · téléchargement')).toBeInTheDocument();
     expect(screen.getByText('Installé')).toBeInTheDocument();
     expect(screen.getByText('Rechercher les modèles')).toBeInTheDocument();
-    // GPU asked, CPU in use (no Vulkan GPU): said plainly.
-    expect(screen.getByTestId('accel-note')).toHaveTextContent('Aucune carte graphique Vulkan utilisable');
+    // Auto asked, CPU in use (backend from the engine): said plainly.
+    expect(screen.getByTestId('accel-note')).toHaveTextContent(/processeur/i);
     // Picking a model selects it; a missing one is then downloaded by the app.
     fireEvent.click(screen.getByText('whisper-tiny'));
     expect(useApp.getState().model).toBe('tiny');
@@ -131,5 +131,8 @@ describe('where Whisper runs', () => {
     expect(accelNote('gpu', 'GPU · NVIDIA GeForce RTX 3060 (Vulkan)')).toMatch(/^Carte graphique/);
     expect(accelNote('gpu', 'CPU · AVX2')).toMatch(/Aucune carte graphique/);
     expect(accelNote('cpu', 'CPU · AVX2')).toMatch(/Processeur choisi/);
+    expect(accelNote('auto', 'GPU · NVIDIA GeForce RTX 3060 (Vulkan) · auto : 4,2× plus rapide que le processeur')).toBe('Auto : carte graphique NVIDIA GeForce RTX 3060, 4,2× plus rapide que le processeur.');
+    expect(accelNote('auto', 'CPU · AVX2 · auto : carte graphique pas assez rapide (1,1×)')).toBe('Auto : processeur (carte graphique pas assez rapide, 1,1×).');
+    expect(accelNote('auto', 'CPU · AVX2 · auto (aucune carte graphique Vulkan)')).toBe('Auto : processeur (aucune carte graphique Vulkan).');
   });
 });

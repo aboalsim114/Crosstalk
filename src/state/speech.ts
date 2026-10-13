@@ -33,7 +33,7 @@ export function speechConfigFrom(s: Pick<AppState, 'model' | 'vad' | 'src' | 'gl
     languages: languages.length ? [...languages] : ['ru', 'en'],
     vadThreshold: Math.min(0.9, Math.max(0.2, s.vad / 100)),
     glossary: s.gloss.map((g: GlossEntry) => g[0]),
-    gpu: s.accel !== 'cpu',
+    accel: s.accel ?? 'auto',
   };
 }
 

@@ -48,6 +48,21 @@ pub trait Recognizer: Send {
     ) -> Result<Recognition, SpeechError>;
 }
 
+/// The GPU is kept in Auto mode only if it does the test in at most this
+/// share of the CPU's time: it also draws CS2, a small gain is not worth it.
+pub const AUTO_GPU_MAX_RATIO: f32 = 0.75;
+
+/// Auto mode: `(use the GPU, CPU time / GPU time)`.
+pub fn pick_accel(gpu_ms: u32, cpu_ms: u32) -> (bool, f32) {
+    let speedup = cpu_ms.max(1) as f32 / gpu_ms.max(1) as f32;
+    (gpu_ms as f32 <= cpu_ms as f32 * AUTO_GPU_MAX_RATIO, speedup)
+}
+
+/// "4,2×" (French decimal comma).
+pub fn speedup_label(x: f32) -> String {
+    format!("{x:.1}×").replace('.', ",")
+}
+
 /// Threads for Whisper: half of the logical CPUs, at most 4, so that CS2
 /// keeps the other half (the ASR thread also runs below normal priority).
 pub fn logical_threads() -> usize {
@@ -69,7 +84,11 @@ pub fn default_threads() -> usize {
 
 /// whisper.cpp and ggml log every call to stderr; route them nowhere.
 #[cfg(feature = "whisper")]
+/// `CROSSTALK_WHISPER_LOGS=1` keeps them on stderr (diagnosis).
 pub fn quiet_whisper_logs() {
+    if std::env::var_os("CROSSTALK_WHISPER_LOGS").is_some_and(|v| v == "1") {
+        return;
+    }
     whisper_rs::install_logging_hooks();
 }
 
@@ -90,7 +109,7 @@ pub fn pick_language(langs: &[Lang], prob_of: impl Fn(Lang) -> f32) -> (Lang, f3
 }
 
 #[cfg(feature = "whisper")]
-pub use whisper_impl::WhisperRecognizer;
+pub use whisper_impl::{vulkan_gpu, WhisperRecognizer};
 
 #[cfg(feature = "whisper")]
 mod whisper_impl {
@@ -177,6 +196,48 @@ mod whisper_impl {
             };
             recognizer.warm_up(default_threads())?;
             Ok(recognizer)
+        }
+
+        /// Time to transcribe 3 s of test audio (low noise, a few tokens):
+        /// mostly the encoder, which dominates a callout.
+        pub fn bench_ms(&mut self) -> Result<u32, SpeechError> {
+            let n = crate::speech::dsp::SAMPLE_RATE as usize * 3;
+            let mut seed = 0x2545_f491_u32;
+            let audio: Vec<f32> = (0..n)
+                .map(|_| {
+                    seed ^= seed << 13;
+                    seed ^= seed >> 17;
+                    seed ^= seed << 5;
+                    (seed as f32 / u32::MAX as f32 - 0.5) * 0.02
+                })
+                .collect();
+            let mut p = FullParams::new(SamplingStrategy::Greedy { best_of: 1 });
+            p.set_n_threads(default_threads() as i32);
+            p.set_language(Some("ru"));
+            p.set_no_context(true);
+            p.set_single_segment(true);
+            p.set_no_timestamps(true);
+            p.set_print_special(false);
+            p.set_print_progress(false);
+            p.set_print_realtime(false);
+            p.set_print_timestamps(false);
+            p.set_max_tokens(8);
+            if let Some(ctx) = audio_ctx_for(audio.len(), true) {
+                p.set_audio_ctx(ctx);
+            }
+            let started = std::time::Instant::now();
+            self.state
+                .full(p, &audio)
+                .map_err(|e| SpeechError::Model(format!("mesure Whisper : {e}")))?;
+            Ok(started.elapsed().as_millis() as u32)
+        }
+
+        pub fn set_backend(&mut self, backend: String) {
+            self.backend = backend;
+        }
+
+        pub fn backend_name(&self) -> &str {
+            &self.backend
         }
 
         /// One short pass on silence while the model loads. whisper.cpp's
@@ -325,6 +386,18 @@ mod whisper_impl {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn auto_keeps_the_gpu_only_when_clearly_faster() {
+        assert_eq!(pick_accel(250, 1000), (true, 4.0));
+        assert!(pick_accel(750, 1000).0);
+        assert!(
+            !pick_accel(800, 1000).0,
+            "a 20 % gain is not worth the game's GPU"
+        );
+        assert!(!pick_accel(1200, 1000).0);
+        assert_eq!(speedup_label(4.04), "4,0×");
+    }
 
     #[test]
     fn picks_the_likeliest_allowed_language() {

@@ -10,12 +10,22 @@ import { useApp, type Accel, type CaptureSource } from '../state/store';
 import { pairSummary, percentile, rescanTranslation, useTranslation } from '../state/translation';
 
 const ACCELS: [Accel, string][] = [
-  ['cpu', 'CPU'],
+  ['auto', 'AUTO'],
   ['gpu', 'GPU'],
+  ['cpu', 'CPU'],
 ];
 
 /** What the engine card says about where Whisper runs. */
 export function accelNote(accel: Accel, backend: string | undefined): string {
+  if (accel === 'auto') {
+    if (!backend) return 'Auto : mesure de la carte graphique et du processeur…';
+    const gpu = /^GPU · (.+?) \(Vulkan\) · auto : (.+)$/.exec(backend);
+    if (gpu) return `Auto : carte graphique ${gpu[1]}, ${gpu[2]}.`;
+    const slow = /auto : carte graphique pas assez rapide \((.+)\)$/.exec(backend);
+    if (slow) return `Auto : processeur (carte graphique pas assez rapide, ${slow[1]}).`;
+    if (backend.includes('aucune carte graphique')) return 'Auto : processeur (aucune carte graphique Vulkan).';
+    return 'Auto : processeur.';
+  }
   if (accel === 'cpu') return 'Processeur choisi : la carte graphique reste au jeu.';
   if (backend?.startsWith('GPU')) return 'Carte graphique : transcription bien plus rapide, modèle plus précis possible.';
   if (!backend) return 'Carte graphique demandée…';

@@ -11,8 +11,8 @@ export type FeedMode = 'text' | 'voice' | 'mixed';
 export type OverlayFormat = 'minimal' | 'bilingue' | 'accessible';
 export type Corner = 'tl' | 'tr' | 'bl' | 'br';
 export type CaptureSource = 'process' | 'device' | 'wav';
-/** Whisper on the processor, or on the graphics card (Vulkan) when available. */
-export type Accel = 'cpu' | 'gpu';
+/** Whisper on the processor, the graphics card (Vulkan), or the faster one measured (auto). */
+export type Accel = 'cpu' | 'gpu' | 'auto';
 export type ToggleKey = 'click' | 'noise' | 'translate' | 'hist' | 'skipFr' | 'ignoreOwn';
 /** Mode streamer: subtitles for OBS (src-tauri/src/stream). */
 export interface StreamOpts {
@@ -151,7 +151,7 @@ const initial: AppState = {
   capture: 'process',
   vad: 55,
   model: 'base',
-  accel: 'gpu',
+  accel: 'auto',
   src: { ru: true, en: true, de: false, es: false, pt: false, pl: false },
   gloss: GLOSSARY,
   newTerm: '',

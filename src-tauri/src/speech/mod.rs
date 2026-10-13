@@ -40,6 +40,51 @@ pub enum SpeechError {
     Inference(String),
 }
 
+/// Loads Whisper where asked; in Auto mode, measures the GPU against the CPU
+/// on 3 s of test audio and keeps the GPU only if clearly faster.
+#[cfg(feature = "whisper")]
+fn load_with(path: &Path, accel: Accel) -> Result<engine::WhisperRecognizer, SpeechError> {
+    use engine::{pick_accel, speedup_label, vulkan_gpu, WhisperRecognizer};
+    match accel {
+        Accel::Cpu => WhisperRecognizer::load(path, false),
+        Accel::Gpu => WhisperRecognizer::load(path, true),
+        Accel::Auto => {
+            if vulkan_gpu().is_none() {
+                let mut r = WhisperRecognizer::load(path, false)?;
+                r.set_backend("CPU · AVX2 · auto (aucune carte graphique Vulkan)".into());
+                return Ok(r);
+            }
+            let mut gpu = WhisperRecognizer::load(path, true)?;
+            let gpu_ms = gpu.bench_ms()?;
+            let mut cpu = WhisperRecognizer::load(path, false)?;
+            let cpu_ms = cpu.bench_ms()?;
+            let (use_gpu, speedup) = pick_accel(gpu_ms, cpu_ms);
+            let mut chosen = if use_gpu { gpu } else { cpu };
+            let note = if use_gpu {
+                format!(
+                    "auto : {} plus rapide que le processeur",
+                    speedup_label(speedup)
+                )
+            } else {
+                format!(
+                    "auto : carte graphique pas assez rapide ({})",
+                    speedup_label(speedup)
+                )
+            };
+            let backend = format!("{} · {note}", chosen.backend_name());
+            chosen.set_backend(backend);
+            crate::logs::info(
+                "asr",
+                &format!(
+                    "mode auto : GPU {gpu_ms} ms, CPU {cpu_ms} ms sur 3 s de test → {}",
+                    if use_gpu { "GPU" } else { "CPU" }
+                ),
+            );
+            Ok(chosen)
+        }
+    }
+}
+
 /// Loads the whisper.cpp models from the models directory.
 pub struct WhisperLoader;
 
@@ -62,17 +107,17 @@ impl EngineLoader for WhisperLoader {
         &self,
         dir: &Path,
         model: &str,
-        gpu: bool,
+        accel: Accel,
     ) -> Result<Box<dyn engine::Recognizer>, SpeechError> {
         let path = models::model_path(dir, model)
             .ok_or_else(|| SpeechError::NotInstalled(model.into()))?;
         #[cfg(feature = "whisper")]
         {
-            Ok(Box::new(engine::WhisperRecognizer::load(&path, gpu)?))
+            Ok(Box::new(load_with(&path, accel)?))
         }
         #[cfg(not(feature = "whisper"))]
         {
-            let _ = (path, gpu);
+            let _ = (path, accel);
             Err(SpeechError::Model("build sans whisper.cpp".into()))
         }
     }
@@ -171,7 +216,7 @@ mod tests {
             Err(SpeechError::NotInstalled(_))
         ));
         assert!(matches!(
-            WhisperLoader.load_recognizer(&dir, "base", false),
+            WhisperLoader.load_recognizer(&dir, "base", Accel::Cpu),
             Err(SpeechError::NotInstalled(_))
         ));
     }
