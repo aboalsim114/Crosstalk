@@ -85,6 +85,8 @@ export interface AppState {
   vad: number;
   model: ModelId;
   accel: Accel;
+  /** "Focus voix": keep the centred voice chat, turn down game sounds from the sides. */
+  voiceFocus: boolean;
   src: Record<SourceLang, boolean>;
   gloss: GlossEntry[];
   newTerm: string;
@@ -162,6 +164,7 @@ const initial: AppState = {
   vad: 55,
   model: 'base',
   accel: 'auto',
+  voiceFocus: false,
   src: { ru: true, en: true, de: false, es: false, pt: false, pl: false },
   gloss: GLOSSARY,
   newTerm: '',

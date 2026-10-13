@@ -51,6 +51,10 @@ pub struct SpeechConfig {
     /// both measured when the model loads (default).
     #[serde(default)]
     pub accel: Accel,
+    /// "Focus voix": keep what is in the centre of the stereo game audio
+    /// (the voice chat), turn down sounds coming from the sides (focus.rs).
+    #[serde(default)]
+    pub voice_focus: bool,
 }
 
 /// Where Whisper runs.
@@ -76,6 +80,7 @@ impl Default for SpeechConfig {
                 .collect(),
             fast_encoder: true,
             accel: Accel::Auto,
+            voice_focus: false,
         }
     }
 }
@@ -205,6 +210,9 @@ pub struct SpeechStats {
     pub last_rtf: Option<f32>,
     /// CPU used by the Crosstalk core process, in % of the whole machine.
     pub cpu_percent: Option<f32>,
+    /// "Focus voix": game sound removed over the last second, in dB
+    /// (`None`: off, or a mono source).
+    pub focus_db: Option<f32>,
 }
 
 /// Live voice activity, emitted when it changes.
@@ -229,6 +237,7 @@ mod tests {
             glossary: vec!["  rush B ".into(), "".into(), "a\0wp".into()],
             fast_encoder: false,
             accel: Accel::Cpu,
+            voice_focus: false,
         }
         .sanitized();
         assert_eq!(c.vad_threshold, 0.9);

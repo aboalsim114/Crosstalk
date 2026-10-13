@@ -37,8 +37,13 @@ const status = (over: Partial<SpeechStatus> = {}): SpeechStatus => ({
 describe('speech settings', () => {
   it('maps the UI settings to the Rust config', () => {
     const c = speechConfigFrom({ model: 'small', vad: 55, src: { ru: true, en: false, de: true, es: false, pt: false, pl: false }, gloss: GLOSSARY.slice(0, 2) });
-    expect(c).toEqual({ model: 'small', languages: ['ru'], vadThreshold: 0.55, glossary: ['rush B', 'mid'], accel: 'auto' });
+    expect(c).toEqual({ model: 'small', languages: ['ru'], vadThreshold: 0.55, glossary: ['rush B', 'mid'], accel: 'auto', voiceFocus: false });
     expect(speechConfigFrom({ model: 'small', vad: 55, src: { ru: true, en: false, de: false, es: false, pt: false, pl: false }, gloss: [], accel: 'cpu' }).accel).toBe('cpu');
+  });
+
+  it('sends "Focus voix", off by default', () => {
+    expect(speechConfigFrom(useApp.getState()).voiceFocus).toBe(false);
+    expect(speechConfigFrom({ ...useApp.getState(), voiceFocus: true }).voiceFocus).toBe(true);
   });
 
   it('starts on the same model as the Rust engine (base), so a fresh install works', () => {

@@ -155,7 +155,7 @@ Chaque étape est désactivable et mesurable dans l'écran Diagnostic.
 
 | ID | Exigence | Prio. |
 | --- | --- | --- |
-| A-01 | **Mid/side.** Hypothèse : le chat vocal de CS2 n'est pas spatialisé, contrairement aux sons de jeu. Le canal side sert de référence de bruit pour une soustraction adaptative (NLMS) sur le canal mid. Désactivé si la source est mono. | Exp. |
+| A-01 | **Mid/side.** Hypothèse : le chat vocal de CS2 n'est pas spatialisé, contrairement aux sons de jeu. Le canal side sert de référence de bruit pour une soustraction adaptative (NLMS) sur le canal mid. Désactivé si la source est mono. | Exp. · ◐ livré comme « Focus voix » (désactivé par défaut) : masque fréquentiel gauche/droite, plus efficace que le NLMS au banc (+3,9 à +7,7 dB de RSB sur bruit synthétique, 0,8 % d'un cœur). WER sur vrais sons de CS2 à mesurer ([mesures](testing/voice-focus.md)) |
 | A-02 | **Passe-bande** 200–4 000 Hz (biquads Butterworth d'ordre 4). | P0 |
 | A-03 | **Réduction de bruit neuronale** DeepFilterNet 3 (crate `deep_filter`). Adoptée seulement si le gain de WER est mesuré et que le budget (≤ 10 ms par trame de 10 ms sur un cœur) est tenu. | Exp. |
 | A-04 | Repli **RNNoise** (crate `nnnoiseless`) sur les machines trop faibles pour DeepFilterNet. | Exp. |

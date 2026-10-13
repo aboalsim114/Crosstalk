@@ -4,7 +4,7 @@ import { IDLE_CAPTURE } from '../backend';
 import { useAudio } from '../state/audio';
 import { useSpeech } from '../state/speech';
 import { useApp } from '../state/store';
-import { AudioPage } from './AudioPage';
+import { AudioPage, focusNote } from './AudioPage';
 
 const audio0 = useAudio.getState();
 const app0 = useApp.getState();
@@ -137,5 +137,14 @@ describe('where Whisper runs', () => {
     // The driver crashed in the separate test process: said plainly.
     expect(accelNote('auto', 'CPU · AVX2 · auto (le pilote graphique a planté pendant le test)')).toBe('Auto : processeur (le pilote graphique a planté pendant le test).');
     expect(accelNote('gpu', 'CPU · AVX2 · GPU (Crosstalk s\'est fermé brutalement en utilisant la carte graphique)')).toMatch(/^Carte graphique non utilisée : Crosstalk s'est fermé brutalement/);
+  });
+});
+
+describe('Focus voix', () => {
+  it('says what it does', () => {
+    expect(focusNote(false, null, true)).toMatch(/Désactivé/);
+    expect(focusNote(true, null, false)).toMatch(/dès que la capture démarre/);
+    expect(focusNote(true, null, true)).toMatch(/source mono/);
+    expect(focusNote(true, 6.25, true)).toBe('Activé · 6,3 dB de sons latéraux retirés sur la dernière seconde.');
   });
 });

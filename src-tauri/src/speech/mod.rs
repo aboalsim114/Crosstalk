@@ -10,6 +10,7 @@ pub mod cpu;
 pub mod dsp;
 pub mod engine;
 pub mod filter;
+pub mod focus;
 pub mod gpu_guard;
 pub mod models;
 pub mod segmenter;

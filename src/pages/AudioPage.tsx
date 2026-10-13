@@ -159,8 +159,18 @@ function CaptureCard() {
   );
 }
 
+/** What "Focus voix" is doing right now. */
+export function focusNote(on: boolean, focusDb: number | null | undefined, capturing: boolean): string {
+  if (!on) return 'Désactivé : la voix et les sons du jeu sont mélangés en mono.';
+  if (!capturing) return 'Activé · agit dès que la capture démarre.';
+  if (focusDb == null) return 'Activé · en attente d’un son stéréo (sans effet sur une source mono).';
+  return `Activé · ${focusDb.toFixed(1).replace('.', ',')} dB de sons latéraux retirés sur la dernière seconde.`;
+}
+
 function VadCard() {
   const vad = useApp((s) => s.vad);
+  const voiceFocus = useApp((s) => s.voiceFocus);
+  const capturing = useAudio((a) => isCapturing(a.status));
   const noise = useApp((s) => s.tg.noise);
   const { set, toggle } = useApp.getState();
   const native = useSpeech((x) => x.native);
@@ -177,6 +187,24 @@ function VadCard() {
         )}
       </div>
       <Slider label="Seuil de détection" unit="%" min={20} max={90} value={vad} onChange={(v) => set({ vad: v })} hint="Plus haut = ignore davantage les tirs et bruitages" />
+      {native && (
+        <div className="flex flex-col gap-1.5">
+          <ToggleRow
+            title={
+              <>
+                Focus voix <span style={{ font: fnt(500, 9, 'mono'), letterSpacing: '.12em', color: '#ffa24a', marginLeft: 6 }}>EXPÉRIMENTAL</span>
+              </>
+            }
+            sub="Garde la voix des coéquipiers (au centre du son) et baisse les tirs et pas venant des côtés"
+            on={voiceFocus}
+            onClick={() => set({ voiceFocus: !voiceFocus })}
+            label="Focus voix"
+          />
+          <span data-testid="focus-note" style={{ font: fnt(400, 11, 'sans', 1.5), color: voiceFocus ? '#8f8a83' : '#5a5650' }}>
+            {focusNote(voiceFocus, stats?.focusDb, capturing)}
+          </span>
+        </div>
+      )}
       {native ? (
         <div className="flex flex-col gap-1.5" style={{ font: fnt(400, 11, 'sans', 1.5), color: '#6e6961' }}>
           <span>Pré-roll 256 ms · post-roll 416 ms · 5 s max · rejet des tirs et explosions · une phrase en retard reprend le texte affiché en direct.</span>
