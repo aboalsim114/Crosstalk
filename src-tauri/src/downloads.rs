@@ -586,7 +586,12 @@ mod tests {
         let all = missing(&d, "base", true);
         // VAD + Whisper, ru/en → fr, then fr → en/ru (replies).
         assert_eq!(all.len(), 2 + 10 + 10);
-        assert_eq!(all.iter().filter(|f| f.label.starts_with("Réponse")).count(), 10);
+        assert_eq!(
+            all.iter()
+                .filter(|f| f.label.starts_with("Réponse"))
+                .count(),
+            10
+        );
         let mb: u64 = all.iter().map(|f| f.bytes).sum::<u64>() / 1_000_000;
         assert!((1370..1420).contains(&mb), "{mb} Mo");
         assert!(all

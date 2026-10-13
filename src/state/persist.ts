@@ -13,7 +13,7 @@ const LOCAL_KEY = 'crosstalk.settings';
 
 type Persisted = Pick<
   AppState,
-  'mode' | 'fmt' | 'corner' | 'opacity' | 'textSize' | 'duration' | 'maxBlocks' | 'overlayOn' | 'tg' | 'chatPath' | 'ownName' | 'capture' | 'vad' | 'model' | 'accel' | 'src'
+  'mode' | 'fmt' | 'corner' | 'opacity' | 'textSize' | 'duration' | 'maxBlocks' | 'overlayOn' | 'tg' | 'chatPath' | 'ownName' | 'capture' | 'vad' | 'model' | 'accel' | 'src' | 'stream'
 >;
 
 const oneOf =
@@ -41,6 +41,7 @@ const CHECKS: { [K in keyof Persisted]: (v: unknown) => boolean } = {
   model: oneOf<ModelId>('tiny', 'base', 'small', 'medium', 'large-v3-turbo'),
   accel: oneOf('cpu', 'cuda'),
   src: (v) => typeof v === 'object' && v !== null,
+  stream: (v) => typeof v === 'object' && v !== null,
 };
 
 export function snapshot(s: AppState, deviceId: string | null) {
@@ -69,7 +70,13 @@ export function restore(raw: unknown, defaults: AppState): { app: Partial<AppSta
   for (const k of Object.keys(CHECKS) as (keyof Persisted)[]) {
     const v = s[k];
     if (!CHECKS[k](v)) continue;
-    if (k === 'tg' || k === 'src') {
+    if (k === 'stream') {
+      // Same type as the default only; the Rust side bounds the numbers again.
+      const base = defaults.stream as unknown as Record<string, unknown>;
+      const merged: Record<string, unknown> = { ...base };
+      for (const [key, val] of Object.entries(v as Record<string, unknown>)) if (key in base && typeof val === typeof base[key]) merged[key] = val;
+      app.stream = merged as unknown as AppState['stream'];
+    } else if (k === 'tg' || k === 'src') {
       const base = defaults[k] as Record<string, boolean>;
       const merged = { ...base };
       for (const [key, val] of Object.entries(v as Record<string, unknown>)) if (key in base && isBool(val)) merged[key] = val;

@@ -13,6 +13,18 @@ export type Corner = 'tl' | 'tr' | 'bl' | 'br';
 export type CaptureSource = 'process' | 'device' | 'wav';
 export type Accel = 'cpu' | 'cuda';
 export type ToggleKey = 'click' | 'noise' | 'translate' | 'hist' | 'skipFr' | 'ignoreOwn';
+/** Mode streamer: subtitles for OBS (src-tauri/src/stream). */
+export interface StreamOpts {
+  enabled: boolean;
+  names: boolean;
+  original: boolean;
+  watermark: boolean;
+  size: number;
+  max: number;
+  duration: number;
+}
+export const STREAM_DEFAULTS: StreamOpts = { enabled: false, names: false, original: false, watermark: true, size: 34, max: 3, duration: 8 };
+
 export type SourceLang = 'ru' | 'en' | 'de' | 'es' | 'pt' | 'pl';
 
 export interface FeedEntry extends SimEvent {
@@ -59,6 +71,7 @@ export interface AppState {
   chatPath: string;
   /** The player's own name, to leave out their chat messages. */
   ownName: string;
+  stream: StreamOpts;
   capture: CaptureSource;
   vad: number;
   model: ModelId;
@@ -83,6 +96,7 @@ export interface AppActions {
   set: (patch: Partial<AppState>) => void;
   setPage: (page: PageId) => void;
   toggle: (k: ToggleKey) => void;
+  setStream: (p: Partial<StreamOpts>) => void;
   toggleSession: () => void;
   togglePause: () => void;
   emergency: () => void;
@@ -132,6 +146,7 @@ const initial: AppState = {
   tg: { click: true, noise: false, translate: true, hist: false, skipFr: true, ignoreOwn: true },
   chatPath: '',
   ownName: '',
+  stream: STREAM_DEFAULTS,
   capture: 'process',
   vad: 55,
   model: 'base',
@@ -246,6 +261,7 @@ export const useApp = create<AppState & AppActions>()((set, get) => {
     set: (patch) => set(patch),
     setPage: (page) => set({ page }),
     toggle: (k) => set((s) => ({ tg: { ...s.tg, [k]: !s.tg[k] } })),
+    setStream: (p) => set((s) => ({ stream: { ...s.stream, ...p } })),
     toggleSource: (k) => set((s) => ({ src: { ...s.src, [k]: !s.src[k] } })),
     toggleOverlay: () => set((s) => ({ overlayOn: !s.overlayOn })),
 

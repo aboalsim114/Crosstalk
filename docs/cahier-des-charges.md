@@ -208,6 +208,7 @@ Chaque étape est désactivable et mesurable dans l'écran Diagnostic.
 | F-46 | Prise en charge du multi-écran et des mises à l'échelle DPI de 100 à 200 %. | P1 | ◐ |
 | F-47 | Widget Xbox Game Bar (UWP) qui affiche les mêmes sous-titres en plein écran exclusif. | **P2** | — |
 | F-48 | Afficher le pseudo devant la traduction vocale dès qu'il est résolu (§4.8), sans retarder l'affichage de la traduction. | P1 | — |
+| F-49 | **Mode streamer** : page locale (127.0.0.1:31983, source navigateur OBS) affichant les sous-titres finaux pour les viewers ; pseudos et phrases originales retirés côté Rust sauf choix contraire ; désactivé par défaut. | P1 | ✅ |
 | F-50 | Traduction de ses propres annonces (micro) vers la langue des coéquipiers, affichée en texte. Opt-in, désactivé par défaut. | P2 | ◐ version texte livrée : « Répondre dans leur langue » (Ctrl+Alt+F7), saisie en français → anglais/russe en local (Opus-MT fr→en, fr→ru et phrases CS écrites à la main), copié dans le presse-papiers ; rien n'est envoyé au jeu. Micro : à faire |
 
 ### 4.6 Fenêtre principale
