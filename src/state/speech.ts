@@ -52,6 +52,7 @@ export function transcriptEntry(t: Transcript, now = new Date()): FeedEntry {
     lat: t.partial ? null : t.latencyMs,
     err: false,
     live: t.partial,
+    ...(t.speaker ? { sender: t.speaker } : {}),
   };
 }
 

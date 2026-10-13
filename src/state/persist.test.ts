@@ -14,6 +14,14 @@ describe('settings kept between launches', () => {
     window.localStorage.clear();
   });
 
+  it('keeps the "Qui parle ?" options, with the area bounded to the window', () => {
+    const snap = snapshot({ ...app0, speaker: { enabled: true, region: { x: 0.1, y: 0.6, w: 0.2, h: 0.25 } } }, null);
+    expect(restore(snap.config, app0).app.speaker).toEqual({ enabled: true, region: { x: 0.1, y: 0.6, w: 0.2, h: 0.25 } });
+    const bad = restore({ version: 1, settings: { speaker: { enabled: 'yes', region: { x: 4, y: 0.7, w: null } } } }, app0).app.speaker;
+    expect(bad).toEqual({ enabled: false, region: { ...app0.speaker.region, y: 0.7 } });
+    expect(app0.speaker.enabled).toBe(false);
+  });
+
   it('round-trips the settings, the device and the glossary', () => {
     const s = { ...app0, model: 'small' as const, ownName: 'Иван', fmt: 'minimal' as const, opacity: 40, tg: { ...app0.tg, ignoreOwn: false } };
     const snap = snapshot(s, 'dev-1');

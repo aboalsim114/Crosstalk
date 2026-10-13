@@ -223,6 +223,8 @@ export interface Transcript {
   avgLogprob: number;
   noSpeechProb: number;
   model: string;
+  /** Name read on CS2's voice indicator while it was spoken ("Qui parle ?", opt-in). */
+  speaker?: string;
 }
 
 export interface SpeechStats {
@@ -561,6 +563,46 @@ export const streamOverlay = {
   status: (): Promise<StreamStatus | null> => (isTauri ? invoke<StreamStatus>('stream_status') : Promise.resolve(null)),
   configure: (options: import('../state/store').StreamOpts): Promise<StreamStatus | null> => (isTauri ? invoke<StreamStatus>('stream_configure', { options }) : Promise.resolve(null)),
   push: (line: StreamLine): Promise<boolean> => (isTauri ? invoke<boolean>('stream_push', { line }) : Promise.resolve(false)),
+};
+
+// ---------- "Qui parle ?": names read on CS2's voice indicator (src-tauri/src/speaker) ----------
+
+export interface SpeakerRegion {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+export interface SpeakerConfig {
+  enabled: boolean;
+  region: SpeakerRegion;
+  ignore: string[];
+}
+export interface SpeakerStatus {
+  enabled: boolean;
+  state: 'off' | 'waiting' | 'paused' | 'watching' | 'error';
+  detail: string | null;
+  ocrLang: string | null;
+  known: string[];
+  blank: boolean;
+  covered: boolean;
+}
+export interface SpeakerTest {
+  preview: string | null;
+  lines: string[];
+  names: string[];
+  blank: boolean;
+  covered: boolean;
+  foreground: boolean;
+  error: string | null;
+}
+export const SPEAKER_STATUS_EVENT = 'speaker://status';
+
+export const speakerId = {
+  status: (): Promise<SpeakerStatus | null> => (isTauri ? invoke<SpeakerStatus>('speaker_status') : Promise.resolve(null)),
+  configure: (config: SpeakerConfig): Promise<SpeakerStatus | null> => (isTauri ? invoke<SpeakerStatus>('speaker_configure', { config }) : Promise.resolve(null)),
+  test: (region: SpeakerRegion, delayMs: number): Promise<SpeakerTest | null> => (isTauri ? invoke<SpeakerTest>('speaker_test', { region, delayMs }) : Promise.resolve(null)),
+  onStatus: (cb: (s: SpeakerStatus) => void) => (isTauri ? listen<SpeakerStatus>(SPEAKER_STATUS_EVENT, (e) => cb(e.payload)) : Promise.resolve(noop)),
 };
 
 // ---------- spoken reply (src-tauri/src/dictation.rs) ----------

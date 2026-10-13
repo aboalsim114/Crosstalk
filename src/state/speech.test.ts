@@ -60,6 +60,13 @@ describe('real transcripts are never presented as French before a real translati
     expect(entry.time).toBe('14:02:03');
   });
 
+  it('carries the name read on CS2\'s voice indicator, when there is one', () => {
+    expect(entry.sender).toBeUndefined();
+    const named = transcriptEntry({ ...t, speaker: 'Player One' });
+    expect(named.sender).toBe('Player One');
+    expect(feedRow(named).lead).toBe('Player One — ');
+  });
+
   it('is labelled TRANSCRIT in the Script', () => {
     const row = feedRow(entry);
     expect(row.status).toBe('TRANSCRIT');

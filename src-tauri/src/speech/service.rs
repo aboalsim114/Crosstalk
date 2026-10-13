@@ -1039,6 +1039,7 @@ fn transcribe(inner: &Inner, job: Job) {
                 avg_logprob: rec.avg_logprob,
                 no_speech_prob: rec.no_speech_prob,
                 model: config.model.clone(),
+                speaker: None,
             });
         }
     }
@@ -1103,6 +1104,7 @@ fn transcribe_partial(inner: &Inner, job: Job) {
         avg_logprob: rec.avg_logprob,
         no_speech_prob: rec.no_speech_prob,
         model: config.model.clone(),
+        speaker: None,
     };
     inner
         .live
@@ -1515,6 +1517,7 @@ mod tests {
             avg_logprob: -0.2,
             no_speech_prob: 0.01,
             model: "base".into(),
+            speaker: None,
         };
         {
             let mut l = svc.inner.live.lock().unwrap();
