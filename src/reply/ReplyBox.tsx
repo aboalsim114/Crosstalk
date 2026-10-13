@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { reply, type ReplyPhrase, type ReplyTarget } from '../backend';
+import { dictation, isTauri, reply, type ReplyPhrase, type ReplyTarget } from '../backend';
 import { fnt } from '../components/atoms';
 
 export const TARGET_NAME: Record<ReplyTarget, string> = { en: 'Anglais', ru: 'Russe' };
@@ -94,17 +94,25 @@ export function ReplyBox({ target, onTarget, onCopied, autoFocusKey }: Props) {
           </div>
         ))}
       </div>
-      <input
-        ref={input}
-        className="text-input"
-        aria-label="Message en français"
-        placeholder="Écrivez en français, puis Entrée…"
-        value={text}
-        maxLength={300}
-        disabled={busy}
-        onChange={(e) => setText(e.target.value)}
-        onKeyDown={(e) => e.key === 'Enter' && send()}
-      />
+      <div className="flex gap-2">
+        <input
+          ref={input}
+          className="text-input"
+          aria-label="Message en français"
+          placeholder="Écrivez en français, puis Entrée…"
+          value={text}
+          maxLength={300}
+          disabled={busy}
+          onChange={(e) => setText(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && send()}
+          style={{ flex: 1, minWidth: 0 }}
+        />
+        {isTauri && (
+          <div className="pill flex-none px-3 py-2" role="button" title="Dicter en français (Ctrl+Alt+F6)" onClick={() => void dictation.toggle([], target)} style={{ font: fnt(500, 12) }}>
+            🎙 Dicter
+          </div>
+        )}
+      </div>
       {phrases.length > 0 && (
         <div className="flex flex-wrap gap-1.5">
           {phrases.map((p) => (

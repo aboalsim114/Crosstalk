@@ -25,6 +25,8 @@ pub enum Action {
     Session,
     /// Ctrl+Alt+F7: reply in the teammates' language (pop-up over the game).
     Reply,
+    /// Ctrl+Alt+F6: dictate the reply (microphone), press again to finish.
+    Dictate,
 }
 
 pub fn dispatch(app: &AppHandle, action: Action) {

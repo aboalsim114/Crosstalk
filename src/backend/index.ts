@@ -37,7 +37,7 @@ export const windowControls = {
 
 // ---------- actions from global shortcuts and the tray menu ----------
 
-export type NativeAction = 'overlay' | 'pause' | 'emergency' | 'session' | 'reply';
+export type NativeAction = 'overlay' | 'pause' | 'emergency' | 'session' | 'reply' | 'dictate';
 
 const noop: UnlistenFn = () => {};
 
@@ -561,4 +561,26 @@ export const streamOverlay = {
   status: (): Promise<StreamStatus | null> => (isTauri ? invoke<StreamStatus>('stream_status') : Promise.resolve(null)),
   configure: (options: import('../state/store').StreamOpts): Promise<StreamStatus | null> => (isTauri ? invoke<StreamStatus>('stream_configure', { options }) : Promise.resolve(null)),
   push: (line: StreamLine): Promise<boolean> => (isTauri ? invoke<boolean>('stream_push', { line }) : Promise.resolve(false)),
+};
+
+// ---------- spoken reply (src-tauri/src/dictation.rs) ----------
+
+export interface DictationState {
+  state: 'listening' | 'transcribing' | 'done' | 'error';
+  level: number;
+  seconds: number;
+  text: string | null;
+  translated: string | null;
+  target: ReplyTarget;
+  via: 'phrasebook' | 'model' | null;
+  copied: boolean;
+  error: string | null;
+}
+export const DICTATION_EVENT = 'dictation://state';
+
+export const dictation = {
+  /** Starts a dictation (opens the reply window), or finishes the running one. */
+  toggle: (recentLangs: string[], target?: ReplyTarget): Promise<void> => (isTauri ? invoke<void>('dictation_toggle', { recentLangs, target: target ?? null }) : Promise.resolve()),
+  state: (): Promise<DictationState | null> => (isTauri ? invoke<DictationState | null>('dictation_state') : Promise.resolve(null)),
+  onState: (cb: (s: DictationState) => void) => (isTauri ? listen<DictationState>(DICTATION_EVENT, (e) => cb(e.payload)) : Promise.resolve(noop)),
 };

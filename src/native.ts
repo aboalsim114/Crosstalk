@@ -2,7 +2,7 @@
 // in-game overlay window out. Only active inside the Tauri app.
 
 import { recentLangs } from './pages/ReplyCard';
-import { audioCapture, chat, cs2, isTauri, modelDownload, onNativeAction, overlayWindow, reply, speech, translation, type CaptureStatus, type NativeAction, type OverlayWindowConfig } from './backend';
+import { audioCapture, chat, cs2, dictation, isTauri, modelDownload, onNativeAction, overlayWindow, reply, speech, translation, type CaptureStatus, type NativeAction, type OverlayWindowConfig } from './backend';
 import { refreshModels, speechConfigFrom, transcriptEntry, useSpeech } from './state/speech';
 import { recordTime, translationConfigFrom, useTranslation } from './state/translation';
 import { setupNeeds, startSetup, useSetup } from './state/setup';
@@ -48,7 +48,8 @@ export function overlayConfig(s: AppState, prev?: AppState): OverlayWindowConfig
 export function applyNativeAction(a: NativeAction) {
   const s = useApp.getState();
   const openReply = () => void reply.open(recentLangs(s.feed));
-  ({ overlay: s.toggleOverlay, pause: s.togglePause, emergency: s.emergency, session: s.toggleSession, reply: openReply })[a]();
+  const dictate = () => void dictation.toggle(recentLangs(s.feed));
+  ({ overlay: s.toggleOverlay, pause: s.togglePause, emergency: s.emergency, session: s.toggleSession, reply: openReply, dictate })[a]();
 }
 
 /** Sessions during which the real capture runs. */

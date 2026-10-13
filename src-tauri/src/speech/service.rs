@@ -419,6 +419,22 @@ impl SpeechService {
         &self.inner.models_dir
     }
 
+    /// The user's dictated reply (16 kHz mono) in French, with the model that
+    /// transcribes the game: waits for a callout in progress, then runs.
+    pub fn dictate(&self, samples: &[f32]) -> Result<String, String> {
+        let prompt = {
+            let config = self.inner.config.lock().unwrap();
+            prompt_with(&config.glossary, &self.inner.map_prompt.lock().unwrap())
+        };
+        let mut slot = self.inner.recognizer.lock().unwrap();
+        let recognizer = slot
+            .as_mut()
+            .ok_or("modèle Whisper pas encore chargé (Audio & IA)")?;
+        recognizer
+            .transcribe_in(samples, "fr", &prompt, self.inner.threads)
+            .map_err(|e| e.to_string())
+    }
+
     /// Callouts of the map being played, added to Whisper's prompt (A-06).
     pub fn set_map_prompt(&self, callouts: Vec<String>) {
         *self.inner.map_prompt.lock().unwrap() = callouts;
@@ -1141,6 +1157,16 @@ mod tests {
         calls: Arc<AtomicU64>,
     }
     impl Recognizer for EchoRecognizer {
+        fn transcribe_in(
+            &mut self,
+            samples: &[f32],
+            lang: &str,
+            prompt: &str,
+            _threads: usize,
+        ) -> Result<String, SpeechError> {
+            assert!(prompt.contains("rush B"), "CS words help the dictation too");
+            Ok(format!("{lang}:{}", samples.len()))
+        }
         fn recognize(
             &mut self,
             _samples: &[f32],
@@ -1217,6 +1243,20 @@ mod tests {
             },
         );
         (svc, rx, calls)
+    }
+
+    #[test]
+    fn dictation_uses_the_loaded_model_in_french() {
+        let (svc, _rx, _) = service("unused", 0, false);
+        let end = Instant::now() + Duration::from_secs(5);
+        while svc.status().state == EngineState::Loading {
+            assert!(Instant::now() < end);
+            std::thread::sleep(Duration::from_millis(5));
+        }
+        assert!(svc.dictate(&[0.0; 16]).unwrap_err().contains("pas encore chargé"));
+        let (svc, _rx, _) = service("unused", 0, true);
+        wait_ready(&svc);
+        assert_eq!(svc.dictate(&[0.0; 16_000]).unwrap(), "fr:16000");
     }
 
     fn wait_ready(svc: &SpeechService) {

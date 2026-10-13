@@ -30,6 +30,18 @@ pub const LEVEL_EVENT: &str = "audio://level";
 
 /// The OS backend: WASAPI on Windows, an "unsupported" backend elsewhere (so
 /// the app still builds and runs for UI work on other platforms).
+/// The default microphone (reply dictation only, opened on demand).
+pub fn open_microphone() -> Result<Box<dyn backend::CaptureStream>, AudioError> {
+    #[cfg(windows)]
+    {
+        wasapi::open_microphone()
+    }
+    #[cfg(not(windows))]
+    {
+        Err(AudioError::Unsupported)
+    }
+}
+
 pub fn default_backend() -> Arc<dyn CaptureBackend> {
     #[cfg(windows)]
     {
