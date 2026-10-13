@@ -1,0 +1,12 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "reply",
+  "description": "Permissions of the reply pop-up (type in French, copy the translation)",
+  "windows": [
+    "reply"
+  ],
+  "permissions": [
+    "core:default",
+    "core:window:allow-start-dragging"
+  ]
+}

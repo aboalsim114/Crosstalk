@@ -180,7 +180,8 @@ fn silent(args: &[String]) -> i32 {
         } else {
             !flag("--no-desktop")
         },
-        models: !flag("--skip-models"),
+        // An in-app update stays quick: models added since are offered in the app.
+        models: !flag("--skip-models") && !update,
         dir,
     };
     if update && !install::wait_until_closed(&opts.dir, std::time::Duration::from_secs(30)) {

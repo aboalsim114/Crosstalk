@@ -378,7 +378,10 @@ mod tests {
     #[test]
     fn map_callouts_always_fit_at_the_end() {
         let many: Vec<String> = (0..200).map(|i| format!("term{i}")).collect();
-        let map: Vec<String> = ["Palace", "Jungle", "Connector"].iter().map(|s| s.to_string()).collect();
+        let map: Vec<String> = ["Palace", "Jungle", "Connector"]
+            .iter()
+            .map(|s| s.to_string())
+            .collect();
         let p = prompt_with(&many, &map);
         assert!(p.starts_with("term0, "));
         assert!(p.ends_with("Palace, Jungle, Connector."), "{p}");

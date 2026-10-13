@@ -37,7 +37,7 @@ export const windowControls = {
 
 // ---------- actions from global shortcuts and the tray menu ----------
 
-export type NativeAction = 'overlay' | 'pause' | 'emergency' | 'session';
+export type NativeAction = 'overlay' | 'pause' | 'emergency' | 'session' | 'reply';
 
 const noop: UnlistenFn = () => {};
 
@@ -498,4 +498,37 @@ export const gsi = {
   install: (): Promise<GsiStatus> => invoke<GsiStatus>('gsi_install'),
   uninstall: (): Promise<GsiStatus> => invoke<GsiStatus>('gsi_uninstall'),
   onStatus: (cb: (s: GsiStatus) => void) => (isTauri ? listen<GsiStatus>('gsi://status', (e) => cb(e.payload)) : Promise.resolve(noop)),
+};
+
+// ---------- reply in the teammates' language (src-tauri/src/reply) ----------
+
+export type ReplyTarget = 'en' | 'ru';
+export interface ReplyPhrase {
+  id: string;
+  fr: string;
+  quick: boolean;
+}
+export interface ReplyResult {
+  text: string;
+  target: ReplyTarget;
+  via: 'phrasebook' | 'model';
+  ms: number;
+}
+export interface ReplyModel {
+  target: ReplyTarget;
+  repo: string;
+  sizeMb: number;
+  installed: boolean;
+  loaded: boolean;
+}
+export const REPLY_OPEN_EVENT = 'reply://open';
+
+export const reply = {
+  phrases: (): Promise<ReplyPhrase[]> => (isTauri ? invoke<ReplyPhrase[]>('reply_phrases') : Promise.resolve([])),
+  phraseText: (id: string, target: ReplyTarget): Promise<string | null> => invoke<string | null>('reply_phrase_text', { id, target }),
+  translate: (text: string, target: ReplyTarget): Promise<ReplyResult> => invoke<ReplyResult>('reply_translate', { text, target }),
+  models: (): Promise<ReplyModel[]> => (isTauri ? invoke<ReplyModel[]>('reply_models') : Promise.resolve([])),
+  open: (recentLangs: string[]): Promise<void> => (isTauri ? invoke<void>('reply_open', { recentLangs }) : Promise.resolve()),
+  hide: (): Promise<void> => (isTauri ? invoke<void>('reply_hide') : Promise.resolve()),
+  onOpen: (cb: (target: ReplyTarget) => void) => (isTauri ? listen<ReplyTarget>(REPLY_OPEN_EVENT, (e) => cb(e.payload)) : Promise.resolve(noop)),
 };

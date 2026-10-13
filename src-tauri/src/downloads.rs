@@ -64,6 +64,17 @@ pub fn missing_all(dir: &Path, whisper_models: &[&str], translation: bool) -> Ve
                 });
             }
         }
+        for p in opus::REPLY {
+            for &(file, bytes) in &p.files {
+                all.push(FileSpec {
+                    label: format!("Réponse français → {}", p.target.to_uppercase()),
+                    url: format!("https://huggingface.co/{}/resolve/main/{file}", p.repo),
+                    path: opus::pair_dir(dir, p).join(file),
+                    bytes,
+                    sha1: None,
+                });
+            }
+        }
     }
     all.retain(|f| !complete(f));
     all
@@ -570,12 +581,14 @@ mod tests {
     }
 
     #[test]
-    fn the_starter_pack_is_vad_whisper_and_both_translation_models() {
+    fn the_starter_pack_is_vad_whisper_and_the_translation_models() {
         let d = dir("pack");
         let all = missing(&d, "base", true);
-        assert_eq!(all.len(), 2 + 10);
+        // VAD + Whisper, ru/en → fr, then fr → en/ru (replies).
+        assert_eq!(all.len(), 2 + 10 + 10);
+        assert_eq!(all.iter().filter(|f| f.label.starts_with("Réponse")).count(), 10);
         let mb: u64 = all.iter().map(|f| f.bytes).sum::<u64>() / 1_000_000;
-        assert!((750..800).contains(&mb), "{mb} Mo");
+        assert!((1370..1420).contains(&mb), "{mb} Mo");
         assert!(all
             .iter()
             .all(|f| f.url.starts_with("https://huggingface.co/")));
@@ -592,9 +605,9 @@ mod tests {
     fn the_installer_pack_holds_every_cpu_model() {
         let d = dir("all");
         let all = missing_all(&d, &["base", "small"], true);
-        assert_eq!(all.len(), 3 + 10);
+        assert_eq!(all.len(), 3 + 20);
         let mb: u64 = all.iter().map(|f| f.bytes).sum::<u64>() / 1_000_000;
-        assert!((1200..1300).contains(&mb), "{mb} Mo");
+        assert!((1800..1950).contains(&mb), "{mb} Mo");
         assert_eq!(all.iter().filter(|f| f.sha1.is_some()).count(), 2);
     }
 }

@@ -208,7 +208,7 @@ Chaque étape est désactivable et mesurable dans l'écran Diagnostic.
 | F-46 | Prise en charge du multi-écran et des mises à l'échelle DPI de 100 à 200 %. | P1 | ◐ |
 | F-47 | Widget Xbox Game Bar (UWP) qui affiche les mêmes sous-titres en plein écran exclusif. | **P2** | — |
 | F-48 | Afficher le pseudo devant la traduction vocale dès qu'il est résolu (§4.8), sans retarder l'affichage de la traduction. | P1 | — |
-| F-50 | Traduction de ses propres annonces (micro) vers la langue des coéquipiers, affichée en texte. Opt-in, désactivé par défaut. | P2 | — |
+| F-50 | Traduction de ses propres annonces (micro) vers la langue des coéquipiers, affichée en texte. Opt-in, désactivé par défaut. | P2 | ◐ version texte livrée : « Répondre dans leur langue » (Ctrl+Alt+F7), saisie en français → anglais/russe en local (Opus-MT fr→en, fr→ru et phrases CS écrites à la main), copié dans le presse-papiers ; rien n'est envoyé au jeu. Micro : à faire |
 
 ### 4.6 Fenêtre principale
 
@@ -233,6 +233,7 @@ Sept écrans, conformes à la maquette *v2 Cinematic*. **Réalisés en React ave
 | --- | --- | --- |
 | Ctrl+Alt+F8 | Afficher / masquer l'overlay | ✅ |
 | Ctrl+Alt+F9 | Pause / reprise de la session | ✅ |
+| Ctrl+Alt+F7 | Répondre dans leur langue (fenêtre au-dessus du jeu, message copié) | ✅ |
 | Ctrl+Alt+F10 | Arrêt d'urgence : toutes les captures sont arrêtées et les tampons audio purgés en moins de 200 ms | ✅ (simulé) |
 
 Raccourcis via `RegisterHotKey` (pas de hook clavier bas niveau), avec détection des conflits ✅. Reconfiguration des raccourcis en P1.
@@ -319,7 +320,7 @@ fenêtre CS2 ─► capture HUD ─► indicateur ─► OCR ─► corrélation
 | --- | --- |
 | `%APPDATA%\Crosstalk\config.json` | Réglages, versionnés avec migration automatique |
 | `%APPDATA%\Crosstalk\glossary.json` | Glossaire utilisateur |
-| `%LOCALAPPDATA%\Crosstalk\models\` | Modèles, avec vérification SHA-256 après téléchargement |
+| `%LOCALAPPDATA%\Crosstalk\models\` | Modèles, avec vérification SHA-256 après téléchargement (dont `opus-mt-fr-en` et `opus-mt-fr-ru` pour les réponses) |
 | `%LOCALAPPDATA%\Crosstalk\history.jsonl` | Historique texte (une ligne JSON par phrase), si activé ; purgé après 7 jours |
 | `<CS2>\game\csgo\cfg\gamestate_integration_crosstalk.cfg` | Demande à CS2 le nom de la carte (Game State Integration, 127.0.0.1:31982, jeton) ; écrit seulement sur « Activer », supprimé par « Retirer » |
 | `%LOCALAPPDATA%\Crosstalk\logs\` | Journaux expurgés (`crosstalk-<date>.log`, un fichier par jour, conservés 7 jours) : états des services et erreurs, jamais de texte de partie ni de pseudo ; nom d'utilisateur Windows masqué |

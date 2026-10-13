@@ -55,6 +55,7 @@ Un overlay transparent conçu pour afficher les sous-titres sans prendre le cont
 
 | | Expérience |
 | --- | --- |
+| **Répondez dans leur langue** | En pleine partie, **Ctrl+Alt+F7** : écrivez en français, Crosstalk traduit en anglais ou en russe (la langue entendue chez vos coéquipiers) et copie le message. Dans CS2 : Y ou U, Ctrl+V, Entrée. Les annonces courantes (« éco », « drop-moi », « deux en B »…) sont traduites à la main, instantanément ; rien n'est tapé dans le jeu à votre place. |
 | **Overlay en jeu** | Fenêtre transparente, repositionnable, avec clics traversants par défaut. Fonctionne avec CS2 en mode fenêtré sans bordures. |
 | **Contrôle immédiat** | Affichez ou masquez l'overlay, mettez en pause ou déclenchez l'arrêt d'urgence via des raccourcis globaux. |
 | **Discret par conception** | Crosstalk peut continuer à fonctionner dans la zone de notification lorsque sa fenêtre principale est masquée. |
@@ -74,7 +75,7 @@ Crosstalk est un outil **externe**. Il n'injecte pas de code dans `cs2.exe`, ne 
 **[↓ Télécharger l'installateur Crosstalk-setup.exe](https://github.com/aboalsim114/Crosstalk/raw/downloads/Crosstalk-setup.exe)**
 
 1. **Téléchargez** `Crosstalk-setup.exe` depuis la branche de distribution `downloads`.
-2. **Installez** Crosstalk dans le dossier proposé ou celui de votre choix. L'installateur met en place l'application, les raccourcis et **télécharge tous les modèles** pendant l'installation : détection de voix, Whisper base et small, traduction russe et anglais → français (environ **1,25 Go**, une seule fois).
+2. **Installez** Crosstalk dans le dossier proposé ou celui de votre choix. L'installateur met en place l'application, les raccourcis et **télécharge tous les modèles** pendant l'installation : détection de voix, Whisper base et small, traduction russe et anglais → français, et français → anglais et russe pour vos réponses (environ **1,9 Go**, une seule fois).
 3. **Lancez** Crosstalk puis ouvrez CS2 : tout fonctionne hors ligne, sans aucun téléchargement supplémentaire.
 4. **Mises à jour : depuis l'application.** À partir du build 94, Crosstalk vérifie au lancement (puis toutes les 6 h) s'il existe une version plus récente et propose de l'installer : il télécharge l'installateur, vérifie sa taille et son empreinte SHA-256, puis se met à jour au même endroit et redémarre, modèles et réglages conservés. Plus besoin de revenir sur cette page.
 
