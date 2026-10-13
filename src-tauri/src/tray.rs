@@ -24,6 +24,13 @@ pub fn create(app: &AppHandle) -> tauri::Result<()> {
         true,
         None::<&str>,
     )?;
+    let dictate = MenuItem::with_id(
+        app,
+        "dictate",
+        "Dicter une réponse\tCtrl+Alt+F6",
+        true,
+        None::<&str>,
+    )?;
     let pause = MenuItem::with_id(app, "pause", "Pause\tCtrl+Alt+F9", true, None::<&str>)?;
     let emergency = MenuItem::with_id(
         app,
@@ -42,6 +49,7 @@ pub fn create(app: &AppHandle) -> tauri::Result<()> {
             &session,
             &overlay,
             &reply,
+            &dictate,
             &pause,
             &emergency,
             &sep()?,
@@ -59,6 +67,7 @@ pub fn create(app: &AppHandle) -> tauri::Result<()> {
             "overlay" => actions::dispatch(app, Action::Overlay),
             "pause" => actions::dispatch(app, Action::Pause),
             "reply" => actions::dispatch(app, Action::Reply),
+            "dictate" => actions::dispatch(app, Action::Dictate),
             "emergency" => actions::dispatch(app, Action::Emergency),
             "quit" => app.exit(0),
             _ => {}

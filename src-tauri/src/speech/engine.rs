@@ -40,6 +40,19 @@ pub trait Recognizer: Send {
         None
     }
 
+    /// Transcribes 16 kHz mono samples in a given language (the user's own
+    /// dictated reply, in French): plain text, no filtering.
+    fn transcribe_in(
+        &mut self,
+        samples: &[f32],
+        lang: &str,
+        prompt: &str,
+        threads: usize,
+    ) -> Result<String, SpeechError> {
+        let _ = (samples, lang, prompt, threads);
+        Err(SpeechError::Model("dictée non prise en charge".into()))
+    }
+
     /// Transcribes 16 kHz mono samples.
     fn recognize(
         &mut self,
@@ -313,6 +326,47 @@ mod whisper_impl {
         }
         fn backend(&self) -> Option<String> {
             Some(self.backend.clone())
+        }
+        fn transcribe_in(
+            &mut self,
+            samples: &[f32],
+            lang: &str,
+            prompt: &str,
+            threads: usize,
+        ) -> Result<String, SpeechError> {
+            let mut p = FullParams::new(SamplingStrategy::Greedy { best_of: 1 });
+            p.set_n_threads(threads.max(1) as i32);
+            p.set_language(Some(lang));
+            p.set_translate(false);
+            p.set_no_context(true);
+            p.set_single_segment(true);
+            p.set_no_timestamps(true);
+            p.set_print_special(false);
+            p.set_print_progress(false);
+            p.set_print_realtime(false);
+            p.set_print_timestamps(false);
+            p.set_suppress_blank(true);
+            p.set_suppress_nst(true);
+            p.set_temperature(0.0);
+            p.set_max_tokens(128);
+            if let Some(ctx) = audio_ctx_for(samples.len(), true) {
+                p.set_audio_ctx(ctx);
+            }
+            if !prompt.is_empty() {
+                p.set_initial_prompt(prompt);
+            }
+            self.state
+                .full(p, samples)
+                .map_err(|e| SpeechError::Inference(format!("whisper : {e}")))?;
+            let mut text = String::new();
+            for i in 0..self.state.full_n_segments() {
+                if let Some(seg) = self.state.get_segment(i) {
+                    if let Ok(t) = seg.to_str_lossy() {
+                        text.push_str(&t);
+                    }
+                }
+            }
+            Ok(text.trim().to_string())
         }
         fn recognize(
             &mut self,

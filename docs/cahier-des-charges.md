@@ -209,7 +209,7 @@ Chaque étape est désactivable et mesurable dans l'écran Diagnostic.
 | F-47 | Widget Xbox Game Bar (UWP) qui affiche les mêmes sous-titres en plein écran exclusif. | **P2** | — |
 | F-48 | Afficher le pseudo devant la traduction vocale dès qu'il est résolu (§4.8), sans retarder l'affichage de la traduction. | P1 | — |
 | F-49 | **Mode streamer** : page locale (127.0.0.1:31983, source navigateur OBS) affichant les sous-titres finaux pour les viewers ; pseudos et phrases originales retirés côté Rust sauf choix contraire ; désactivé par défaut. | P1 | ✅ |
-| F-50 | Traduction de ses propres annonces (micro) vers la langue des coéquipiers, affichée en texte. Opt-in, désactivé par défaut. | P2 | ◐ version texte livrée : « Répondre dans leur langue » (Ctrl+Alt+F7), saisie en français → anglais/russe en local (Opus-MT fr→en, fr→ru et phrases CS écrites à la main), copié dans le presse-papiers ; rien n'est envoyé au jeu. Micro : à faire |
+| F-50 | Traduction de ses propres annonces (micro) vers la langue des coéquipiers, affichée en texte. Opt-in, désactivé par défaut. | P2 | ◐ version texte livrée : « Répondre dans leur langue » (Ctrl+Alt+F7), saisie en français → anglais/russe en local (Opus-MT fr→en, fr→ru et phrases CS écrites à la main), copié dans le presse-papiers ; rien n'est envoyé au jeu. Micro ✅ : « Dicter » (Ctrl+Alt+F6) enregistre le micro par défaut seulement le temps de la phrase (fin automatique après 1,1 s de silence, 12 s max), Whisper transcrit le français, la traduction est copiée ; audio gardé en mémoire puis effacé |
 
 ### 4.6 Fenêtre principale
 
@@ -234,6 +234,7 @@ Sept écrans, conformes à la maquette *v2 Cinematic*. **Réalisés en React ave
 | --- | --- | --- |
 | Ctrl+Alt+F8 | Afficher / masquer l'overlay | ✅ |
 | Ctrl+Alt+F9 | Pause / reprise de la session | ✅ |
+| Ctrl+Alt+F6 | Dicter une réponse (micro, le temps d'une phrase) : transcrite, traduite et copiée | ✅ |
 | Ctrl+Alt+F7 | Répondre dans leur langue (fenêtre au-dessus du jeu, message copié) | ✅ |
 | Ctrl+Alt+F10 | Arrêt d'urgence : toutes les captures sont arrêtées et les tampons audio purgés en moins de 200 ms | ✅ (simulé) |
 

@@ -15,11 +15,12 @@ use windows::Win32::Foundation::{
     CloseHandle, E_INVALIDARG, HANDLE, RPC_E_CHANGED_MODE, WAIT_OBJECT_0,
 };
 use windows::Win32::Media::Audio::{
-    eConsole, eRender, ActivateAudioInterfaceAsync, IActivateAudioInterfaceAsyncOperation,
-    IActivateAudioInterfaceCompletionHandler, IActivateAudioInterfaceCompletionHandler_Impl,
-    IAudioCaptureClient, IAudioClient, IMMDevice, IMMDeviceEnumerator, MMDeviceEnumerator,
-    AUDCLNT_BUFFERFLAGS_SILENT, AUDCLNT_E_DEVICE_INVALIDATED, AUDCLNT_E_SERVICE_NOT_RUNNING,
-    AUDCLNT_E_UNSUPPORTED_FORMAT, AUDCLNT_SHAREMODE_SHARED, AUDCLNT_STREAMFLAGS_AUTOCONVERTPCM,
+    eCapture, eCommunications, eConsole, eRender, ActivateAudioInterfaceAsync,
+    IActivateAudioInterfaceAsyncOperation, IActivateAudioInterfaceCompletionHandler,
+    IActivateAudioInterfaceCompletionHandler_Impl, IAudioCaptureClient, IAudioClient, IMMDevice,
+    IMMDeviceEnumerator, MMDeviceEnumerator, AUDCLNT_BUFFERFLAGS_SILENT,
+    AUDCLNT_E_DEVICE_INVALIDATED, AUDCLNT_E_SERVICE_NOT_RUNNING, AUDCLNT_E_UNSUPPORTED_FORMAT,
+    AUDCLNT_SHAREMODE_SHARED, AUDCLNT_STREAMFLAGS_AUTOCONVERTPCM,
     AUDCLNT_STREAMFLAGS_EVENTCALLBACK, AUDCLNT_STREAMFLAGS_LOOPBACK,
     AUDCLNT_STREAMFLAGS_SRC_DEFAULT_QUALITY, AUDIOCLIENT_ACTIVATION_PARAMS,
     AUDIOCLIENT_ACTIVATION_PARAMS_0, AUDIOCLIENT_ACTIVATION_TYPE_PROCESS_LOOPBACK,
@@ -274,6 +275,47 @@ fn open_device(id: Option<&str>) -> Result<WasapiStream, AudioError> {
             r.map_err(os)?;
         }
         WasapiStream::start(com, client, format, SourceInfo::Device { id: dev_id, name })
+    }
+}
+
+/// The default communications microphone, in shared event-driven mode (no
+/// loopback). Only opened while the user dictates a reply.
+pub fn open_microphone() -> Result<Box<dyn CaptureStream>, AudioError> {
+    let com = Com::init()?;
+    let en = enumerator()?;
+    // SAFETY: COM calls on live interfaces; the mix format is freed after use.
+    unsafe {
+        let device = en
+            .GetDefaultAudioEndpoint(eCapture, eCommunications)
+            .map_err(|e| {
+                if e.code() == E_NOTFOUND {
+                    AudioError::NoMicrophone
+                } else {
+                    os(e)
+                }
+            })?;
+        let (dev_id, name) = describe(&device)?;
+        let client: IAudioClient = device.Activate(CLSCTX_ALL, None).map_err(os)?;
+        let mix = client.GetMixFormat().map_err(os)?;
+        let parsed = parse_format(mix);
+        let init = parsed.as_ref().ok().map(|_| {
+            client.Initialize(
+                AUDCLNT_SHAREMODE_SHARED,
+                AUDCLNT_STREAMFLAGS_EVENTCALLBACK,
+                BUFFER_100NS,
+                0,
+                mix,
+                None,
+            )
+        });
+        CoTaskMemFree(Some(mix as *const _));
+        let format = parsed?;
+        if let Some(r) = init {
+            r.map_err(os)?;
+        }
+        let stream =
+            WasapiStream::start(com, client, format, SourceInfo::Device { id: dev_id, name })?;
+        Ok(Box::new(stream))
     }
 }
 

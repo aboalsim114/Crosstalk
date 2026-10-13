@@ -55,7 +55,7 @@ Un overlay transparent conçu pour afficher les sous-titres sans prendre le cont
 
 | | Expérience |
 | --- | --- |
-| **Répondez dans leur langue** | En pleine partie, **Ctrl+Alt+F7** : écrivez en français, Crosstalk traduit en anglais ou en russe (la langue entendue chez vos coéquipiers) et copie le message. Dans CS2 : Y ou U, Ctrl+V, Entrée. Les annonces courantes (« éco », « drop-moi », « deux en B »…) sont traduites à la main, instantanément ; rien n'est tapé dans le jeu à votre place. |
+| **Répondez dans leur langue** | En pleine partie, **Ctrl+Alt+F6** : **dites** votre phrase en français, ou **Ctrl+Alt+F7** : écrivez-la, Crosstalk traduit en anglais ou en russe (la langue entendue chez vos coéquipiers) et copie le message. Dans CS2 : Y ou U, Ctrl+V, Entrée. Les annonces courantes (« éco », « drop-moi », « deux en B »…) sont traduites à la main, instantanément ; rien n'est tapé dans le jeu à votre place. |
 | **Mode streamer** | Vos viewers lisent aussi les annonces en français : Crosstalk sert une page locale (`http://127.0.0.1:31983/`) à ajouter dans OBS comme **source navigateur**. Pseudos masqués par défaut, phrase originale en option, désactivé tant que vous ne l'activez pas. |
 | **Overlay en jeu** | Fenêtre transparente, repositionnable, avec clics traversants par défaut. Fonctionne avec CS2 en mode fenêtré sans bordures. |
 | **Contrôle immédiat** | Affichez ou masquez l'overlay, mettez en pause ou déclenchez l'arrêt d'urgence via des raccourcis globaux. |

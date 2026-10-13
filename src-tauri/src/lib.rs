@@ -15,7 +15,9 @@
 mod actions;
 pub mod audio;
 pub mod chat;
+mod clipboard;
 mod commands;
+mod dictation;
 mod download_commands;
 pub mod downloads;
 pub mod game;
@@ -130,6 +132,8 @@ pub fn run() {
             reply::reply_models,
             reply::reply_open,
             reply::reply_hide,
+            dictation::dictation_toggle,
+            dictation::dictation_state,
             stream::stream_status,
             stream::stream_configure,
             stream::stream_push
@@ -180,6 +184,7 @@ pub fn run() {
             app.manage(chat.clone());
             let reply = reply::ReplyService::new(speech::models::models_dir());
             app.manage(reply.clone());
+            app.manage(Arc::new(dictation::Dictation::default()));
             app.manage(stream::StreamService::new());
             let gsi = gsi::GsiService::new(Arc::new(gsi::TauriGsiEvents {
                 app: handle.clone(),
