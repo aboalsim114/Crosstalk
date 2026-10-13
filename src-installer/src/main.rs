@@ -2,8 +2,10 @@
 //! driving a real per-user installation (src/install.rs). The NSIS wrapper
 //! (scripts/cross/setup-wrapper.nsi) starts it and writes the uninstaller.
 //!
-//! `--silent [--dir <folder>] [--no-desktop] [--skip-models]` installs without
-//! a window (NSIS `/S`); the exit code is 0 when installed, 1 otherwise.
+//! `--silent [--dir <folder>] [--no-desktop] [--skip-models] [--update] [--launch]`
+//! installs without a window (NSIS `/S`); the exit code is 0 when installed,
+//! 1 otherwise. `--update`: in-app update (same folder, shortcuts kept, waits
+//! for Crosstalk to quit); `--launch` starts Crosstalk once installed.
 
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
@@ -164,15 +166,36 @@ fn silent(args: &[String]) -> i32 {
             .position(|a| a == flag)
             .and_then(|i| args.get(i + 1))
     };
+    let flag = |f: &str| args.iter().any(|a| a == f);
+    // --update (in-app update): same folder, the user's desktop-shortcut
+    // choice kept, and Crosstalk given time to quit.
+    let update = flag("--update");
+    let dir = value("--dir")
+        .map(PathBuf::from)
+        .or_else(|| update.then(system::installed_dir).flatten())
+        .unwrap_or_else(system::default_dir);
     let opts = Options {
-        dir: value("--dir")
-            .map(PathBuf::from)
-            .unwrap_or_else(system::default_dir),
-        desktop: !args.iter().any(|a| a == "--no-desktop"),
-        models: !args.iter().any(|a| a == "--skip-models"),
+        desktop: if update {
+            system::desktop_link_exists()
+        } else {
+            !flag("--no-desktop")
+        },
+        models: !flag("--skip-models"),
+        dir,
     };
+    if update && !install::wait_until_closed(&opts.dir, std::time::Duration::from_secs(30)) {
+        eprintln!("Crosstalk est toujours ouvert");
+        return 1;
+    }
     match installer().run(&opts, &|_| {}) {
-        Ok(()) => 0,
+        Ok(()) => {
+            if flag("--launch") {
+                let _ = std::process::Command::new(opts.dir.join(install::APP_EXE))
+                    .current_dir(&opts.dir)
+                    .spawn();
+            }
+            0
+        }
         Err(Stop::Cancelled) => 1,
         Err(Stop::Failed(e)) => {
             eprintln!("{e}");

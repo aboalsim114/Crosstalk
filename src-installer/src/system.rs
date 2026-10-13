@@ -99,6 +99,20 @@ mod win {
         hkcu().open_subkey(APP_KEY).ok()?.get_value("Version").ok()
     }
 
+    pub fn installed_dir() -> Option<PathBuf> {
+        let d: String = hkcu()
+            .open_subkey(APP_KEY)
+            .ok()?
+            .get_value("InstallDir")
+            .ok()?;
+        Some(PathBuf::from(d))
+    }
+
+    pub fn desktop_link_exists() -> bool {
+        use windows::Win32::UI::Shell::FOLDERID_Desktop;
+        known_folder(&FOLDERID_Desktop).is_ok_and(|d| d.join(SHORTCUT).exists())
+    }
+
     pub fn link(exe: &Path, at: &Path) -> Result<(), String> {
         let mut sl = mslnk::ShellLink::new(exe).map_err(|e| e.to_string())?;
         sl.set_working_dir(exe.parent().map(|d| d.display().to_string()));
@@ -195,6 +209,22 @@ pub fn installed_version() -> Option<String> {
     return win::installed_version();
     #[cfg(not(windows))]
     None
+}
+
+/// Folder of the current installation (update in place).
+pub fn installed_dir() -> Option<PathBuf> {
+    #[cfg(windows)]
+    return win::installed_dir();
+    #[cfg(not(windows))]
+    None
+}
+
+/// Whether the user kept the desktop shortcut (an update keeps their choice).
+pub fn desktop_link_exists() -> bool {
+    #[cfg(windows)]
+    return win::desktop_link_exists();
+    #[cfg(not(windows))]
+    true
 }
 
 /// Launch with Windows (the app's own switch writes the same entry).

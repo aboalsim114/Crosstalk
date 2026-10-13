@@ -38,6 +38,8 @@ candle-transformers = "0.11"
 # OpenSSL), checked by exact size and published SHA-1.
 ureq = "2.12"
 sha1_smol = "1"
+# Fingerprint of the update installer (in-app update).
+sha2 = "0.10"
 # Chat lines of console.log, matched by the rules file (src/chat/rules.json).
 regex = "1"
 

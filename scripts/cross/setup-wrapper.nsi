@@ -4,7 +4,8 @@
 ;   2. unpacks crosstalk-setup.exe and WebView2Loader.dll in a temporary folder and runs it,
 ;   3. once Crosstalk is installed (exit code 0), writes the uninstaller and the
 ;      "Applications et fonctionnalités" entry.
-; /S installs silently (crosstalk-setup.exe --silent).
+; /S installs silently (crosstalk-setup.exe --silent); /S /LAUNCH is the in-app
+; update: same folder, shortcuts kept, Crosstalk started again.
 ;
 ; Defines (scripts/cross-build-windows-gnu.sh): VERSION, OUTFILE, SETUP_EXE,
 ; LOADER, ICON, FILES_NSH (one Delete per installed file), APP_KB.
@@ -109,7 +110,15 @@ Section
   File "/oname=crosstalk-setup.exe" "${SETUP_EXE}"
   File "/oname=WebView2Loader.dll" "${LOADER}"
   ${If} $Quiet == 1
-    ExecWait '"$PLUGINSDIR\setup\crosstalk-setup.exe" --silent' $0
+    ; /LAUNCH: in-app update (same folder, then Crosstalk restarted).
+    ${GetParameters} $1
+    ClearErrors
+    ${GetOptions} $1 "/LAUNCH" $2
+    ${If} ${Errors}
+      ExecWait '"$PLUGINSDIR\setup\crosstalk-setup.exe" --silent' $0
+    ${Else}
+      ExecWait '"$PLUGINSDIR\setup\crosstalk-setup.exe" --silent --update --launch' $0
+    ${EndIf}
   ${Else}
     ExecWait '"$PLUGINSDIR\setup\crosstalk-setup.exe"' $0
   ${EndIf}

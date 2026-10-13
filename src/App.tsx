@@ -7,6 +7,8 @@ import { EASE } from './components/atoms';
 import { Intro, Letterbox, Toast } from './components/Intro';
 import { PageHeader } from './components/PageHeader';
 import { SetupBanner } from './components/SetupBanner';
+import { UpdateBanner } from './components/UpdateBanner';
+import { startUpdateBridge } from './state/update';
 import { Sidebar } from './components/Sidebar';
 import { TitleBar } from './components/TitleBar';
 import { AboutPage } from './pages/AboutPage';
@@ -52,12 +54,14 @@ export default function App() {
     // In the desktop app the shortcuts are system-wide (registered in Rust) and arrive
     // through the native bridge; the window listener only serves the UI dev server.
     const stopNative = startNativeBridge();
+    const stopUpdate = startUpdateBridge();
     if (!isTauri) window.addEventListener('keydown', handleShortcut);
     let autoStart: ReturnType<typeof setTimeout> | undefined;
     if (config.autoStart) autoStart = setTimeout(() => useApp.getState().toggleSession(), 400);
     return () => {
       stopMeter();
       stopNative();
+      stopUpdate();
       window.removeEventListener('keydown', handleShortcut);
       clearTimeout(autoStart);
     };
@@ -87,6 +91,7 @@ export default function App() {
           <Sidebar />
           <main className="flex min-w-0 flex-1 flex-col">
             <PageHeader />
+            <UpdateBanner />
             <SetupBanner />
             <motion.div
               key={page}
