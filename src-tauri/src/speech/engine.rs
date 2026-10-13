@@ -128,34 +128,48 @@ mod whisper_impl {
         backend: String,
     }
 
+    // Through ggml's device registry: its Vulkan registration catches the
+    // errors of a missing or too old driver (calling the Vulkan backend
+    // directly would let them escape and abort the process).
     #[cfg(feature = "gpu")]
     extern "C" {
-        fn ggml_backend_vk_get_device_count() -> std::os::raw::c_int;
-        fn ggml_backend_vk_get_device_description(
-            device: std::os::raw::c_int,
-            description: *mut std::os::raw::c_char,
-            size: usize,
-        );
+        fn ggml_backend_dev_count() -> usize;
+        fn ggml_backend_dev_get(index: usize) -> *mut std::ffi::c_void;
+        fn ggml_backend_dev_type(device: *mut std::ffi::c_void) -> std::os::raw::c_int;
+        fn ggml_backend_dev_description(
+            device: *mut std::ffi::c_void,
+        ) -> *const std::os::raw::c_char;
     }
 
-    /// Name of the first Vulkan GPU, if any (Vulkan driver present and usable).
+    /// Name of the first GPU ggml can use (Vulkan driver present and recent
+    /// enough), if any.
     #[cfg(feature = "gpu")]
     pub fn vulkan_gpu() -> Option<String> {
-        // SAFETY: ggml's C API; the buffer is large enough and NUL-terminated.
+        const GPU: std::os::raw::c_int = 1;
+        const IGPU: std::os::raw::c_int = 2;
+        // SAFETY: ggml's C API; devices live for the whole process and the
+        // description is a NUL-terminated string owned by ggml.
         unsafe {
-            if ggml_backend_vk_get_device_count() < 1 {
-                return None;
-            }
-            let mut buf = [0 as std::os::raw::c_char; 256];
-            ggml_backend_vk_get_device_description(0, buf.as_mut_ptr(), buf.len());
-            let name = std::ffi::CStr::from_ptr(buf.as_ptr())
-                .to_string_lossy()
-                .trim()
-                .to_string();
-            Some(if name.is_empty() {
-                "carte graphique".into()
-            } else {
-                name
+            (0..ggml_backend_dev_count()).find_map(|i| {
+                let dev = ggml_backend_dev_get(i);
+                let kind = ggml_backend_dev_type(dev);
+                if dev.is_null() || (kind != GPU && kind != IGPU) {
+                    return None;
+                }
+                let desc = ggml_backend_dev_description(dev);
+                let name = if desc.is_null() {
+                    String::new()
+                } else {
+                    std::ffi::CStr::from_ptr(desc)
+                        .to_string_lossy()
+                        .trim()
+                        .to_string()
+                };
+                Some(if name.is_empty() {
+                    "carte graphique".into()
+                } else {
+                    name
+                })
             })
         }
     }
