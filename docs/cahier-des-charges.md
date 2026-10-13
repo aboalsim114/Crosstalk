@@ -119,7 +119,7 @@ Statut : ✅ réalisé dans le dépôt (interface et données simulées comprise
 | F-11 | Extraire le canal (Tous, CT, T), l'expéditeur et le message. Parseur versionné, défini par des expressions régulières dans un fichier de règles mis à jour sans recompiler. | P0 | ✅ (format à confirmer sur une vraie partie) |
 | F-12 | Ignorer les lignes système, les messages vides et les doublons (fenêtre de 2 s). | P0 | ✅ |
 | F-13 | Option : ignorer ses propres messages (pseudo Steam configurable). | P1 | ✅ |
-| F-14 | Alimenter la liste des pseudos connus de la session avec les expéditeurs du chat (utilisée par §4.8). | P1 | — |
+| F-14 | Alimenter la liste des pseudos connus de la session avec les expéditeurs du chat (utilisée par §4.8). | P1 | ✅ (en mémoire, quand « Qui parle ? » est activé) |
 
 ### 4.3 Chat vocal
 
@@ -207,7 +207,7 @@ Chaque étape est désactivable et mesurable dans l'écran Diagnostic.
 | F-45 | Mode de repositionnement temporaire (clics capturés), position libre enregistrée par écran. | P1 | ◐ |
 | F-46 | Prise en charge du multi-écran et des mises à l'échelle DPI de 100 à 200 %. | P1 | ◐ |
 | F-47 | Widget Xbox Game Bar (UWP) qui affiche les mêmes sous-titres en plein écran exclusif. | **P2** | — |
-| F-48 | Afficher le pseudo devant la traduction vocale dès qu'il est résolu (§4.8), sans retarder l'affichage de la traduction. | P1 | — |
+| F-48 | Afficher le pseudo devant la traduction vocale dès qu'il est résolu (§4.8), sans retarder l'affichage de la traduction. | P1 | ◐ expérimental, à valider en partie réelle |
 | F-49 | **Mode streamer** : page locale (127.0.0.1:31983, source navigateur OBS) affichant les sous-titres finaux pour les viewers ; pseudos et phrases originales retirés côté Rust sauf choix contraire ; désactivé par défaut. | P1 | ✅ |
 | F-50 | Traduction de ses propres annonces (micro) vers la langue des coéquipiers, affichée en texte. Opt-in, désactivé par défaut. | P2 | ◐ version texte livrée : « Répondre dans leur langue » (Ctrl+Alt+F7), saisie en français → anglais/russe en local (Opus-MT fr→en, fr→ru et phrases CS écrites à la main), copié dans le presse-papiers ; rien n'est envoyé au jeu. Micro ✅ : « Dicter » (Ctrl+Alt+F6) enregistre le micro par défaut seulement le temps de la phrase (fin automatique après 1,1 s de silence, 12 s max), Whisper transcrit le français, la traduction est copiée ; audio gardé en mémoire puis effacé |
 
@@ -265,6 +265,14 @@ La solution retenue est donc l'**analyse du HUD par capture d'image et OCR**.
 | S-08 | Fonction désactivée par défaut et activable dans Audio & IA, avec information sur la capture d'image du jeu. | Exp. |
 | S-09 | Discord : identification via l'API locale de Discord si la permission voix est obtenue. | P2 |
 | S-10 | Regroupement des voix par session (empreinte vocale en mémoire uniquement, jamais enregistrée, opt-in). Donnée biométrique au sens du RGPD. | P2 |
+
+**Implémentation (octobre 2026, `src-tauri/src/speaker`, à valider sous Windows : [protocole](testing/speaker.md)) :**
+- **Capture** : copie GDI d'une zone de l'écran du bureau (comme la capture d'écran d'OBS) plutôt que Windows Graphics Capture : pas de bordure jaune sous Windows 10, rien à autoriser. La zone, définie en fractions de la fenêtre CS2, est réglable, avec un test et un aperçu. Les fenêtres de Crosstalk sont masquées avant la lecture.
+- **Fréquence** : 4 lectures par seconde, seulement pendant que l'audio du jeu contient de la voix (VAD) et que CS2 est au premier plan. Cela remplace la détection d'indicateur par motif (S-03).
+- **Rapprochement** : lectures OCR regroupées par distance d'édition (chiffres identiques exigés). Un pseudo n'est retenu qu'après deux lectures ou s'il est connu du chat (S-04). Le pseudo de l'utilisateur est ignoré.
+- **Corrélation** : la fin d'une ligne est calculée à partir de sa latence et sa durée à partir de l'audio, sur la même horloge monotone (`Instant`, QPC sous Windows). Le pseudo doit représenter au moins 60 % des lectures, sans égalité (S-05, S-06).
+- **Moment de l'attribution** : le pseudo est attribué au moment où la transcription est émise, sans délai (S-01). Ce moment arrive déjà après la fin de la phrase, donc toutes les lectures utiles sont là : `speaker.resolved` (S-07) n'est pas nécessaire.
+- **Ligne sans pseudo** : rien n'est affiché, plutôt que « Joueur inconnu » sur chaque ligne.
 
 **Préalable à toute implémentation (lot L4) :** valider sur des captures réelles, à plusieurs résolutions et échelles, que le HUD de CS2 affiche un indicateur vocal **associé à un pseudo lisible**. S'il n'affiche qu'un avatar, la faisabilité sera réévaluée. Limites connues :
 - bordure jaune de capture sous Windows 10 ;

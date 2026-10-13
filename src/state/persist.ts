@@ -13,7 +13,7 @@ const LOCAL_KEY = 'crosstalk.settings';
 
 type Persisted = Pick<
   AppState,
-  'mode' | 'fmt' | 'corner' | 'opacity' | 'textSize' | 'duration' | 'maxBlocks' | 'overlayOn' | 'tg' | 'chatPath' | 'ownName' | 'capture' | 'vad' | 'model' | 'accel' | 'src' | 'stream'
+  'mode' | 'fmt' | 'corner' | 'opacity' | 'textSize' | 'duration' | 'maxBlocks' | 'overlayOn' | 'tg' | 'chatPath' | 'ownName' | 'capture' | 'vad' | 'model' | 'accel' | 'src' | 'stream' | 'speaker'
 >;
 
 const oneOf =
@@ -42,6 +42,7 @@ const CHECKS: { [K in keyof Persisted]: (v: unknown) => boolean } = {
   accel: (v) => v === 'cpu' || v === 'gpu' || v === 'auto' || v === 'cuda',
   src: (v) => typeof v === 'object' && v !== null,
   stream: (v) => typeof v === 'object' && v !== null,
+  speaker: (v) => typeof v === 'object' && v !== null,
 };
 
 export function snapshot(s: AppState, deviceId: string | null) {
@@ -76,6 +77,8 @@ export function restore(raw: unknown, defaults: AppState): { app: Partial<AppSta
       const merged: Record<string, unknown> = { ...base };
       for (const [key, val] of Object.entries(v as Record<string, unknown>)) if (key in base && typeof val === typeof base[key]) merged[key] = val;
       app.stream = merged as unknown as AppState['stream'];
+    } else if (k === 'speaker') {
+      app.speaker = restoreSpeaker(v as Record<string, unknown>, defaults.speaker);
     } else if (k === 'accel') {
       app.accel = v === 'cuda' ? 'auto' : (v as AppState['accel']); // "cuda" was simulated before the Vulkan build
     } else if (k === 'tg' || k === 'src') {
@@ -87,6 +90,16 @@ export function restore(raw: unknown, defaults: AppState): { app: Partial<AppSta
   }
   const deviceId = s.deviceId === null || isString(s.deviceId) ? (s.deviceId as string | null) : undefined;
   return { app, deviceId };
+}
+
+/** "Qui parle ?" options: a boolean and an area inside CS2's window. */
+function restoreSpeaker(v: Record<string, unknown>, base: AppState['speaker']): AppState['speaker'] {
+  const r = (typeof v.region === 'object' && v.region !== null ? v.region : {}) as Record<string, unknown>;
+  const frac = (x: unknown, d: number) => (inRange(0, 1)(x) ? x : d);
+  return {
+    enabled: isBool(v.enabled) ? v.enabled : base.enabled,
+    region: { x: frac(r.x, base.region.x), y: frac(r.y, base.region.y), w: frac(r.w, base.region.w), h: frac(r.h, base.region.h) },
+  };
 }
 
 /** The stored glossary; old default entries are migrated ("CT / T" was one term). */

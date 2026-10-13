@@ -31,6 +31,7 @@ mod reply;
 mod pipeline;
 mod settings;
 mod shortcuts;
+mod speaker;
 pub mod speech;
 mod stream;
 pub mod translation;
@@ -144,7 +145,10 @@ pub fn run() {
             dictation::dictation_state,
             stream::stream_status,
             stream::stream_configure,
-            stream::stream_push
+            stream::stream_push,
+            speaker::speaker_status,
+            speaker::speaker_configure,
+            speaker::speaker_test
         ])
         .setup(|app| {
             let handle = app.handle();
@@ -194,6 +198,9 @@ pub fn run() {
             app.manage(reply.clone());
             app.manage(Arc::new(dictation::Dictation::default()));
             app.manage(stream::StreamService::new());
+            let speaker = speaker::SpeakerService::new();
+            speaker::start(handle, speaker.clone());
+            app.manage(speaker);
             let gsi = gsi::GsiService::new(Arc::new(gsi::TauriGsiEvents {
                 app: handle.clone(),
                 speech: speech.clone(),

@@ -329,6 +329,10 @@ impl ChatEvents for TauriChatEvents {
     fn message(&self, m: &ChatMessage) {
         use tauri::{Emitter, Manager};
         let _ = self.0.emit(MESSAGE_EVENT, m);
+        // A chat sender is a known name for "Qui parle ?" (memory only).
+        if let Some(s) = self.0.try_state::<Arc<crate::speaker::SpeakerService>>() {
+            s.chat_sender(&m.sender);
+        }
         // Only languages with a model are sent; French is shown as is (F-32).
         if let Some(lang @ ("ru" | "en")) = m.lang.as_deref() {
             if let Some(t) = self

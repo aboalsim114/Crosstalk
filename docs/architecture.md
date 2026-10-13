@@ -147,3 +147,14 @@ Elle est volontairement isolée (cahier des charges §4.8) :
 - un pseudo n'est retenu que s'il figure dans la liste des pseudos connus de la session, si un seul indicateur chevauche le segment, et si le score dépasse le seuil réglable. Sinon : `name: null`, donc « Joueur inconnu ».
 
 Aucune image n'est conservée. Les pseudos sont expurgés des journaux.
+
+**Implémenté dans `src-tauri/src/speaker`** (expérimental, désactivé par défaut) :
+
+| Fichier | Rôle |
+| --- | --- |
+| `screen.rs` | Rectangle client de la fenêtre « Counter-Strike 2 » (`FindWindowW`, sans ouvrir le processus) et copie GDI de la zone choisie. Les fenêtres Crosstalk sont masquées, l'écran noir (plein écran exclusif) est détecté, l'image agrandie ×2 pour l'OCR. |
+| `ocr.rs` | `Windows.Media.Ocr` (langues de l'utilisateur), dans un thread dédié. |
+| `track.rs` | Nettoyage des lignes OCR, regroupement des variantes d'un même pseudo, fenêtre de 30 s de lectures, pseudo dominant d'un intervalle. |
+| `mod.rs` | Thread de lecture (activé par la VAD), statut `speaker://status`, commandes `speaker_configure`, `speaker_status` et `speaker_test`. |
+
+`speech::TauriEvents::transcript` appelle `SpeakerService::speaker_for(latence, durée)` et remplit `Transcript.speaker`. L'interface en fait le `sender` de la ligne vocale (Script, overlay, historique, mode streamer).

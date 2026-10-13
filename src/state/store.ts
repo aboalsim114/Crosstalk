@@ -24,6 +24,13 @@ export interface StreamOpts {
   max: number;
   duration: number;
 }
+/** "Qui parle ?": names read on CS2's voice indicator (src-tauri/src/speaker). */
+export interface SpeakerOpts {
+  enabled: boolean;
+  /** Area of CS2's window, in fractions (0..1). */
+  region: { x: number; y: number; w: number; h: number };
+}
+export const SPEAKER_DEFAULTS: SpeakerOpts = { enabled: false, region: { x: 0, y: 0.5, w: 0.25, h: 0.3 } };
 export const STREAM_DEFAULTS: StreamOpts = { enabled: false, names: false, original: false, watermark: true, size: 34, max: 3, duration: 8 };
 
 export type SourceLang = 'ru' | 'en' | 'de' | 'es' | 'pt' | 'pl';
@@ -73,6 +80,7 @@ export interface AppState {
   /** The player's own name, to leave out their chat messages. */
   ownName: string;
   stream: StreamOpts;
+  speaker: SpeakerOpts;
   capture: CaptureSource;
   vad: number;
   model: ModelId;
@@ -98,6 +106,7 @@ export interface AppActions {
   setPage: (page: PageId) => void;
   toggle: (k: ToggleKey) => void;
   setStream: (p: Partial<StreamOpts>) => void;
+  setSpeaker: (p: Partial<SpeakerOpts>) => void;
   toggleSession: () => void;
   togglePause: () => void;
   emergency: () => void;
@@ -148,6 +157,7 @@ const initial: AppState = {
   chatPath: '',
   ownName: '',
   stream: STREAM_DEFAULTS,
+  speaker: SPEAKER_DEFAULTS,
   capture: 'process',
   vad: 55,
   model: 'base',
@@ -263,6 +273,7 @@ export const useApp = create<AppState & AppActions>()((set, get) => {
     setPage: (page) => set({ page }),
     toggle: (k) => set((s) => ({ tg: { ...s.tg, [k]: !s.tg[k] } })),
     setStream: (p) => set((s) => ({ stream: { ...s.stream, ...p } })),
+    setSpeaker: (p) => set((s) => ({ speaker: { ...s.speaker, ...p } })),
     toggleSource: (k) => set((s) => ({ src: { ...s.src, [k]: !s.src[k] } })),
     toggleOverlay: () => set((s) => ({ overlayOn: !s.overlayOn })),
 

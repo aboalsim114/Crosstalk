@@ -1,8 +1,9 @@
 import { config } from '../config';
 import { useState } from 'react';
-import { translation as nativeTranslation, type Translation } from '../backend';
+import { isTauri, translation as nativeTranslation, type Translation } from '../backend';
 import { Radio, Seg, Slider, Toggle, ToggleRow, fnt } from '../components/atoms';
 import { LevelMeter } from '../components/LevelMeter';
+import { SpeakerCard } from './SpeakerCard';
 import { captureSummary, cs2Summary, isCapturing, refreshDevices, runCaptureTest, testMessage, useAudio } from '../state/audio';
 import { MODELS, type ModelId } from '../state/data';
 import { engineSummary, formatMs, rescanModels, statsLine, useSpeech } from '../state/speech';
@@ -425,6 +426,7 @@ export function AudioPage() {
       <div className="flex flex-col gap-4">
         <CaptureCard />
         <VadCard />
+        {isTauri && <SpeakerCard />}
       </div>
       <div className="flex flex-col gap-4">
         <ModelCard />

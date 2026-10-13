@@ -132,6 +132,9 @@ pub struct Transcript {
     pub avg_logprob: f32,
     pub no_speech_prob: f32,
     pub model: String,
+    /// Name shown on CS2's voice indicator while it was spoken (src/speaker).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub speaker: Option<String>,
 }
 
 /// Why a segment did not produce a transcript.
@@ -253,6 +256,7 @@ mod tests {
             avg_logprob: -0.3,
             no_speech_prob: 0.01,
             model: "base".into(),
+            speaker: None,
         };
         let v = serde_json::to_value(&t).unwrap();
         assert_eq!(v["lang"], "ru");

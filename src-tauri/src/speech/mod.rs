@@ -19,6 +19,7 @@ pub mod vad;
 
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use std::time::Duration;
 
 use tauri::{AppHandle, Emitter, Manager, State};
 
@@ -154,6 +155,26 @@ impl SpeechEvents for TauriEvents {
         let _ = self.0.emit(STATUS_EVENT, status);
     }
     fn transcript(&self, transcript: &Transcript) {
+        // Who was talking, read on CS2's voice indicator (opt-in).
+        let named;
+        let transcript = match self
+            .0
+            .try_state::<Arc<crate::speaker::SpeakerService>>()
+            .and_then(|s| {
+                s.speaker_for(
+                    Duration::from_millis(transcript.latency_ms as u64),
+                    Duration::from_millis(transcript.audio_ms as u64),
+                )
+            }) {
+            Some(name) => {
+                named = Transcript {
+                    speaker: Some(name),
+                    ..transcript.clone()
+                };
+                &named
+            }
+            None => transcript,
+        };
         let _ = self.0.emit(TRANSCRIPT_EVENT, transcript);
         if let Some(t) = self
             .0
@@ -168,6 +189,9 @@ impl SpeechEvents for TauriEvents {
         }
     }
     fn activity(&self, activity: VoiceActivity) {
+        if let Some(s) = self.0.try_state::<Arc<crate::speaker::SpeakerService>>() {
+            s.voice(activity.speaking);
+        }
         let _ = self.0.emit(ACTIVITY_EVENT, activity);
     }
     fn stats(&self, stats: &SpeechStats) {
