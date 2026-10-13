@@ -9,6 +9,7 @@ import { PageHeader } from './components/PageHeader';
 import { SetupBanner } from './components/SetupBanner';
 import { UpdateBanner } from './components/UpdateBanner';
 import { startUpdateBridge } from './state/update';
+import { startHistoryRecorder } from './state/history';
 import { Sidebar } from './components/Sidebar';
 import { TitleBar } from './components/TitleBar';
 import { AboutPage } from './pages/AboutPage';
@@ -55,6 +56,7 @@ export default function App() {
     // through the native bridge; the window listener only serves the UI dev server.
     const stopNative = startNativeBridge();
     const stopUpdate = startUpdateBridge();
+    const stopHistory = isTauri ? startHistoryRecorder() : () => {};
     if (!isTauri) window.addEventListener('keydown', handleShortcut);
     let autoStart: ReturnType<typeof setTimeout> | undefined;
     if (config.autoStart) autoStart = setTimeout(() => useApp.getState().toggleSession(), 400);
@@ -62,6 +64,7 @@ export default function App() {
       stopMeter();
       stopNative();
       stopUpdate();
+      stopHistory();
       window.removeEventListener('keydown', handleShortcut);
       clearTimeout(autoStart);
     };

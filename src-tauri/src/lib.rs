@@ -19,6 +19,7 @@ mod commands;
 mod download_commands;
 pub mod downloads;
 pub mod game;
+mod history;
 mod overlay;
 // Traits and helpers for the upcoming native pipeline; wired in later phases.
 #[allow(dead_code)]
@@ -105,7 +106,12 @@ pub fn run() {
             updater::update_check,
             updater::update_download,
             updater::update_cancel,
-            updater::update_install
+            updater::update_install,
+            history::history_append,
+            history::history_list,
+            history::history_count,
+            history::history_clear,
+            history::history_export
         ])
         .setup(|app| {
             let handle = app.handle();
@@ -123,6 +129,9 @@ pub fn run() {
             app.manage(translation.clone());
             let speech = speech::start(handle);
             app.manage(speech.clone());
+            let history = history::History::new(history::default_path());
+            let _ = history.purge(history::now_ms());
+            app.manage(history);
             app.manage(updater::Updater::new(
                 Arc::new(downloads::HttpFetcher),
                 Arc::new(updater::TauriUpdateEvents(handle.clone())),
