@@ -33,6 +33,9 @@ pub struct ProbeCache {
     pub cpu_ms: Option<u32>,
     /// Why the GPU is not used, in French.
     pub reason: Option<String>,
+    /// File name of the Whisper model the timings were measured with.
+    #[serde(default)]
+    pub model: Option<String>,
 }
 
 /// What the probe process prints on its last line.
@@ -51,6 +54,27 @@ pub struct Decision {
     pub allowed: bool,
     /// Shown in the engine card when the GPU is not used (French).
     pub reason: Option<String>,
+    /// The probe's timings, reused by Auto mode instead of loading the
+    /// model twice in this process.
+    pub bench: Option<Bench>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct Bench {
+    /// File name of the measured model.
+    pub model: String,
+    pub gpu_ms: u32,
+    pub cpu_ms: u32,
+}
+
+impl Decision {
+    fn refused(reason: Option<String>) -> Self {
+        Decision {
+            allowed: false,
+            reason,
+            bench: None,
+        }
+    }
 }
 
 fn state_dir() -> PathBuf {
@@ -89,6 +113,7 @@ pub fn judge_probe(build: u32, exit: Option<i32>, stdout: &str) -> ProbeCache {
         gpu_ms: None,
         cpu_ms: None,
         reason: Some(reason.into()),
+        model: None,
     };
     let Some(code) = exit else {
         return fail("le test de la carte graphique ne répond plus (pilote bloqué)");
@@ -113,6 +138,7 @@ pub fn judge_probe(build: u32, exit: Option<i32>, stdout: &str) -> ProbeCache {
             gpu_ms: r.gpu_ms,
             cpu_ms: r.cpu_ms,
             reason: None,
+            model: None,
         },
     }
 }
@@ -140,10 +166,7 @@ pub fn decide(
     model: Option<&Path>,
     probe: impl FnOnce(&Path) -> (Option<i32>, String),
 ) -> Decision {
-    let no = |reason: Option<String>| Decision {
-        allowed: false,
-        reason,
-    };
+    let no = Decision::refused;
     if accel == Some("cpu") {
         return no(None);
     }
@@ -158,6 +181,7 @@ pub fn decide(
             reason: Some(
                 "Crosstalk s'est fermé brutalement en utilisant la carte graphique".into(),
             ),
+            model: None,
         };
         write_cache(dir, &cache);
         crate::logs::warn(
@@ -175,7 +199,8 @@ pub fn decide(
                 ));
             };
             let (exit, out) = probe(model);
-            let c = judge_probe(build, exit, &out);
+            let mut c = judge_probe(build, exit, &out);
+            c.model = model.file_name().map(|n| n.to_string_lossy().into_owned());
             crate::logs::info(
                 "gpu",
                 &match (&c.gpu, c.reason.as_deref()) {
@@ -196,9 +221,18 @@ pub fn decide(
     }
     let _ = std::fs::create_dir_all(dir);
     let _ = std::fs::write(marker_path(dir), b"gpu");
+    let bench = match (cache.model, cache.gpu_ms, cache.cpu_ms) {
+        (Some(model), Some(gpu_ms), Some(cpu_ms)) => Some(Bench {
+            model,
+            gpu_ms,
+            cpu_ms,
+        }),
+        _ => None,
+    };
     Decision {
         allowed: true,
         reason: None,
+        bench,
     }
 }
 
@@ -256,10 +290,7 @@ static STATE_DIR: Mutex<Option<PathBuf>> = Mutex::new(None);
 pub fn ensure(models_dir: &Path) -> &'static Decision {
     DECISION.get_or_init(|| {
         if !cfg!(feature = "gpu") {
-            return Decision {
-                allowed: false,
-                reason: None,
-            };
+            return Decision::refused(None);
         }
         let dir = state_dir();
         *STATE_DIR.lock().unwrap() = Some(dir.clone());
@@ -281,6 +312,14 @@ pub fn ensure(models_dir: &Path) -> &'static Decision {
 
 pub fn decision() -> Option<&'static Decision> {
     DECISION.get()
+}
+
+/// GPU and CPU timings measured by this run's probe for the model at `path`
+/// (same file), if any.
+pub fn measured(path: &Path) -> Option<(u32, u32)> {
+    let b = decision()?.bench.as_ref()?;
+    let name = path.file_name()?.to_string_lossy();
+    (b.model == name).then_some((b.gpu_ms, b.cpu_ms))
 }
 
 /// A model to probe with: the chosen one if installed, else the smallest.
@@ -429,6 +468,32 @@ mod tests {
         let r = decide(&d, 1, Some("auto"), None, |_| panic!("probed"));
         assert!(!r.allowed && r.reason.unwrap().contains("modèle"));
         assert!(read_cache(&d).is_none(), "nothing cached without a probe");
+    }
+
+    #[test]
+    fn the_probe_timings_are_kept_for_auto_mode() {
+        let d = dir("bench");
+        let model = d.join("ggml-large-v3-turbo.bin");
+        let r = decide(&d, 3, Some("auto"), Some(&model), |_| (Some(0), OK.into()));
+        let want = Some(Bench {
+            model: "ggml-large-v3-turbo.bin".into(),
+            gpu_ms: 180,
+            cpu_ms: 900,
+        });
+        assert_eq!(r.bench, want);
+        clean_exit_in(&d);
+        // Next launch, from the cache.
+        let r = decide(&d, 3, Some("auto"), Some(&model), |_| panic!("probed"));
+        assert_eq!(r.bench, want);
+        clean_exit_in(&d);
+        // A cache written by an older build (no model name): no timings.
+        let mut c = read_cache(&d).unwrap();
+        c.model = None;
+        write_cache(&d, &c);
+        assert!(decide(&d, 3, None, Some(&model), |_| panic!("probed"))
+            .bench
+            .is_none());
+        clean_exit_in(&d);
     }
 
     fn clean_exit_in(d: &Path) {

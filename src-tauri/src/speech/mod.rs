@@ -41,11 +41,21 @@ pub enum SpeechError {
     Inference(String),
 }
 
+#[cfg(feature = "whisper")]
+fn auto_note(use_gpu: bool, speedup: f32) -> String {
+    let label = engine::speedup_label(speedup);
+    if use_gpu {
+        format!("auto : {label} plus rapide que le processeur")
+    } else {
+        format!("auto : carte graphique pas assez rapide ({label})")
+    }
+}
+
 /// Loads Whisper where asked; in Auto mode, measures the GPU against the CPU
 /// on 3 s of test audio and keeps the GPU only if clearly faster.
 #[cfg(feature = "whisper")]
 fn load_with(path: &Path, accel: Accel) -> Result<engine::WhisperRecognizer, SpeechError> {
-    use engine::{pick_accel, speedup_label, vulkan_gpu, WhisperRecognizer};
+    use engine::{pick_accel, vulkan_gpu, WhisperRecognizer};
     let refused = gpu_guard::decision().filter(|d| !d.allowed).map(|d| {
         d.reason
             .clone()
@@ -66,23 +76,29 @@ fn load_with(path: &Path, accel: Accel) -> Result<engine::WhisperRecognizer, Spe
                 r.set_backend("CPU · AVX2 · auto (aucune carte graphique Vulkan)".into());
                 return Ok(r);
             }
+            // The start-up probe already measured this model: load it once.
+            if let Some((gpu_ms, cpu_ms)) = gpu_guard::measured(path) {
+                let (use_gpu, speedup) = pick_accel(gpu_ms, cpu_ms);
+                let mut chosen = WhisperRecognizer::load(path, use_gpu)?;
+                let note = auto_note(use_gpu, speedup);
+                let backend = format!("{} · {note}", chosen.backend_name());
+                chosen.set_backend(backend);
+                crate::logs::info(
+                    "asr",
+                    &format!(
+                        "mode auto (mesure du démarrage) : GPU {gpu_ms} ms, CPU {cpu_ms} ms → {}",
+                        if use_gpu { "GPU" } else { "CPU" }
+                    ),
+                );
+                return Ok(chosen);
+            }
             let mut gpu = WhisperRecognizer::load(path, true)?;
             let gpu_ms = gpu.bench_ms()?;
             let mut cpu = WhisperRecognizer::load(path, false)?;
             let cpu_ms = cpu.bench_ms()?;
             let (use_gpu, speedup) = pick_accel(gpu_ms, cpu_ms);
             let mut chosen = if use_gpu { gpu } else { cpu };
-            let note = if use_gpu {
-                format!(
-                    "auto : {} plus rapide que le processeur",
-                    speedup_label(speedup)
-                )
-            } else {
-                format!(
-                    "auto : carte graphique pas assez rapide ({})",
-                    speedup_label(speedup)
-                )
-            };
+            let note = auto_note(use_gpu, speedup);
             let backend = format!("{} · {note}", chosen.backend_name());
             chosen.set_backend(backend);
             crate::logs::info(
