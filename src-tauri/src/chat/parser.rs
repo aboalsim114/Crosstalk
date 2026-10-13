@@ -138,7 +138,8 @@ pub fn chat_shape(line: &str) -> Option<String> {
         line.trim_start_matches(|c: char| c.is_ascii_digit() || matches!(c, '/' | ':' | '.' | ' '));
     let rest = rest.strip_prefix('[')?;
     let (tag, tail) = rest.split_once(']')?;
-    let tag_ok = !tag.is_empty()
+    // A channel tag has letters ("[ALL]", "[КТ]"); "[ ]" or "[--]" are not.
+    let tag_ok = tag.chars().any(char::is_alphabetic)
         && tag.chars().count() <= 16
         && tag
             .chars()
@@ -309,6 +310,8 @@ mod tests {
         assert_eq!(chat_shape("Damage Given to \"Bot\" - 27 in 1 hit"), None);
         assert_eq!(chat_shape("[Client] CL: x"), None);
         assert_eq!(chat_shape("+2900 $ à l'équipe pour avoir perdu."), None);
+        assert_eq!(chat_shape("[ ] Loading : 42%"), None);
+        assert_eq!(chat_shape("[--] net: 12 ms"), None);
     }
 
     #[test]
