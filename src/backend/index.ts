@@ -194,6 +194,8 @@ export interface SpeechConfig {
   glossary: string[];
   /** Where Whisper runs; auto = GPU only if measured clearly faster than the CPU. */
   accel: 'cpu' | 'gpu' | 'auto';
+  /** "Focus voix": keep the centre of the stereo game audio (voice chat), turn down side sounds. */
+  voiceFocus?: boolean;
 }
 
 export interface SpeechStatus {
@@ -236,6 +238,8 @@ export interface SpeechStats {
   latencyP95Ms: number | null;
   lastRtf: number | null;
   cpuPercent: number | null;
+  /** Game sound removed by "Focus voix" over the last second (dB); null when off or mono. */
+  focusDb?: number | null;
 }
 
 export interface VoiceActivity {

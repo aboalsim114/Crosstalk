@@ -14,6 +14,11 @@ describe('settings kept between launches', () => {
     window.localStorage.clear();
   });
 
+  it('keeps "Focus voix"', () => {
+    expect(restore(snapshot({ ...app0, voiceFocus: true }, null).config, app0).app.voiceFocus).toBe(true);
+    expect(restore({ version: 1, settings: { voiceFocus: 'yes' } }, app0).app.voiceFocus).toBeUndefined();
+  });
+
   it('keeps the "Qui parle ?" options, with the area bounded to the window', () => {
     const snap = snapshot({ ...app0, speaker: { enabled: true, region: { x: 0.1, y: 0.6, w: 0.2, h: 0.25 } } }, null);
     expect(restore(snap.config, app0).app.speaker).toEqual({ enabled: true, region: { x: 0.1, y: 0.6, w: 0.2, h: 0.25 } });

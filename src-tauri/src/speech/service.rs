@@ -209,6 +209,7 @@ impl StatsAcc {
             latency_p95_ms: pct(0.95),
             last_rtf: self.last_rtf,
             cpu_percent: self.cpu_percent,
+            focus_db: None,
         }
     }
 }
@@ -246,9 +247,22 @@ struct Inner {
     last_audio: Mutex<Option<Instant>>,
     shutdown: AtomicBool,
     threads: usize,
+    /// "Focus voix" on (read by the capture thread).
+    focus: AtomicBool,
+    focus_db: Mutex<Option<f32>>,
 }
 
 impl Inner {
+    fn stats_snapshot(&self) -> SpeechStats {
+        let mut s = self
+            .stats
+            .lock()
+            .unwrap()
+            .snapshot(self.dropped_blocks.load(Ordering::Relaxed));
+        s.focus_db = *self.focus_db.lock().unwrap();
+        s
+    }
+
     fn status(&self) -> SpeechStatus {
         let config = self.config.lock().unwrap().clone();
         let e = self.engine.lock().unwrap();
@@ -284,11 +298,7 @@ impl Inner {
     }
 
     fn publish_stats(&self) {
-        let s = self
-            .stats
-            .lock()
-            .unwrap()
-            .snapshot(self.dropped_blocks.load(Ordering::Relaxed));
+        let s = self.stats_snapshot();
         self.events.stats(&s);
     }
 
@@ -351,7 +361,10 @@ impl SpeechService {
         config: SpeechConfig,
         threads: usize,
     ) -> Arc<Self> {
+        let focus = config.voice_focus;
         let inner = Arc::new(Inner {
+            focus: AtomicBool::new(focus),
+            focus_db: Mutex::new(None),
             events,
             loader,
             models_dir,
@@ -408,11 +421,7 @@ impl SpeechService {
     }
 
     pub fn stats(&self) -> SpeechStats {
-        self.inner
-            .stats
-            .lock()
-            .unwrap()
-            .snapshot(self.inner.dropped_blocks.load(Ordering::Relaxed))
+        self.inner.stats_snapshot()
     }
 
     pub fn models_dir(&self) -> &Path {
@@ -447,6 +456,7 @@ impl SpeechService {
             let mut c = self.inner.config.lock().unwrap();
             let changed = c.model != config.model || c.accel != config.accel;
             *c = config.clone();
+            self.inner.focus.store(config.voice_focus, Ordering::SeqCst);
             changed
         };
         if model_changed {
@@ -559,6 +569,8 @@ impl SpeechService {
         SpeechSink {
             tx: self.front.clone(),
             inner: self.inner.clone(),
+            focus: None,
+            focus_frames: 0,
         }
     }
 }
@@ -573,6 +585,9 @@ impl Drop for SpeechService {
 pub struct SpeechSink {
     tx: SyncSender<FrontMsg>,
     inner: Arc<Inner>,
+    /// "Focus voix" state while it is on and the source is stereo.
+    focus: Option<super::focus::VoiceFocus>,
+    focus_frames: usize,
 }
 
 impl SpeechSink {
@@ -592,8 +607,23 @@ impl SpeechSink {
 impl BlockSink for SpeechSink {
     fn block(&mut self, block: &AudioBlock) {
         let generation = self.inner.generation.load(Ordering::SeqCst);
-        let mono: Vec<f32> =
-            crate::audio::convert::mono_frames(block.samples, block.channels).collect();
+        let mono: Vec<f32> = if block.channels == 2 && self.inner.focus.load(Ordering::Relaxed) {
+            let f = self.focus.get_or_insert_with(Default::default);
+            let mut out = Vec::with_capacity(block.samples.len() / 2);
+            f.process(block.samples, 2, &mut out);
+            // Meter: what was removed over about a second.
+            self.focus_frames += block.samples.len() / 2;
+            if self.focus_frames >= block.sample_rate as usize {
+                self.focus_frames = 0;
+                *self.inner.focus_db.lock().unwrap() = f.take_reduction_db();
+            }
+            out
+        } else {
+            if self.focus.take().is_some() {
+                *self.inner.focus_db.lock().unwrap() = None;
+            }
+            crate::audio::convert::mono_frames(block.samples, block.channels).collect()
+        };
         self.send(mono, block.sample_rate, generation);
     }
 
@@ -1317,6 +1347,33 @@ mod tests {
         let st = svc.stats();
         assert_eq!(st.transcribed, 1);
         assert!(st.latency_p50_ms.is_some());
+    }
+
+    #[test]
+    fn voice_focus_keeps_the_centred_voice_and_reports_what_it_removes() {
+        let (svc, rx, _) = service("Двое на B", 0, true);
+        wait_ready(&svc);
+        assert_eq!(svc.stats().focus_db, None, "off by default");
+        svc.configure(SpeechConfig {
+            voice_focus: true,
+            ..svc.status().config
+        });
+        let mut sink = svc.sink();
+        // The test tone is the same on both channels: a centred voice.
+        feed(&mut sink, 1200, 700);
+        let t = next_transcript(&rx).expect("the centred voice still goes through");
+        assert_eq!(t.text, "Двое на B");
+        let removed = svc.stats().focus_db.expect("meter");
+        assert!(
+            removed < 1.0,
+            "a centred voice is not removed ({removed} dB)"
+        );
+        svc.configure(SpeechConfig {
+            voice_focus: false,
+            ..svc.status().config
+        });
+        feed(&mut sink, 20, 0);
+        assert_eq!(svc.stats().focus_db, None);
     }
 
     #[test]
