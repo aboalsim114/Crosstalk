@@ -1,6 +1,8 @@
+import { isTauri } from '../backend';
 import { ToggleRow, fnt } from '../components/atoms';
 import { useApp, type SourceLang } from '../state/store';
 import { ChatCard } from './ChatCard';
+import { GsiCard } from './GsiCard';
 
 const COLS = '140px 110px minmax(0,1fr) 24px';
 
@@ -46,6 +48,7 @@ export function LangPage() {
           <ToggleRow title="Ignorer le français" sub="Original affiché, aucun appel" on={s.tg.skipFr} onClick={() => s.toggle('skipFr')} />
         </div>
         <ChatCard />
+        {isTauri && <GsiCard />}
       </div>
 
       <div className="glass flex flex-col overflow-hidden">

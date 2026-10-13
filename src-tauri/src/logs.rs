@@ -421,11 +421,34 @@ pub fn summarize(event: &str, v: &Value) -> Vec<(String, &'static str, &'static 
                 msg,
             )
         }
+        "gsi://status" => {
+            let msg = if v.get("installed").and_then(Value::as_bool) != Some(true) {
+                "carte en cours : désactivée".to_string()
+            } else if let Some(e) = s(v, &["error"]) {
+                format!("carte en cours : {e}")
+            } else if let Some(m) = s(v, &["map"]) {
+                format!(
+                    "carte en cours : {m} · {} callouts",
+                    n(v, &["callouts"]).unwrap_or(0)
+                )
+            } else if v.get("lastSeen").is_some_and(|t| !t.is_null()) {
+                "carte en cours : CS2 connecté, dans les menus".to_string()
+            } else {
+                "carte en cours : en attente de CS2".to_string()
+            };
+            let level = if v.get("error").is_some_and(|e| !e.is_null()) {
+                "WARN"
+            } else {
+                "INFO"
+            };
+            one(level, "gsi", msg)
+        }
         _ => Vec::new(),
     }
 }
 
-pub const WATCHED: [&str; 7] = [
+pub const WATCHED: [&str; 8] = [
+    "gsi://status",
     "cs2://status",
     "audio://status",
     "speech://status",

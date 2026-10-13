@@ -19,6 +19,7 @@ mod commands;
 mod download_commands;
 pub mod downloads;
 pub mod game;
+mod gsi;
 mod history;
 mod logs;
 mod overlay;
@@ -117,7 +118,10 @@ pub fn run() {
             logs::logs_write,
             logs::logs_open_folder,
             logs::diag_report,
-            logs::diag_report_issue
+            logs::diag_report_issue,
+            gsi::gsi_status,
+            gsi::gsi_install,
+            gsi::gsi_uninstall
         ])
         .setup(|app| {
             let handle = app.handle();
@@ -158,10 +162,24 @@ pub fn run() {
                 std::env::temp_dir().join("Crosstalk-update"),
                 updater::feed_url(),
             ));
-            app.manage(chat::ChatService::new(
+            let chat = chat::ChatService::new(
                 Arc::new(chat::TauriChatEvents(handle.clone())),
                 chat::user_rules_file(),
-            ));
+            );
+            app.manage(chat.clone());
+            let gsi = gsi::GsiService::new(Arc::new(gsi::TauriGsiEvents {
+                app: handle.clone(),
+                speech: speech.clone(),
+                translation: translation.clone(),
+            }));
+            gsi.refresh(
+                chat.status()
+                    .setup
+                    .cs2_dir
+                    .map(std::path::PathBuf::from)
+                    .as_deref(),
+            );
+            app.manage(gsi.clone());
             let audio = Arc::new(audio::AudioService::new(
                 audio::default_backend(),
                 Arc::new(CaptureEvents {
@@ -180,6 +198,7 @@ pub fn run() {
                 let _ = events.emit(game::STATUS_EVENT, status);
                 match change {
                     game::Cs2Change::Exited(pid) | game::Cs2Change::Restarted { old: pid, .. } => {
+                        gsi.game_closed();
                         audio.on_process_exited(pid)
                     }
                     game::Cs2Change::Started(_) => {}
