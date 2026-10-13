@@ -20,6 +20,7 @@ mod download_commands;
 pub mod downloads;
 pub mod game;
 mod history;
+mod logs;
 mod overlay;
 // Traits and helpers for the upcoming native pipeline; wired in later phases.
 #[allow(dead_code)]
@@ -111,10 +112,29 @@ pub fn run() {
             history::history_list,
             history::history_count,
             history::history_clear,
-            history::history_export
+            history::history_export,
+            logs::logs_recent,
+            logs::logs_write,
+            logs::logs_open_folder,
+            logs::diag_report,
+            logs::diag_report_issue
         ])
         .setup(|app| {
             let handle = app.handle();
+            logs::init(logs::default_dir());
+            logs::info(
+                "app",
+                &format!(
+                    "Crosstalk {} · build {} · commit {} · Windows {}",
+                    env!("CARGO_PKG_VERSION"),
+                    updater::current_build(),
+                    env!("CROSSTALK_COMMIT"),
+                    audio::platform::windows_build()
+                        .map(|b| b.to_string())
+                        .unwrap_or_else(|| "?".into())
+                ),
+            );
+            logs::watch(handle);
 
             // Translation decodes one token at a time: one thread is nearly as
             // fast as four and leaves the CPU to CS2 and Whisper (read by candle).

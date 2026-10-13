@@ -186,7 +186,7 @@ pub fn to_text(entries: &[Entry]) -> String {
 }
 
 /// `YYYY-MM-DD HH:MM:SS UTC` without a date library.
-fn utc(secs: i64) -> String {
+pub(crate) fn utc(secs: i64) -> String {
     let days = secs.div_euclid(86_400);
     let rem = secs.rem_euclid(86_400);
     // Civil date from days since 1970-01-01 (Howard Hinnant's algorithm).
@@ -209,6 +209,11 @@ fn utc(secs: i64) -> String {
 
 /// `Documents\Crosstalk-historique-<date>.<ext>`.
 pub fn export_path(ext: &str, now: u64) -> PathBuf {
+    documents_path("Crosstalk-historique", ext, now)
+}
+
+/// `Documents\<prefix>-<date>.<ext>` (temp folder if Documents is missing).
+pub(crate) fn documents_path(prefix: &str, ext: &str, now: u64) -> PathBuf {
     let base = std::env::var_os("USERPROFILE")
         .map(|p| PathBuf::from(p).join("Documents"))
         .filter(|p| p.is_dir())
@@ -216,7 +221,7 @@ pub fn export_path(ext: &str, now: u64) -> PathBuf {
     let stamp = utc((now / 1000) as i64)
         .replace([':', ' '], "-")
         .replace("-UTC", "");
-    base.join(format!("Crosstalk-historique-{stamp}.{ext}"))
+    base.join(format!("{prefix}-{stamp}.{ext}"))
 }
 
 pub fn export(h: &History, format: &str, to: &Path) -> Result<usize, String> {

@@ -34,7 +34,7 @@ pub fn dispatch(app: &AppHandle, action: Action) {
         }
     }
     if let Err(e) = app.emit_to(MAIN_WINDOW, ACTION_EVENT, action) {
-        eprintln!("crosstalk: failed to forward {action:?}: {e}");
+        crate::logs::warn("actions", &format!("{action:?} non transmis : {e}"));
     }
 }
 

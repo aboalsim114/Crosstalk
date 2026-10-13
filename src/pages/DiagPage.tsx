@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { getShortcutStatus, type ShortcutStatus } from '../backend';
+import { chat, diagnostics, getShortcutStatus, type LogLine, type ShortcutStatus } from '../backend';
 import { config } from '../config';
 import { fnt } from '../components/atoms';
 import { useAudio, type AudioState } from '../state/audio';
@@ -57,6 +57,11 @@ export function nativeLog(chat: ChatStatus | null, lines: [string, string][]): [
   return out;
 }
 
+/** Journal lines as shown on screen (local time). */
+export function journalRows(lines: LogLine[]): [string, string, string][] {
+  return lines.map((l) => [new Date(l.ts).toLocaleTimeString('fr-FR'), l.level, `${l.source}: ${l.message}`]);
+}
+
 export function DiagPage() {
   const s = useApp();
   const fb = config.win10Fallback;
@@ -68,6 +73,8 @@ export function DiagPage() {
     getShortcutStatus().then(setKeys);
   }, [s.diag]);
   const keysFailed = keys?.filter((k) => !k.registered) ?? [];
+  const [journal, setJournal] = useState<LogLine[]>([]);
+  const [exported, setExported] = useState<string | null>(null);
   const audio = useAudio();
   const [captureDetail, captureState] = audio.native
     ? captureDiag(audio)
@@ -112,19 +119,47 @@ export function DiagPage() {
     ['14:03:41', 'WARN', 'audio-pipeline: segment périmé abandonné'],
     ['14:03:44', 'INFO', 'overlay: 2 blocs affichés'],
   ];
-  const logs = sp.native
-    ? nativeLog(chatStatus, [
-        [captureState === 'ÉCHEC' ? 'WARN' : 'INFO', `audio: ${captureDetail}`],
-        [sp.status?.state === 'ready' ? 'INFO' : 'WARN', `asr: ${engine.value} · ${engine.detail}`],
-        ['INFO', `translation: ${trSum.value}`],
-      ])
-    : demoLogs;
+  useEffect(() => {
+    if (!sp.native) return;
+    const load = () => diagnostics.recent(80).then(setJournal);
+    load();
+    const t = setInterval(load, 2000);
+    return () => clearInterval(t);
+  }, [sp.native]);
+  // In the desktop app the tests are re-run for real: the chat set-up is
+  // scanned again and the shortcut registrations re-read.
+  const run = !sp.native
+    ? s.runDiag
+    : async () => {
+        useApp.setState({ diag: 'running' });
+        const [st] = await Promise.all([chat.rescan(), getShortcutStatus().then(setKeys), new Promise((r) => setTimeout(r, 400))]);
+        if (st) useChat.setState({ status: st });
+        useApp.setState({ diag: 'done' });
+      };
+  const report = () =>
+    diagnostics.report(rows.map(([name, detail, state]) => ({ name, detail, state }))).then(
+      (path) => {
+        setExported(path);
+        s.flash(`Rapport exporté : ${path}`);
+      },
+      (e) => s.flash(`Export impossible : ${e}`),
+    );
+  // Newest first; before the first journal line, what the services report now.
+  const logs = journal.length
+    ? journalRows(journal).reverse()
+    : sp.native
+      ? nativeLog(chatStatus, [
+          [captureState === 'ÉCHEC' ? 'WARN' : 'INFO', `audio: ${captureDetail}`],
+          [sp.status?.state === 'ready' ? 'INFO' : 'WARN', `asr: ${engine.value} · ${engine.detail}`],
+          ['INFO', `translation: ${trSum.value}`],
+        ])
+      : demoLogs;
   return (
     <div className="grid grid-cols-2 items-start gap-4">
       <div className="glass flex flex-col overflow-hidden">
         <div className="flex items-center justify-between px-5 py-3.5" style={{ borderBottom: '1px solid rgba(255,255,255,.05)' }}>
           <span style={{ font: fnt(400, 22, 'serif'), color: '#ece6dc' }}>Tests intégrés</span>
-          <div className="pill pill-ember px-4 py-[7px]" role="button" onClick={s.runDiag} style={{ font: fnt(500, 12) }}>
+          <div className="pill pill-ember px-4 py-[7px]" role="button" onClick={run} style={{ font: fnt(500, 12) }}>
             {done ? 'Relancer' : 'Tests…'}
           </div>
         </div>
@@ -144,16 +179,37 @@ export function DiagPage() {
           );
         })}
       </div>
-      <div className="flex flex-col gap-[5px] rounded-2xl px-[18px] py-4" style={{ background: 'rgba(0,0,0,.55)', border: '1px solid rgba(255,255,255,.06)', font: fnt(400, 11, 'mono', 1.55), color: '#8f8a83' }}>
+      <div className="flex flex-col gap-4">
+      <div className="flex max-h-[520px] flex-col gap-[5px] overflow-y-auto rounded-2xl px-[18px] py-4" style={{ background: 'rgba(0,0,0,.55)', border: '1px solid rgba(255,255,255,.06)', font: fnt(400, 11, 'mono', 1.55), color: '#8f8a83' }}>
         <div className="flex justify-between pb-1.5" style={{ color: '#5a5650', letterSpacing: '.14em', fontSize: 9.5 }}>
           <span>JOURNAL · EXPURGÉ</span>
-          <span>TRACING</span>
+          <span>{sp.native ? 'LOGS · 7 JOURS' : 'DÉMO'}</span>
         </div>
         {logs.map(([t, lv, m], i) => (
           <div key={i}>
-            <span style={{ color: '#4a4640' }}>{t}</span> <span style={{ color: lv === 'WARN' ? '#ffa24a' : lv === 'DEBUG' ? '#4a4640' : '#7fe0a8' }}>{lv}</span> {m}
+            <span style={{ color: '#4a4640' }}>{t}</span> <span style={{ color: lv === 'ERROR' ? '#ff8a7a' : lv === 'WARN' ? '#ffa24a' : lv === 'DEBUG' ? '#4a4640' : '#7fe0a8' }}>{lv}</span> {m}
           </div>
         ))}
+      </div>
+      {sp.native && (
+        <div className="glass flex flex-col gap-3 p-5">
+          <span style={{ font: fnt(400, 12, 'sans', 1.5), color: '#6e6961' }}>
+            Un problème ? Exportez le rapport (versions, tests, journal ; ni audio, ni texte de partie, ni pseudo) puis joignez-le à votre signalement.
+          </span>
+          <div className="flex flex-wrap gap-2">
+            <div className="pill pill-ember px-4 py-[7px]" role="button" onClick={report} style={{ font: fnt(500, 12) }}>
+              Exporter le rapport
+            </div>
+            <div className="pill px-4 py-[7px]" role="button" onClick={() => diagnostics.reportIssue(!!exported).catch((e) => s.flash(String(e)))} style={{ font: fnt(500, 12) }}>
+              Signaler un problème
+            </div>
+            <div className="pill px-4 py-[7px]" role="button" onClick={() => diagnostics.openFolder().catch((e) => s.flash(String(e)))} style={{ font: fnt(500, 12) }}>
+              Dossier des journaux
+            </div>
+          </div>
+          {exported && <span className="truncate" style={{ font: fnt(400, 10.5, 'mono'), color: '#5a5650' }}>{exported}</span>}
+        </div>
+      )}
       </div>
     </div>
   );
