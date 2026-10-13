@@ -76,6 +76,7 @@ Crosstalk est un outil **externe**. Il n'injecte pas de code dans `cs2.exe`, ne 
 1. **Téléchargez** `Crosstalk-setup.exe` depuis la branche de distribution `downloads`.
 2. **Installez** Crosstalk dans le dossier proposé ou celui de votre choix. L'installateur met en place l'application, les raccourcis et **télécharge tous les modèles** pendant l'installation : détection de voix, Whisper base et small, traduction russe et anglais → français (environ **1,25 Go**, une seule fois).
 3. **Lancez** Crosstalk puis ouvrez CS2 : tout fonctionne hors ligne, sans aucun téléchargement supplémentaire.
+4. **Mises à jour : depuis l'application.** À partir du build 94, Crosstalk vérifie au lancement (puis toutes les 6 h) s'il existe une version plus récente et propose de l'installer : il télécharge l'installateur, vérifie sa taille et son empreinte SHA-256, puis se met à jour au même endroit et redémarre, modèles et réglages conservés. Plus besoin de revenir sur cette page.
 
 **Avant l'installation :** ce build de test n'est pas signé numériquement et peut déclencher un avertissement SmartScreen. Vérifiez la provenance et, si nécessaire, comparez son empreinte SHA-256 avec la [fiche de distribution](https://github.com/aboalsim114/Crosstalk/blob/downloads/VERSION.md) avant de décider de l'exécuter.
 
@@ -83,10 +84,11 @@ Crosstalk est un outil **externe**. Il n'injecte pas de code dans `cs2.exe`, ne 
 | --- | --- |
 | [**Installateur de développement**](https://github.com/aboalsim114/Crosstalk/raw/downloads/Crosstalk-setup.exe) | Tester l'expérience Windows et la capture/traduction actuelle. |
 | [**Fiche du build et SHA-256**](https://github.com/aboalsim114/Crosstalk/blob/downloads/VERSION.md) | Identifier le commit, la date de compilation et contrôler les téléchargements. |
+| [**Flux de mise à jour**](https://github.com/aboalsim114/Crosstalk/blob/downloads/latest.json) | Lu par l'application : numéro de build, nouveautés, empreinte de l'installateur. |
 | [**Outils Windows portables**](https://github.com/aboalsim114/Crosstalk/raw/downloads/crosstalk-windows-x64-portable.zip) | Diagnostics audio, banc d'essai ASR et tests de traduction. |
 | [**Releases GitHub**](https://github.com/aboalsim114/Crosstalk/releases) | Versions publiées depuis la branche de production, lorsqu'elles sont disponibles. |
 
-**À noter :** le dépôt est actuellement privé. Les liens GitHub nécessitent un compte disposant des droits d'accès. La branche `downloads` peut être en retard sur `develop` : consultez `VERSION.md` pour connaître le commit exact du build. Le runtime WebView2 est pris en charge par les installateurs Windows si nécessaire.
+**À noter :** le dépôt est public, les liens fonctionnent sans compte GitHub. La branche `downloads` peut être en retard sur `develop` : consultez `VERSION.md` pour connaître le commit exact du build. Le runtime WebView2 est pris en charge par les installateurs Windows si nécessaire.
 
 ### Commandes essentielles en jeu
 
