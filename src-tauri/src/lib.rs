@@ -29,6 +29,7 @@ mod reply;
 // Traits and helpers for the upcoming native pipeline; wired in later phases.
 #[allow(dead_code)]
 mod pipeline;
+mod recap;
 mod settings;
 mod shortcuts;
 mod speaker;
@@ -148,7 +149,9 @@ pub fn run() {
             stream::stream_push,
             speaker::speaker_status,
             speaker::speaker_configure,
-            speaker::speaker_test
+            speaker::speaker_test,
+            recap::recap_save,
+            recap::recap_reveal
         ])
         .setup(|app| {
             let handle = app.handle();

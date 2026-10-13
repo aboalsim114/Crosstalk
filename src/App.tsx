@@ -13,6 +13,7 @@ import { startHistoryRecorder } from './state/history';
 import { startGsiBridge } from './state/gsi';
 import { startStreamBridge } from './state/stream';
 import { startSpeakerBridge } from './state/speaker';
+import { startRecapTracker } from './state/recap';
 import { Sidebar } from './components/Sidebar';
 import { TitleBar } from './components/TitleBar';
 import { AboutPage } from './pages/AboutPage';
@@ -63,6 +64,7 @@ export default function App() {
     const stopGsi = startGsiBridge();
     const stopStream = isTauri ? startStreamBridge() : () => {};
     const stopSpeaker = startSpeakerBridge();
+    const stopRecap = startRecapTracker((m) => useApp.getState().flash(`Résumé de ${m.mapName ?? 'la partie'} prêt · onglet Historique`));
     if (!isTauri) window.addEventListener('keydown', handleShortcut);
     let autoStart: ReturnType<typeof setTimeout> | undefined;
     if (config.autoStart) autoStart = setTimeout(() => useApp.getState().toggleSession(), 400);
@@ -74,6 +76,7 @@ export default function App() {
       stopGsi();
       stopStream();
       stopSpeaker();
+      stopRecap();
       window.removeEventListener('keydown', handleShortcut);
       clearTimeout(autoStart);
     };

@@ -3,6 +3,7 @@ import { historyStore, isTauri, type HistoryEntry } from '../backend';
 import { Toggle, fnt } from '../components/atoms';
 import { CHANNEL_NAME, type Channel } from '../state/data';
 import { useApp } from '../state/store';
+import { RecapPanel } from './RecapPanel';
 
 const COLS = '128px 120px minmax(0,1fr) minmax(0,1fr)';
 
@@ -65,6 +66,7 @@ export function HistoryPage() {
         </div>
         <Toggle on={on} onClick={() => toggle('hist')} label="Historique local" />
       </div>
+      <RecapPanel />
       {!isTauri && (
         <div className="glass p-5" style={{ font: fnt(400, 12.5, 'sans', 1.5), color: '#6e6961' }}>
           Dans l’application Windows, les sous-titres de vos parties sont enregistrés ici quand l’historique est activé.
