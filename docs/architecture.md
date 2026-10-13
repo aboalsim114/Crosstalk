@@ -52,7 +52,7 @@ Le découpage se fait d'abord en **modules** de la crate existante (`src-tauri/s
 | `speaker` (exp.) | Windows Graphics Capture, détection de l'indicateur, OCR, corrélation, confiance | thread dédié, ~10 Hz, désactivé par défaut |
 | `gsi` | Serveur HTTP local Game State Integration : carte, phase de round | tâche tokio |
 | `overlay`, `tray`, `shortcuts`, `actions` | Intégration Windows (existants) | thread principal Tauri |
-| `storage` | Réglages, glossaire, historique SQLite, modèles | tâche tokio |
+| `storage` | Réglages, glossaire, historique local (`history.jsonl`), modèles | tâche tokio |
 
 Les traits `AudioCapture`, `Transcriber`, `Translator` et `ChatSource` existent déjà dans `pipeline/`. Ils permettent de tester chaque module avec des implémentations factices et d'alimenter le banc d'essai hors ligne avec des fichiers WAV.
 

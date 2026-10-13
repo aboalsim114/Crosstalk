@@ -433,3 +433,24 @@ export const updater = {
   install: (): Promise<void> => (isTauri ? invoke<void>('update_install') : Promise.resolve()),
   onStatus: (cb: (s: UpdateStatus) => void) => (isTauri ? listen<UpdateStatus>('update://status', (e) => cb(e.payload)) : Promise.resolve(noop)),
 };
+
+// ---------- local history (src-tauri/src/history.rs) ----------
+
+export interface HistoryEntry {
+  ts: number;
+  kind: 'voice' | 'chat';
+  channel?: string;
+  sender?: string;
+  lang: string;
+  original: string;
+  translated?: string;
+  status: string;
+}
+
+export const historyStore = {
+  append: (entry: HistoryEntry): Promise<void> => (isTauri ? invoke<void>('history_append', { entry }) : Promise.resolve()),
+  list: (query: string, limit: number): Promise<HistoryEntry[]> => (isTauri ? invoke<HistoryEntry[]>('history_list', { query, limit }) : Promise.resolve([])),
+  count: (): Promise<number> => (isTauri ? invoke<number>('history_count') : Promise.resolve(0)),
+  clear: (): Promise<void> => (isTauri ? invoke<void>('history_clear') : Promise.resolve()),
+  exportTo: (format: 'txt' | 'json'): Promise<string> => (isTauri ? invoke<string>('history_export', { format }) : Promise.reject(new Error('export disponible dans l’application Windows'))),
+};

@@ -220,7 +220,7 @@ Sept écrans, conformes à la maquette *v2 Cinematic*. **Réalisés en React ave
 | Overlay | Aperçu à l'échelle et réglages F-43 à F-45. |
 | Audio & IA | Source de capture, test audio de 10 s, seuil VAD, choix et téléchargement des modèles Whisper, CPU/GPU, modèles de traduction locaux et test de traduction. Option d'identification expérimentale du locuteur. |
 | Langues & glossaire | Langue cible, langues sources préférées, option « ignorer le français », édition du glossaire. |
-| Historique | Désactivé par défaut ; recherche, export TXT/JSON, effacement. |
+| Historique | Désactivé par défaut ; texte seulement, fichier local `history.jsonl` ; recherche, export TXT/JSON dans Documents, effacement ; purge à 7 jours (20 000 lignes max). |
 | Diagnostic | Tests intégrés (journal, -condebug, parseur, capture, modèle, traduction, raccourcis, indicateur vocal), journal expurgé, export d'un rapport. |
 | À propos | Ce que l'application ne fait jamais, licences tierces, version, lancement avec Windows. |
 
@@ -320,7 +320,7 @@ fenêtre CS2 ─► capture HUD ─► indicateur ─► OCR ─► corrélation
 | `%APPDATA%\Crosstalk\config.json` | Réglages, versionnés avec migration automatique |
 | `%APPDATA%\Crosstalk\glossary.json` | Glossaire utilisateur |
 | `%LOCALAPPDATA%\Crosstalk\models\` | Modèles, avec vérification SHA-256 après téléchargement |
-| `%LOCALAPPDATA%\Crosstalk\history.db` | Historique texte, si activé |
+| `%LOCALAPPDATA%\Crosstalk\history.jsonl` | Historique texte (une ligne JSON par phrase), si activé ; purgé après 7 jours |
 | `%LOCALAPPDATA%\Crosstalk\logs\` | Journaux expurgés, conservés 7 jours |
 
 ## 7. Direction artistique
@@ -364,7 +364,7 @@ Le casque 3D réactif (Three.js) et le verre dépoli sont livrés. Ils doivent r
 | **L0 · Preuve de concept voix** | Chaîne réelle CS2 → WASAPI → VAD → Whisper → traduction → overlay. Validation du process loopback (19045 et Windows 11), premier corpus, banc d'essai, premières mesures de latence et de FPS. | 2 à 3 semaines |
 | L1 · Session Rust et chat | Machine à états en Rust, événements typés, détection CS2, `-condebug`, chat-ingest, glossaire, cache, persistance des réglages | 2 semaines |
 | L2 · Voix 1.0 | Nettoyage P0, VAD, segmentation, filtre anti-hallucinations, choix du modèle, résultats provisoires si viables, évaluation des traitements Exp. | 4 semaines |
-| L3 · Interface branchée | Écrans reliés aux données réelles, diagnostic réel, historique SQLite, téléchargement des modèles | 2 semaines |
+| L3 · Interface branchée | Écrans reliés aux données réelles, diagnostic réel, historique local, téléchargement des modèles | 2 semaines |
 | L4 · Locuteur expérimental | Préalable (corpus HUD), puis capture, indicateur, OCR, corrélation, « Joueur inconnu » | 3 semaines, après validation du préalable |
 | L5 · Industrialisation | Signature, mises à jour, tests 20 h, bêta fermée | 3 semaines |
 | P2 | Widget Xbox Game Bar, traduction de ses annonces, Discord, regroupement des voix | — |
