@@ -223,6 +223,14 @@ pub fn run() {
             tray::create(handle)?;
             shortcuts::register_all(handle);
             overlay::create(handle)?;
+            // Two screens: the overlay goes where CS2 is (checked every 3 s).
+            let follow = handle.clone();
+            std::thread::Builder::new()
+                .name("overlay-follow".into())
+                .spawn(move || loop {
+                    std::thread::sleep(std::time::Duration::from_secs(3));
+                    overlay::follow_cs2(&follow);
+                })?;
             reply::create_window(handle)?;
             if !std::env::args().any(|a| a == MINIMIZED_FLAG) {
                 actions::show_main(handle);

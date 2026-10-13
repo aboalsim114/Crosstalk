@@ -36,10 +36,11 @@ export function chatDiag(st: ChatStatus | null): [string, string, DiagState][] {
       : s.condebug === 'absent'
         ? ['Option -condebug', 'Absente : Steam › CS2 › Propriétés › Options de lancement', 'ÉCHEC']
         : ['Option -condebug', 'Options de lancement Steam illisibles : à vérifier à la main', 'AVERT.'];
+  const unknown = st.unrecognized ? ` · ${st.unrecognized} ligne${st.unrecognized > 1 ? 's' : ''} de chat non reconnue${st.unrecognized > 1 ? 's' : ''} (forme dans le journal)` : '';
   const rules: [string, string, DiagState] = [
     'Parseur de chat',
-    `Règles ${st.rulesVersion} · ${st.rulesFile ?? 'intégrées'}${st.rulesWarning ? ` · ${st.rulesWarning}` : ''}`,
-    st.rulesWarning ? 'AVERT.' : 'OK',
+    `Règles ${st.rulesVersion} · ${st.rulesFile ?? 'intégrées'}${st.rulesWarning ? ` · ${st.rulesWarning}` : ''}${unknown}`,
+    st.rulesWarning || st.unrecognized ? 'AVERT.' : 'OK',
   ];
   return [log, condebug, rules];
 }

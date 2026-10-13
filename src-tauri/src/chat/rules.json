@@ -1,11 +1,28 @@
 {
-  "version": "cs2-2026.10",
-  "comment": "Chat lines of CS2's console.log. A copy in %APPDATA%\\Crosstalk\\chat-rules.json takes precedence: rules can be fixed without a new version. Named groups: channel, sender, message (required), location, dead (optional).",
+  "version": "cs2-2026.10b",
+  "comment": "Chat lines of CS2's console.log, in the game's language (English [ALL]/[CT]/[T]/[DEAD], French [GÉNÉRAL]/[AT]/[MORT(E)], Russian…). A copy in %APPDATA%\\Crosstalk\\chat-rules.json takes precedence: rules can be fixed without a new version. Named groups: channel, sender, message (required), location, dead (optional).",
   "rules": [
     {
       "name": "cs2",
-      "pattern": "^(?:\\d{2}/\\d{2}(?:/\\d{4})? \\d{2}:\\d{2}:\\d{2}(?:\\.\\d+)?\\s+)?\\[(?P<channel>ALL|CT|T)\\]\\s+(?P<dead1>\\*?\\[?DEAD\\]?\\*?\\s+)?(?P<sender>.+?)[\\x{200e}\\x{200f}]?\\s*(?:[\\x{fe6b}@]\\s*(?P<location>[^:\\[\\]]+?))?\\s*(?P<dead>\\[DEAD\\]|\\*DEAD\\*)?\\s*:\\s(?P<message>.*)$"
+      "pattern": "^(?:\\d{2}/\\d{2}(?:/\\d{4})? \\d{2}:\\d{2}:\\d{2}(?:\\.\\d+)?\\s+)?\\[(?P<channel>GÉNÉRAL|GENERAL|WSZYSCY|TODOS|TUTTI|ALLE|TOUS|ВСЕМ|ALL|ВСЕ|CT|AT|КТ|TT|T|Т)\\]\\s*[•●·]?\\s*(?P<dead1>(?:\\[(?:DEAD|MORT|MORT\\(E\\)|MORTE|TOT|MUERTO|MORTO|МЁРТВ|МЕРТВ|МЕРТВЫЙ|МЁРТВЫЙ)\\]|\\*(?:DEAD|MORT|MORT\\(E\\)|MORTE|TOT|MUERTO|MORTO)\\*)\\s+)?(?P<sender>.+?)[\\x{200e}\\x{200f}]?\\s*(?:[\\x{fe6b}@]\\s*(?P<location>[^:\\[\\]]+?))?\\s*(?P<dead>\\[(?:DEAD|MORT|MORT\\(E\\)|MORTE|TOT|MUERTO|MORTO|МЁРТВ|МЕРТВ|МЕРТВЫЙ|МЁРТВЫЙ)\\]|\\*(?:DEAD|MORT|MORT\\(E\\)|MORTE|TOT|MUERTO|MORTO)\\*)?\\s*:\\s(?P<message>.*)$"
     }
   ],
-  "channels": { "ALL": "ALL", "CT": "CT", "T": "T" }
+  "channels": {
+    "ALL": "ALL",
+    "ALLE": "ALL",
+    "TOUS": "ALL",
+    "GÉNÉRAL": "ALL",
+    "GENERAL": "ALL",
+    "TODOS": "ALL",
+    "TUTTI": "ALL",
+    "WSZYSCY": "ALL",
+    "ВСЕ": "ALL",
+    "ВСЕМ": "ALL",
+    "CT": "CT",
+    "AT": "CT",
+    "КТ": "CT",
+    "T": "T",
+    "TT": "T",
+    "Т": "T"
+  }
 }

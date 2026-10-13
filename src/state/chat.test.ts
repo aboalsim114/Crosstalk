@@ -28,6 +28,7 @@ const status = (over: Partial<ChatStatus> = {}, setup: Partial<ChatStatus['setup
   messages: 3,
   ownIgnored: 0,
   duplicates: 0,
+  unrecognized: 0,
   ...over,
 });
 
