@@ -11,8 +11,16 @@ import { pairSummary, percentile, rescanTranslation, useTranslation } from '../s
 
 const ACCELS: [Accel, string][] = [
   ['cpu', 'CPU'],
-  ['cuda', 'CUDA'],
+  ['gpu', 'GPU'],
 ];
+
+/** What the engine card says about where Whisper runs. */
+export function accelNote(accel: Accel, backend: string | undefined): string {
+  if (accel === 'cpu') return 'Processeur choisi : la carte graphique reste au jeu.';
+  if (backend?.startsWith('GPU')) return 'Carte graphique : transcription bien plus rapide, modèle plus précis possible.';
+  if (!backend) return 'Carte graphique demandée…';
+  return 'Aucune carte graphique Vulkan utilisable : Whisper tourne sur le processeur.';
+}
 
 function CaptureCard() {
   const s = useApp();
@@ -188,8 +196,11 @@ function NativeModelCard() {
     <div className="glass flex flex-col gap-2 p-5">
       <div className="flex items-center justify-between pb-1">
         <span className="lbl">MODÈLE LOCAL · WHISPER</span>
-        <span style={{ font: fnt(500, 9.5, 'mono'), letterSpacing: '.12em', color: '#6e6961' }}>{sp.status?.backend ?? 'CPU'} · SANS GPU</span>
+        <Seg options={ACCELS} value={s.accel} onChange={(v) => s.set({ accel: v })} item={{ padding: '3px 11px', font: fnt(500, 10.5, 'mono') }} />
       </div>
+      <span data-testid="accel-note" style={{ font: fnt(400, 10.5, 'sans', 1.45), color: '#6e6961' }}>
+        {sp.status?.state === 'loading' ? 'Chargement du modèle…' : accelNote(s.accel, sp.status?.backend)}
+      </span>
       <div className="flex items-baseline justify-between gap-3 pb-1" data-testid="engine-state">
         <span style={{ font: fnt(500, 12.5), color: engine.color }}>{engine.value}</span>
         <span className="truncate text-right" style={{ font: fnt(400, 11), color: '#6e6961' }}>

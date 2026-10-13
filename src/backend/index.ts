@@ -192,6 +192,8 @@ export interface SpeechConfig {
   /** 0.2–0.9. */
   vadThreshold: number;
   glossary: string[];
+  /** Whisper on the graphics card when one is usable (Vulkan), else on the CPU. */
+  gpu: boolean;
 }
 
 export interface SpeechStatus {

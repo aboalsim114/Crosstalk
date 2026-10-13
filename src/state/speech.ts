@@ -26,13 +26,14 @@ export const useSpeech = create<SpeechState>()(() => ({
 // ---------- pure helpers (unit-tested) ----------
 
 /** Rust speech settings from the UI settings (threshold %, languages, glossary, model). */
-export function speechConfigFrom(s: Pick<AppState, 'model' | 'vad' | 'src' | 'gloss'>): SpeechConfig {
+export function speechConfigFrom(s: Pick<AppState, 'model' | 'vad' | 'src' | 'gloss'> & Partial<Pick<AppState, 'accel'>>): SpeechConfig {
   const languages = (['ru', 'en'] as const).filter((l) => s.src[l]);
   return {
     model: s.model,
     languages: languages.length ? [...languages] : ['ru', 'en'],
     vadThreshold: Math.min(0.9, Math.max(0.2, s.vad / 100)),
     glossary: s.gloss.map((g: GlossEntry) => g[0]),
+    gpu: s.accel !== 'cpu',
   };
 }
 

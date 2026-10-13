@@ -73,7 +73,12 @@ pub trait SpeechEvents: Send + Sync + 'static {
 /// Loads the models (whisper.cpp in the app, fakes in tests).
 pub trait EngineLoader: Send + Sync + 'static {
     fn load_detector(&self, dir: &Path) -> Result<Box<dyn VoiceDetector>, SpeechError>;
-    fn load_recognizer(&self, dir: &Path, model: &str) -> Result<Box<dyn Recognizer>, SpeechError>;
+    fn load_recognizer(
+        &self,
+        dir: &Path,
+        model: &str,
+        gpu: bool,
+    ) -> Result<Box<dyn Recognizer>, SpeechError>;
     /// Path of the model file if installed (for the status).
     fn model_path(&self, dir: &Path, model: &str) -> Option<PathBuf>;
     fn backend(&self) -> String;
@@ -215,6 +220,8 @@ struct EngineSlot {
     vad_ready: bool,
     /// Model id of the loaded recogniser.
     loaded_model: Option<String>,
+    /// Where it runs (CPU or GPU name), once loaded.
+    loaded_backend: Option<String>,
 }
 
 struct Inner {
@@ -263,7 +270,10 @@ impl Inner {
             models_dir: self.models_dir.display().to_string(),
             error: e.error.clone(),
             load_ms: e.load_ms,
-            backend: self.loader.backend(),
+            backend: e
+                .loaded_backend
+                .clone()
+                .unwrap_or_else(|| self.loader.backend()),
             threads: self.threads as u32,
             config,
         }
@@ -353,6 +363,7 @@ impl SpeechService {
                 load_ms: None,
                 vad_ready: false,
                 loaded_model: None,
+                loaded_backend: None,
             }),
             recognizer: Mutex::new(None),
             live: Mutex::new(Live::default()),
@@ -418,7 +429,7 @@ impl SpeechService {
         let config = config.sanitized();
         let model_changed = {
             let mut c = self.inner.config.lock().unwrap();
-            let changed = c.model != config.model;
+            let changed = c.model != config.model || c.gpu != config.gpu;
             *c = config.clone();
             changed
         };
@@ -465,23 +476,28 @@ impl SpeechService {
                     }
                 }
                 loop {
-                    let model = inner.config.lock().unwrap().model.clone();
-                    let result = inner.loader.load_recognizer(&inner.models_dir, &model);
+                    let (model, gpu) = {
+                        let c = inner.config.lock().unwrap();
+                        (c.model.clone(), c.gpu)
+                    };
+                    let result = inner.loader.load_recognizer(&inner.models_dir, &model, gpu);
                     // Configuration may change during a slow load. Never install a
                     // superseded model, and keep loading until the current one wins.
                     // Wait for in-flight inference without holding the settings
                     // lock: status/configure must remain responsive.
                     let mut recognizer = inner.recognizer.lock().unwrap();
                     let config = inner.config.lock().unwrap();
-                    if config.model != model {
+                    if config.model != model || config.gpu != gpu {
                         continue;
                     }
                     let mut error = detector_error.take();
                     match result {
                         Ok(r) => {
+                            let backend = r.backend();
                             *recognizer = Some(r);
                             let mut e = inner.engine.lock().unwrap();
                             e.loaded_model = Some(model);
+                            e.loaded_backend = backend;
                             e.load_ms = Some(started.elapsed().as_millis() as u32);
                         }
                         Err(err) => {
@@ -1158,6 +1174,7 @@ mod tests {
             &self,
             _dir: &Path,
             model: &str,
+            _gpu: bool,
         ) -> Result<Box<dyn Recognizer>, SpeechError> {
             if !self.has_model {
                 return Err(SpeechError::NotInstalled(model.into()));
@@ -1637,6 +1654,7 @@ mod tests {
                 &self,
                 _: &Path,
                 model: &str,
+                _: bool,
             ) -> Result<Box<dyn Recognizer>, SpeechError> {
                 let first = {
                     let mut models = self.models.lock().unwrap();

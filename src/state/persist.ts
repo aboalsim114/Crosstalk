@@ -39,7 +39,7 @@ const CHECKS: { [K in keyof Persisted]: (v: unknown) => boolean } = {
   capture: oneOf('process', 'device', 'wav'),
   vad: inRange(0, 100),
   model: oneOf<ModelId>('tiny', 'base', 'small', 'medium', 'large-v3-turbo'),
-  accel: oneOf('cpu', 'cuda'),
+  accel: (v) => v === 'cpu' || v === 'gpu' || v === 'cuda',
   src: (v) => typeof v === 'object' && v !== null,
   stream: (v) => typeof v === 'object' && v !== null,
 };
@@ -76,6 +76,8 @@ export function restore(raw: unknown, defaults: AppState): { app: Partial<AppSta
       const merged: Record<string, unknown> = { ...base };
       for (const [key, val] of Object.entries(v as Record<string, unknown>)) if (key in base && typeof val === typeof base[key]) merged[key] = val;
       app.stream = merged as unknown as AppState['stream'];
+    } else if (k === 'accel') {
+      app.accel = v === 'cpu' ? 'cpu' : 'gpu'; // "cuda" (simulated before the Vulkan build) means GPU
     } else if (k === 'tg' || k === 'src') {
       const base = defaults[k] as Record<string, boolean>;
       const merged = { ...base };

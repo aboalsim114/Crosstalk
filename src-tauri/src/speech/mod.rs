@@ -62,16 +62,17 @@ impl EngineLoader for WhisperLoader {
         &self,
         dir: &Path,
         model: &str,
+        gpu: bool,
     ) -> Result<Box<dyn engine::Recognizer>, SpeechError> {
         let path = models::model_path(dir, model)
             .ok_or_else(|| SpeechError::NotInstalled(model.into()))?;
         #[cfg(feature = "whisper")]
         {
-            Ok(Box::new(engine::WhisperRecognizer::load(&path)?))
+            Ok(Box::new(engine::WhisperRecognizer::load(&path, gpu)?))
         }
         #[cfg(not(feature = "whisper"))]
         {
-            let _ = path;
+            let _ = (path, gpu);
             Err(SpeechError::Model("build sans whisper.cpp".into()))
         }
     }
@@ -170,7 +171,7 @@ mod tests {
             Err(SpeechError::NotInstalled(_))
         ));
         assert!(matches!(
-            WhisperLoader.load_recognizer(&dir, "base"),
+            WhisperLoader.load_recognizer(&dir, "base", false),
             Err(SpeechError::NotInstalled(_))
         ));
     }

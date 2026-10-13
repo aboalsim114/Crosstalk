@@ -13,6 +13,7 @@
 //! crosstalk-asr-bench --live 120 --model base
 //! ```
 //!
+//! `--gpu` runs Whisper on the graphics card (Vulkan builds; CPU otherwise).
 //! `--full-encoder` encodes Whisper's full 30 s window instead of the segment
 //! duration (the app's default), to compare speed and accuracy.
 //! `--vad-only` runs the VAD and segmenter without Whisper (no model needed).
@@ -282,6 +283,7 @@ fn main() {
         config.languages = parse_langs(&l);
     }
     config.fast_encoder = !args.iter().any(|a| a == "--full-encoder");
+    config.gpu = args.iter().any(|a| a == "--gpu");
     if let Some(v) = arg(&args, "--vad-threshold").and_then(|v| v.parse().ok()) {
         config.vad_threshold = v;
     }
@@ -324,12 +326,13 @@ fn main() {
         .filter(|m| !m.is_empty())
     {
         let t0 = Instant::now();
-        let mut recognizer = match loader.load_recognizer(&dir, model) {
+        let mut recognizer = match loader.load_recognizer(&dir, model, config.gpu) {
             Ok(r) => r,
             Err(e) => fail(&format!("modèle {model} : {e}")),
         };
         let load_ms = t0.elapsed().as_millis();
-        println!("\n== whisper {model} (chargé en {load_ms} ms)");
+        let backend = recognizer.backend().unwrap_or_else(|| "CPU".into());
+        println!("\n== whisper {model} · {backend} (chargé en {load_ms} ms)");
         let config = SpeechConfig {
             model: model.into(),
             ..config.clone()

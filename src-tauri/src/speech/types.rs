@@ -47,6 +47,10 @@ pub struct SpeechConfig {
     /// Not exposed in the UI; the bench compares both (`--full-encoder`).
     #[serde(default = "default_true")]
     pub fast_encoder: bool,
+    /// Run Whisper on the graphics card (Vulkan) when the build and the PC
+    /// allow it; otherwise, or if no GPU is found, on the CPU.
+    #[serde(default = "default_true")]
+    pub gpu: bool,
 }
 
 impl Default for SpeechConfig {
@@ -60,6 +64,7 @@ impl Default for SpeechConfig {
                 .map(|s| s.to_string())
                 .collect(),
             fast_encoder: true,
+            gpu: true,
         }
     }
 }
@@ -165,7 +170,8 @@ pub struct SpeechStatus {
     pub models_dir: String,
     pub error: Option<String>,
     pub load_ms: Option<u32>,
-    /// Inference backend, e.g. "CPU · AVX2". No GPU in this build.
+    /// Inference backend of the loaded model, e.g. "CPU · AVX2" or
+    /// "GPU · NVIDIA GeForce RTX 3060 (Vulkan)".
     pub backend: String,
     pub threads: u32,
 }
@@ -208,6 +214,7 @@ mod tests {
             vad_threshold: 2.0,
             glossary: vec!["  rush B ".into(), "".into(), "a\0wp".into()],
             fast_encoder: false,
+            gpu: false,
         }
         .sanitized();
         assert_eq!(c.vad_threshold, 0.9);

@@ -35,6 +35,11 @@ pub trait Recognizer: Send {
         None
     }
 
+    /// Where it runs, e.g. "CPU · AVX2" or "GPU · <name> (Vulkan)".
+    fn backend(&self) -> Option<String> {
+        None
+    }
+
     /// Transcribes 16 kHz mono samples.
     fn recognize(
         &mut self,
@@ -101,13 +106,54 @@ mod whisper_impl {
         state: WhisperState,
         eot: i32,
         timing: InferenceTiming,
+        backend: String,
+    }
+
+    #[cfg(feature = "gpu")]
+    extern "C" {
+        fn ggml_backend_vk_get_device_count() -> std::os::raw::c_int;
+        fn ggml_backend_vk_get_device_description(
+            device: std::os::raw::c_int,
+            description: *mut std::os::raw::c_char,
+            size: usize,
+        );
+    }
+
+    /// Name of the first Vulkan GPU, if any (Vulkan driver present and usable).
+    #[cfg(feature = "gpu")]
+    pub fn vulkan_gpu() -> Option<String> {
+        // SAFETY: ggml's C API; the buffer is large enough and NUL-terminated.
+        unsafe {
+            if ggml_backend_vk_get_device_count() < 1 {
+                return None;
+            }
+            let mut buf = [0 as std::os::raw::c_char; 256];
+            ggml_backend_vk_get_device_description(0, buf.as_mut_ptr(), buf.len());
+            let name = std::ffi::CStr::from_ptr(buf.as_ptr())
+                .to_string_lossy()
+                .trim()
+                .to_string();
+            Some(if name.is_empty() {
+                "carte graphique".into()
+            } else {
+                name
+            })
+        }
+    }
+
+    #[cfg(not(feature = "gpu"))]
+    pub fn vulkan_gpu() -> Option<String> {
+        None
     }
 
     impl WhisperRecognizer {
-        pub fn load(path: &Path) -> Result<Self, SpeechError> {
+        /// `gpu`: on the graphics card when this build has Vulkan and the PC
+        /// a usable GPU; otherwise on the CPU.
+        pub fn load(path: &Path, gpu: bool) -> Result<Self, SpeechError> {
             quiet_whisper_logs();
+            let device = if gpu { vulkan_gpu() } else { None };
             let mut params = WhisperContextParameters::default();
-            params.use_gpu(false);
+            params.use_gpu(device.is_some());
             let ctx = WhisperContext::new_with_params(path, params)
                 .map_err(|e| SpeechError::Model(format!("modèle Whisper illisible : {e}")))?;
             if !ctx.is_multilingual() {
@@ -119,10 +165,15 @@ mod whisper_impl {
                 .create_state()
                 .map_err(|e| SpeechError::Model(format!("état Whisper : {e}")))?;
             let eot = ctx.token_eot();
+            let backend = match device {
+                Some(name) => format!("GPU · {name} (Vulkan)"),
+                None => "CPU · AVX2".into(),
+            };
             let mut recognizer = Self {
                 state,
                 eot,
                 timing: InferenceTiming::default(),
+                backend,
             };
             recognizer.warm_up(default_threads())?;
             Ok(recognizer)
@@ -184,6 +235,9 @@ mod whisper_impl {
     impl Recognizer for WhisperRecognizer {
         fn timing(&self) -> Option<InferenceTiming> {
             Some(self.timing)
+        }
+        fn backend(&self) -> Option<String> {
+            Some(self.backend.clone())
         }
         fn recognize(
             &mut self,

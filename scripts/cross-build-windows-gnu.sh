@@ -6,7 +6,7 @@
 #   dist-test/Crosstalk-<commit>-setup.exe
 #   dist-test/crosstalk-<commit>-windows-x64-gcc-test/
 #
-# Requirements (Ubuntu 24.04): apt install mingw-w64 nsis libclang-dev cmake
+# Requirements (Ubuntu 24.04): apt install mingw-w64 nsis libclang-dev cmake glslc libvulkan-dev
 #                              rustup target add x86_64-pc-windows-gnu
 # The official release stays the MSVC build (scripts/validate.ps1); the compiler only
 # changes after a measured comparison (docs/testing/speech-recognition.md).
@@ -28,6 +28,20 @@ export CARGO_TARGET_X86_64_PC_WINDOWS_GNU_RUSTFLAGS="-C link-args=-static"
 compat="$root/scripts/cross/mingw_compat.h"
 export CMAKE_C_FLAGS="-include $compat" CMAKE_CXX_FLAGS="-include $compat"
 
+# Whisper on the GPU (Vulkan, feature "gpu"). ggml takes vkGetInstanceProcAddr
+# from the Vulkan loader: our shim provides it and loads vulkan-1.dll at run
+# time, so the app still starts (on the CPU) without a Vulkan driver. CMake
+# finds it as the SDK's vulkan-1 library; headers and glslc come from Ubuntu.
+vk="$root/src-tauri/target/vulkan-shim"
+mkdir -p "$vk/Lib"
+x86_64-w64-mingw32-gcc-posix -O2 -Wall -c scripts/cross/vulkan_shim.c -o "$vk/vulkan_shim.o"
+rm -f "$vk/libvulkan.a" && x86_64-w64-mingw32-ar rcs "$vk/libvulkan.a" "$vk/vulkan_shim.o"
+cp "$vk/libvulkan.a" "$vk/Lib/libvulkan-1.a"
+ln -sfn /usr/include "$vk/Include"
+ln -sfn /usr/bin "$vk/Bin"
+export VULKAN_SDK="$vk"
+export CARGO_TARGET_X86_64_PC_WINDOWS_GNU_RUSTFLAGS="$CARGO_TARGET_X86_64_PC_WINDOWS_GNU_RUSTFLAGS -L native=$vk"
+
 # MinGW names ggml's archives without the "lib" prefix rustc expects.
 fix_archives() {
   for d in src-tauri/target/$target/release/build/whisper-rs-sys-*/out; do
@@ -35,7 +49,7 @@ fix_archives() {
     find "$d" -name 'ggml*.a' | while read -r f; do cp --update=none "$f" "$d/lib$(basename "$f")"; done
   done
 }
-build() { (cd src-tauri && cargo build --release --locked --target $target "$@"); }
+build() { (cd src-tauri && cargo build --release --locked --target $target --features gpu "$@"); }
 
 # First pass builds whisper.cpp (and fails at link), second pass links.
 build --example asr_bench --example audio_probe --example translate || { fix_archives; build --example asr_bench --example audio_probe --example translate; }
@@ -44,7 +58,7 @@ fix_archives
 # libstdc++ and WebView2Loader.dll next to the exe.
 gcc_dir=$(dirname "$(x86_64-w64-mingw32-g++-posix -print-libgcc-file-name)")
 rel="src-tauri/target/$target/release"
-npx tauri build --target $target --no-bundle
+npx tauri build --target $target --no-bundle --features gpu
 version=$(node -p "require('./src-tauri/tauri.conf.json').version")
 
 # The installer (src-installer, "Crosstalk Installer" design) embeds those files,

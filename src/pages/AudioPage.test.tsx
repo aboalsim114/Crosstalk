@@ -56,7 +56,7 @@ describe('speech recognition cards in the desktop app', () => {
       native: true,
       status: {
         state: 'missing',
-        config: { model: 'base', languages: ['ru', 'en'], vadThreshold: 0.55, glossary: [] },
+        config: { model: 'base', languages: ['ru', 'en'], vadThreshold: 0.55, glossary: [], gpu: true },
         modelPath: null,
         vadReady: true,
         modelsDir: 'C:\\Users\\x\\AppData\\Local\\Crosstalk\\models',
@@ -76,7 +76,8 @@ describe('speech recognition cards in the desktop app', () => {
     expect(screen.getByText('Sélectionné · téléchargement')).toBeInTheDocument();
     expect(screen.getByText('Installé')).toBeInTheDocument();
     expect(screen.getByText('Rechercher les modèles')).toBeInTheDocument();
-    expect(screen.getByText(/CPU · AVX2 · SANS GPU/)).toBeInTheDocument();
+    // GPU asked, CPU in use (no Vulkan GPU): said plainly.
+    expect(screen.getByTestId('accel-note')).toHaveTextContent('Aucune carte graphique Vulkan utilisable');
     // Picking a model selects it; a missing one is then downloaded by the app.
     fireEvent.click(screen.getByText('whisper-tiny'));
     expect(useApp.getState().model).toBe('tiny');
@@ -121,5 +122,14 @@ describe('local translation card', () => {
     expect(screen.queryByText(/DeepL|Azure|cloud/i)).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('switch', { name: 'Traduire les voix en français' }));
     expect(useApp.getState().tg.translate).toBe(false);
+  });
+});
+
+describe('where Whisper runs', () => {
+  it('explains the CPU / GPU choice from the real backend', async () => {
+    const { accelNote } = await import('./AudioPage');
+    expect(accelNote('gpu', 'GPU · NVIDIA GeForce RTX 3060 (Vulkan)')).toMatch(/^Carte graphique/);
+    expect(accelNote('gpu', 'CPU · AVX2')).toMatch(/Aucune carte graphique/);
+    expect(accelNote('cpu', 'CPU · AVX2')).toMatch(/Processeur choisi/);
   });
 });

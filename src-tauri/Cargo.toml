@@ -46,6 +46,10 @@ regex = "1"
 [features]
 default = ["whisper"]
 whisper = ["dep:whisper-rs"]
+# Whisper on the graphics card (Vulkan, any recent NVIDIA / AMD / Intel GPU).
+# Enabled by the Windows build (scripts/cross-build-windows-gnu.sh); without a
+# Vulkan driver, ggml falls back to the CPU (scripts/cross/vulkan_shim.c).
+gpu = ["whisper", "whisper-rs/vulkan"]
 
 # Native Windows APIs used by the audio capture (WASAPI) and the CS2 process
 # watcher (Toolhelp snapshots: enumerates names and PIDs, never opens cs2.exe).
