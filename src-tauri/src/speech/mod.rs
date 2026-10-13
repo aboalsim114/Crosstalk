@@ -10,6 +10,7 @@ pub mod cpu;
 pub mod dsp;
 pub mod engine;
 pub mod filter;
+pub mod gpu_guard;
 pub mod models;
 pub mod segmenter;
 pub mod service;
@@ -45,6 +46,17 @@ pub enum SpeechError {
 #[cfg(feature = "whisper")]
 fn load_with(path: &Path, accel: Accel) -> Result<engine::WhisperRecognizer, SpeechError> {
     use engine::{pick_accel, speedup_label, vulkan_gpu, WhisperRecognizer};
+    let refused = gpu_guard::decision().filter(|d| !d.allowed).map(|d| {
+        d.reason
+            .clone()
+            .unwrap_or_else(|| "carte graphique désactivée".into())
+    });
+    if let (Some(reason), Accel::Gpu | Accel::Auto) = (refused, accel) {
+        let mut r = WhisperRecognizer::load(path, false)?;
+        let mode = if accel == Accel::Auto { "auto" } else { "GPU" };
+        r.set_backend(format!("CPU · AVX2 · {mode} ({reason})"));
+        return Ok(r);
+    }
     match accel {
         Accel::Cpu => WhisperRecognizer::load(path, false),
         Accel::Gpu => WhisperRecognizer::load(path, true),
@@ -90,6 +102,8 @@ pub struct WhisperLoader;
 
 impl EngineLoader for WhisperLoader {
     fn load_detector(&self, dir: &Path) -> Result<Box<dyn vad::VoiceDetector>, SpeechError> {
+        // Before any ggml call: may turn Vulkan off for this run.
+        gpu_guard::ensure(dir);
         let path = models::vad_path(dir)
             .ok_or_else(|| SpeechError::NotInstalled(models::VAD_FILE.into()))?;
         #[cfg(feature = "whisper")]
@@ -109,6 +123,7 @@ impl EngineLoader for WhisperLoader {
         model: &str,
         accel: Accel,
     ) -> Result<Box<dyn engine::Recognizer>, SpeechError> {
+        gpu_guard::ensure(dir);
         let path = models::model_path(dir, model)
             .ok_or_else(|| SpeechError::NotInstalled(model.into()))?;
         #[cfg(feature = "whisper")]

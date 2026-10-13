@@ -7,6 +7,9 @@
  * Without it, the only function it returns is a vkEnumerateInstanceVersion
  * that fails: ggml then reports no GPU and Whisper runs on the CPU. The direct
  * calls are only made on a GPU found through the loader.
+ *
+ * CROSSTALK_NO_VULKAN=1 (set by the app when the GPU failed its test in a
+ * separate process, or crashed Crosstalk before) keeps the driver untouched.
  */
 #include <string.h>
 #include <windows.h>
@@ -20,6 +23,11 @@ static volatile LONG tried;
 
 static HMODULE vulkan_dll(void) {
     if (InterlockedCompareExchange(&tried, 1, 0) == 0) {
+        wchar_t off[4] = {0};
+        if (GetEnvironmentVariableW(L"CROSSTALK_NO_VULKAN", off, 4) > 0 && off[0] == L'1') {
+            MemoryBarrier();
+            return NULL;
+        }
         loader = LoadLibraryExW(L"vulkan-1.dll", NULL, LOAD_LIBRARY_SEARCH_SYSTEM32);
         if (loader) {
             real_get_proc = (vk_get_proc_fn)(void *)GetProcAddress(loader, "vkGetInstanceProcAddr");

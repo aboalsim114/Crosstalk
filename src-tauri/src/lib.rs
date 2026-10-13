@@ -67,6 +67,14 @@ impl audio::AudioEvents for CaptureEvents {
 }
 
 pub fn run() {
+    // GPU test in a separate process (speech::gpu_guard): a driver crash
+    // there only ends this process, never the app.
+    let args: Vec<String> = std::env::args().collect();
+    if let Some(i) = args.iter().position(|a| a == "--gpu-probe") {
+        std::process::exit(speech::gpu_guard::probe_main(
+            args.get(i + 1).map(String::as_str),
+        ));
+    }
     tauri::Builder::default()
         // Must be first: a second launch just focuses the running instance.
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
@@ -251,6 +259,11 @@ pub fn run() {
                 }
             }
         })
-        .run(tauri::generate_context!())
-        .expect("error while running Crosstalk");
+        .build(tauri::generate_context!())
+        .expect("error while running Crosstalk")
+        .run(|_, event| {
+            if let tauri::RunEvent::Exit = event {
+                speech::gpu_guard::clean_exit();
+            }
+        });
 }

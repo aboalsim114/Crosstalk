@@ -23,9 +23,12 @@ export function accelNote(accel: Accel, backend: string | undefined): string {
     if (gpu) return `Auto : carte graphique ${gpu[1]}, ${gpu[2]}.`;
     const slow = /auto : carte graphique pas assez rapide \((.+)\)$/.exec(backend);
     if (slow) return `Auto : processeur (carte graphique pas assez rapide, ${slow[1]}).`;
-    if (backend.includes('aucune carte graphique')) return 'Auto : processeur (aucune carte graphique Vulkan).';
+    const why = /auto \((.+)\)$/.exec(backend);
+    if (why) return `Auto : processeur (${why[1]}).`;
     return 'Auto : processeur.';
   }
+  const refused = /GPU \((.+)\)$/.exec(backend ?? '');
+  if (accel === 'gpu' && refused) return `Carte graphique non utilisée : ${refused[1]}. Whisper tourne sur le processeur.`;
   if (accel === 'cpu') return 'Processeur choisi : la carte graphique reste au jeu.';
   if (backend?.startsWith('GPU')) return 'Carte graphique : transcription bien plus rapide, modèle plus précis possible.';
   if (!backend) return 'Carte graphique demandée…';

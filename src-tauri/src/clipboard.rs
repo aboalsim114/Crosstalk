@@ -8,9 +8,7 @@ pub fn set_text(text: &str) -> Result<(), String> {
     use windows::Win32::System::DataExchange::{
         CloseClipboard, EmptyClipboard, OpenClipboard, SetClipboardData,
     };
-    use windows::Win32::System::Memory::{
-        GlobalAlloc, GlobalLock, GlobalUnlock, GMEM_MOVEABLE,
-    };
+    use windows::Win32::System::Memory::{GlobalAlloc, GlobalLock, GlobalUnlock, GMEM_MOVEABLE};
     const CF_UNICODETEXT: u32 = 13;
 
     let wide: Vec<u16> = text.encode_utf16().chain(Some(0)).collect();
