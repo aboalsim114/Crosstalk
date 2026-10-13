@@ -30,7 +30,7 @@ use std::time::{Duration, Instant};
 use super::cpu::{lower_current_thread_priority, CpuMeter};
 use super::dsp::{Conditioner, SAMPLE_RATE};
 use super::engine::{default_threads, sanitize_threads, RecognizeOptions, Recognizer};
-use super::filter::{judge, prompt_from};
+use super::filter::{judge, prompt_with};
 use super::segmenter::{Outcome, Segment, Segmenter, SegmenterConfig};
 use super::types::{
     EngineState, RejectReason, SpeechConfig, SpeechStats, SpeechStatus, Transcript, VoiceActivity,
@@ -222,6 +222,8 @@ struct Inner {
     loader: Arc<dyn EngineLoader>,
     models_dir: PathBuf,
     config: Mutex<SpeechConfig>,
+    /// Callouts of the map being played (Game State Integration).
+    map_prompt: Mutex<Vec<String>>,
     engine: Mutex<EngineSlot>,
     recognizer: Mutex<Option<Box<dyn Recognizer>>>,
     queue: JobQueue,
@@ -344,6 +346,7 @@ impl SpeechService {
             loader,
             models_dir,
             config: Mutex::new(config.sanitized()),
+            map_prompt: Mutex::new(Vec::new()),
             engine: Mutex::new(EngineSlot {
                 loading: false,
                 error: None,
@@ -403,6 +406,11 @@ impl SpeechService {
 
     pub fn models_dir(&self) -> &Path {
         &self.inner.models_dir
+    }
+
+    /// Callouts of the map being played, added to Whisper's prompt (A-06).
+    pub fn set_map_prompt(&self, callouts: Vec<String>) {
+        *self.inner.map_prompt.lock().unwrap() = callouts;
     }
 
     /// Applies new settings; reloads the model only if it changed.
@@ -892,7 +900,7 @@ fn judge_current(
 
 fn transcribe(inner: &Inner, job: Job) {
     let config = inner.config.lock().unwrap().clone();
-    let prompt = prompt_from(&config.glossary);
+    let prompt = prompt_with(&config.glossary, &inner.map_prompt.lock().unwrap());
     let mut slot = inner.recognizer.lock().unwrap();
     if inner.engine.lock().unwrap().loaded_model.as_deref() != Some(config.model.as_str()) {
         inner.close_utterance(job.utterance);
@@ -1007,7 +1015,7 @@ fn transcribe(inner: &Inner, job: Job) {
 /// statistics, replaced by the final transcript of the same id.
 fn transcribe_partial(inner: &Inner, job: Job) {
     let config = inner.config.lock().unwrap().clone();
-    let prompt = prompt_from(&config.glossary);
+    let prompt = prompt_with(&config.glossary, &inner.map_prompt.lock().unwrap());
     let mut slot = inner.recognizer.lock().unwrap();
     if inner.engine.lock().unwrap().loaded_model.as_deref() != Some(config.model.as_str()) {
         return;

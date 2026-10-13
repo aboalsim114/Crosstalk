@@ -160,7 +160,7 @@ Chaque étape est désactivable et mesurable dans l'écran Diagnostic.
 | A-03 | **Réduction de bruit neuronale** DeepFilterNet 3 (crate `deep_filter`). Adoptée seulement si le gain de WER est mesuré et que le budget (≤ 10 ms par trame de 10 ms sur un cœur) est tenu. | Exp. |
 | A-04 | Repli **RNNoise** (crate `nnnoiseless`) sur les machines trop faibles pour DeepFilterNet. | Exp. |
 | A-05 | **Validation des segments** (garde anti-transitoires) : un pic d'énergie bref (< 150 ms, montée > 20 dB) ne peut pas ouvrir un segment de parole à lui seul. Les segments trop courts ou sans parole confirmée par la VAD sont rejetés avant Whisper. | P0 |
-| A-06 | **Prompt glossaire** : les termes CS et les callouts de la carte en cours (carte fournie par Game State Integration) sont passés à Whisper comme texte initial. | P0 |
+| A-06 | **Prompt glossaire** : les termes CS et les callouts de la carte en cours (carte fournie par Game State Integration) sont passés à Whisper comme texte initial. | P0 · ✅ carte reçue par Game State Integration (activation par l’utilisateur), callouts de 9 cartes ajoutés au prompt |
 | A-07 | **Filtre anti-hallucinations** : rejet des sorties à faible confiance (`avg_logprob` < −1,0 ou `no_speech_prob` > 0,6), des répétitions et des phrases typiques d'hallucination (« Merci d'avoir regardé », « Sous-titres réalisés par… »). | P0 |
 | A-08 | **Capture Discord dédiée** : process loopback sur `discord.exe` en parallèle de `cs2.exe`. | P1 |
 | A-09 | **Assistant de réglage du jeu** : recommander de baisser le volume principal du jeu et de monter celui du chat vocal, avec un test avant/après. | P1 |
@@ -193,7 +193,7 @@ Chaque étape est désactivable et mesurable dans l'écran Diagnostic.
 | F-33 | Glossaire CS : termes conservés (smoke, flash, eco, rush B…) remplacés par des repères avant traduction puis restaurés (insensible à la casse, mots entiers), et termes traduits avec un rendu imposé. Si le modèle perd un repère, la phrase est retraduite sans protection. Modifiable par l'utilisateur. | P0 | ✅ (fiabilité à mesurer sur les vrais modèles) |
 | F-34 | Une ligne qui attend plus de 5 s, ou une file pleine, est affichée en original avec la mention « moteur indisponible ». | P0 | ✅ |
 | F-35 | Cache LRU des traductions (1 000 entrées) pour les messages répétés (« gg », « nt »…). | P1 | ✅ |
-| F-36 | Normalisation des annonces : callouts de cartes, économie et utilitaires traduits comme des annonces courtes. **Aucune information absente de l'original ne doit être ajoutée.** Glossaire par carte. | P1 | ◐ (lexique des annonces en/ru → fr ; glossaire par carte à faire) |
+| F-36 | Normalisation des annonces : callouts de cartes, économie et utilitaires traduits comme des annonces courtes. **Aucune information absente de l'original ne doit être ajoutée.** Glossaire par carte. | P1 | ✅ (lexique des annonces en/ru → fr ; glossaire par carte : callouts de la carte en cours conservés tels quels dans la traduction) |
 
 ### 4.5 Overlay en jeu
 
@@ -321,6 +321,7 @@ fenêtre CS2 ─► capture HUD ─► indicateur ─► OCR ─► corrélation
 | `%APPDATA%\Crosstalk\glossary.json` | Glossaire utilisateur |
 | `%LOCALAPPDATA%\Crosstalk\models\` | Modèles, avec vérification SHA-256 après téléchargement |
 | `%LOCALAPPDATA%\Crosstalk\history.jsonl` | Historique texte (une ligne JSON par phrase), si activé ; purgé après 7 jours |
+| `<CS2>\game\csgo\cfg\gamestate_integration_crosstalk.cfg` | Demande à CS2 le nom de la carte (Game State Integration, 127.0.0.1:31982, jeton) ; écrit seulement sur « Activer », supprimé par « Retirer » |
 | `%LOCALAPPDATA%\Crosstalk\logs\` | Journaux expurgés (`crosstalk-<date>.log`, un fichier par jour, conservés 7 jours) : états des services et erreurs, jamais de texte de partie ni de pseudo ; nom d'utilisateur Windows masqué |
 
 ## 7. Direction artistique

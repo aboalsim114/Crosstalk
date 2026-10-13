@@ -156,6 +156,8 @@ struct Inner {
     queue: Mutex<VecDeque<Job>>,
     wake: Condvar,
     cache: Mutex<Cache>,
+    /// Callouts of the map being played, kept as spoken (F-36).
+    map_terms: Mutex<Vec<Term>>,
     generation: AtomicU64,
     /// Asks the worker to (re)load the installed models.
     reload: AtomicBool,
@@ -195,6 +197,7 @@ impl TranslationService {
             queue: Mutex::new(VecDeque::new()),
             wake: Condvar::new(),
             cache: Mutex::new(Cache::default()),
+            map_terms: Mutex::new(Vec::new()),
             generation: AtomicU64::new(0),
             reload: AtomicBool::new(true),
             shutdown: AtomicBool::new(false),
@@ -222,6 +225,23 @@ impl TranslationService {
             *self.inner.cache.lock().unwrap() = Cache::default();
         }
         self.rescan()
+    }
+
+    /// Callouts of the map being played: kept as spoken, after the user's own
+    /// glossary (which wins for a term it already defines).
+    pub fn set_map_terms(&self, callouts: Vec<String>) {
+        let terms: Vec<Term> = callouts
+            .into_iter()
+            .map(|source| Term {
+                source,
+                target: None,
+            })
+            .collect();
+        let mut current = self.inner.map_terms.lock().unwrap();
+        if *current != terms {
+            *current = terms;
+            *self.inner.cache.lock().unwrap() = Cache::default();
+        }
     }
 
     /// Looks for newly installed models (and loads them).
@@ -456,7 +476,16 @@ fn run(
     }
     let queue_ms = job.queued.elapsed().as_millis() as u32;
     let fail = |why: &str| Some(failure(job.id, &job.lang, &job.text, why, queue_ms));
-    let config = inner.config.lock().unwrap().clone();
+    let mut config = inner.config.lock().unwrap().clone();
+    for t in inner.map_terms.lock().unwrap().iter() {
+        if !config
+            .glossary
+            .iter()
+            .any(|g| g.source.eq_ignore_ascii_case(&t.source))
+        {
+            config.glossary.push(t.clone());
+        }
+    }
     if !config.enabled && !manual {
         return fail("traduction désactivée");
     }
@@ -814,5 +843,31 @@ mod tests {
         let t = svc.translate_blocking("en", "throw Smoke");
         assert_eq!(t.translated.as_deref(), Some("FR:throw Smoke"));
         assert!(t.glossary);
+    }
+
+    #[test]
+    fn map_callouts_are_kept_and_the_user_glossary_wins() {
+        let (svc, _rx, calls) = service(vec!["en"], 0);
+        svc.configure(TranslationConfig {
+            enabled: true,
+            glossary: vec![Term {
+                source: "palace".into(),
+                target: Some("palais".into()),
+            }],
+        });
+        svc.translate_blocking("en", "go jungle");
+        svc.translate_blocking("en", "go jungle");
+        let before = calls.load(Ordering::SeqCst);
+        // A new map clears the cache: the line is translated again.
+        svc.set_map_terms(vec!["Jungle".into(), "Palace".into()]);
+        let t = svc.translate_blocking("en", "go jungle");
+        assert_eq!(calls.load(Ordering::SeqCst), before + 1);
+        assert_eq!(t.translated.as_deref(), Some("FR:go jungle"));
+        let t = svc.translate_blocking("en", "push palace");
+        assert_eq!(t.translated.as_deref(), Some("FR:push palais"));
+        // Same map again: the cache is kept.
+        svc.set_map_terms(vec!["Jungle".into(), "Palace".into()]);
+        svc.translate_blocking("en", "go jungle");
+        assert_eq!(calls.load(Ordering::SeqCst), before + 2);
     }
 }

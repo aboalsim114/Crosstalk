@@ -476,3 +476,26 @@ export const diagnostics = {
   report: (rows: DiagReportRow[]): Promise<string> => invoke<string>('diag_report', { rows }),
   reportIssue: (exported: boolean): Promise<void> => invoke<void>('diag_report_issue', { exported }),
 };
+
+// ---------- map being played (src-tauri/src/gsi) ----------
+
+export interface GsiStatus {
+  installed: boolean;
+  cfgPath: string | null;
+  cs2Found: boolean;
+  listening: boolean;
+  port: number;
+  error: string | null;
+  map: string | null;
+  mapName: string | null;
+  mode: string | null;
+  callouts: number;
+  lastSeen: number | null;
+}
+
+export const gsi = {
+  status: (): Promise<GsiStatus | null> => (isTauri ? invoke<GsiStatus>('gsi_status') : Promise.resolve(null)),
+  install: (): Promise<GsiStatus> => invoke<GsiStatus>('gsi_install'),
+  uninstall: (): Promise<GsiStatus> => invoke<GsiStatus>('gsi_uninstall'),
+  onStatus: (cb: (s: GsiStatus) => void) => (isTauri ? listen<GsiStatus>('gsi://status', (e) => cb(e.payload)) : Promise.resolve(noop)),
+};

@@ -215,9 +215,26 @@ fn is_repetitive(norm: &str) -> bool {
 
 /// Initial prompt from the glossary, kept short (Whisper uses at most 224 tokens).
 pub fn prompt_from(glossary: &[String]) -> String {
+    prompt_with(glossary, &[])
+}
+
+/// Glossary, then the callouts of the map being played: the map's callouts
+/// always fit (at the end, nearest to the speech), the glossary fills the rest.
+pub fn prompt_with(glossary: &[String], map: &[String]) -> String {
+    const BUDGET: usize = 400;
+    let map_len: usize = map.iter().map(|t| t.len() + 2).sum();
     let mut out = String::new();
     for term in glossary {
-        if out.len() + term.len() + 2 > 300 {
+        if out.len() + term.len() + 2 + map_len > BUDGET {
+            break;
+        }
+        if !out.is_empty() {
+            out.push_str(", ");
+        }
+        out.push_str(term);
+    }
+    for term in map {
+        if out.len() + term.len() + 2 > BUDGET {
             break;
         }
         if !out.is_empty() {
@@ -352,9 +369,20 @@ mod tests {
         let p = prompt_from(&g);
         assert!(p.starts_with("rush B, mid"));
         assert!(p.ends_with('.'));
-        assert!(p.len() <= 302);
+        assert!(p.len() <= 402);
         assert_eq!(prompt_from(&[]), "");
         let many: Vec<String> = (0..200).map(|i| format!("term{i}")).collect();
-        assert!(prompt_from(&many).len() <= 302);
+        assert!(prompt_from(&many).len() <= 402);
+    }
+
+    #[test]
+    fn map_callouts_always_fit_at_the_end() {
+        let many: Vec<String> = (0..200).map(|i| format!("term{i}")).collect();
+        let map: Vec<String> = ["Palace", "Jungle", "Connector"].iter().map(|s| s.to_string()).collect();
+        let p = prompt_with(&many, &map);
+        assert!(p.starts_with("term0, "));
+        assert!(p.ends_with("Palace, Jungle, Connector."), "{p}");
+        assert!(p.len() <= 402);
+        assert_eq!(prompt_with(&[], &map), "Palace, Jungle, Connector.");
     }
 }

@@ -1,0 +1,48 @@
+{
+  "_comment": "Callouts per CS2 map: 'prompt' is given to Whisper (A-06), 'keep' is kept as spoken in translations (F-36). Names are the usual English callouts.",
+  "de_mirage": {
+    "name": "Mirage",
+    "prompt": ["A site", "B site", "Palace", "Ramp", "Tetris", "Jungle", "Connector", "Stairs", "Firebox", "Ticket", "Sandwich", "CT spawn", "Top mid", "Window", "Short", "Underpass", "Apps", "Market", "Kitchen", "Van", "Bench", "Catwalk", "Triple"],
+    "keep": ["Palace", "Tetris", "Jungle", "Connector", "Firebox", "Ticket", "Sandwich", "Top mid", "Underpass", "Apps", "Market", "Kitchen", "Van", "Bench", "Catwalk", "Triple"]
+  },
+  "de_inferno": {
+    "name": "Inferno",
+    "prompt": ["Banana", "Car", "Coffins", "Arch", "Library", "Pit", "Graveyard", "Apps", "Balcony", "Boiler", "Second mid", "Top banana", "Ruins", "Construction", "Speedway", "Moto", "Logs", "Fountain", "Quad", "Church", "Spools", "Short", "Long"],
+    "keep": ["Banana", "Coffins", "Arch", "Library", "Pit", "Graveyard", "Apps", "Balcony", "Boiler", "Second mid", "Top banana", "Ruins", "Construction", "Speedway", "Moto", "Logs", "Fountain", "Quad", "Church", "Spools"]
+  },
+  "de_dust2": {
+    "name": "Dust II",
+    "prompt": ["Long A", "Short A", "Catwalk", "Pit", "Goose", "Car", "Blue", "Tunnels", "Upper tunnels", "Lower tunnels", "Xbox", "Mid doors", "Window", "Platform", "Back plat", "CT spawn", "T spawn"],
+    "keep": ["Long A", "Short A", "Catwalk", "Pit", "Goose", "Tunnels", "Upper tunnels", "Lower tunnels", "Xbox", "Mid doors", "Back plat"]
+  },
+  "de_nuke": {
+    "name": "Nuke",
+    "prompt": ["Outside", "Ramp", "Hut", "Heaven", "Hell", "Lobby", "Squeaky", "Vents", "Secret", "Silo", "Garage", "Mini", "Rafters", "Trophy", "Mustang", "Lockers", "Decon", "Toxic", "Control room", "Main"],
+    "keep": ["Outside", "Hut", "Heaven", "Hell", "Lobby", "Squeaky", "Vents", "Secret", "Silo", "Garage", "Mini", "Rafters", "Trophy", "Mustang", "Lockers", "Decon", "Toxic"]
+  },
+  "de_ancient": {
+    "name": "Ancient",
+    "prompt": ["Donut", "Cave", "Temple", "Elbow", "Ruins", "Water", "Main", "Mid", "Red room", "House", "Jaguar", "Alley", "Pillar", "Ramp", "Tree room", "Street"],
+    "keep": ["Donut", "Cave", "Temple", "Elbow", "Ruins", "Water", "Red room", "House", "Jaguar", "Alley", "Tree room"]
+  },
+  "de_anubis": {
+    "name": "Anubis",
+    "prompt": ["Canal", "Water", "Bridge", "Palace", "Street", "Alley", "Mid", "Connector", "Heaven", "Ruins", "Camera", "Walkway", "Main"],
+    "keep": ["Canal", "Bridge", "Palace", "Street", "Alley", "Connector", "Heaven", "Ruins", "Camera", "Walkway"]
+  },
+  "de_vertigo": {
+    "name": "Vertigo",
+    "prompt": ["A ramp", "B stairs", "Elevator", "Scaffolding", "Sandbags", "Heaven", "Generator", "Window", "Mid", "Construction", "Tunnel", "Yellow"],
+    "keep": ["A ramp", "B stairs", "Elevator", "Scaffolding", "Sandbags", "Heaven", "Generator", "Construction", "Yellow"]
+  },
+  "de_overpass": {
+    "name": "Overpass",
+    "prompt": ["Monster", "Water", "Sewers", "Short", "Long", "Bathrooms", "Toilets", "Party", "Truck", "Heaven", "Pillar", "Fountain", "Barrels", "Connector", "Playground", "Bank", "Graffiti", "Stairs"],
+    "keep": ["Monster", "Sewers", "Bathrooms", "Toilets", "Party", "Truck", "Heaven", "Fountain", "Barrels", "Connector", "Playground", "Bank", "Graffiti"]
+  },
+  "de_train": {
+    "name": "Train",
+    "prompt": ["Ivy", "Ladder room", "Popdog", "Connector", "Heaven", "Hell", "Bombtrain", "Pink train", "Olof", "Sandwich", "Z connector", "Upper", "Lower", "Main"],
+    "keep": ["Ivy", "Ladder room", "Popdog", "Connector", "Heaven", "Hell", "Bombtrain", "Pink train", "Olof", "Sandwich", "Z connector"]
+  }
+}
