@@ -210,6 +210,7 @@ Chaque étape est désactivable et mesurable dans l'écran Diagnostic.
 | F-48 | Afficher le pseudo devant la traduction vocale dès qu'il est résolu (§4.8), sans retarder l'affichage de la traduction. | P1 | ◐ expérimental, à valider en partie réelle |
 | F-49 | **Mode streamer** : page locale (127.0.0.1:31983, source navigateur OBS) affichant les sous-titres finaux pour les viewers ; pseudos et phrases originales retirés côté Rust sauf choix contraire ; désactivé par défaut. | P1 | ✅ |
 | F-50 | Traduction de ses propres annonces (micro) vers la langue des coéquipiers, affichée en texte. Opt-in, désactivé par défaut. | P2 | ◐ version texte livrée : « Répondre dans leur langue » (Ctrl+Alt+F7), saisie en français → anglais/russe en local (Opus-MT fr→en, fr→ru et phrases CS écrites à la main), copié dans le presse-papiers ; rien n'est envoyé au jeu. Micro ✅ : « Dicter » (Ctrl+Alt+F6) enregistre le micro par défaut seulement le temps de la phrase (fin automatique après 1,1 s de silence, 12 s max), Whisper transcrit le français, la traduction est copiée ; audio gardé en mémoire puis effacé |
+| F-51 | Résumé de fin de partie à partager : une image (carte, mode, durée, score GSI, annonces traduites par langue, latence médiane), copiable dans le presse-papiers ou enregistrée dans Documents. Sans pseudo ; phrases traduites seulement sur demande. Rien n'est envoyé par Crosstalk. | P1 | ✅ ([protocole](testing/recap.md)) |
 
 ### 4.6 Fenêtre principale
 

@@ -76,6 +76,24 @@ pub struct GsiStatus {
     pub callouts: usize,
     /// Unix ms of the last message from CS2.
     pub last_seen: Option<u64>,
+    /// Match phase from the same `map` block: `warmup`, `live`,
+    /// `intermission`, `gameover` (for the end-of-match recap).
+    pub phase: Option<String>,
+    pub round: Option<u32>,
+    pub score_ct: Option<u32>,
+    pub score_t: Option<u32>,
+}
+
+/// The `map` block of a CS2 message: the map and the match score (no player
+/// data is requested).
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct MapState {
+    pub name: String,
+    pub mode: Option<String>,
+    pub phase: Option<String>,
+    pub round: Option<u32>,
+    pub score_ct: Option<u32>,
+    pub score_t: Option<u32>,
 }
 
 /// What the rest of the app does with the map.
@@ -121,7 +139,7 @@ fn new_token() -> String {
 
 /// What a POST from CS2 says about the map: `Some(None)` in the menus,
 /// `None` when the message is not for us (wrong token or game).
-pub fn parse_state(body: &str, token: &str) -> Option<Option<(String, Option<String>)>> {
+pub fn parse_state(body: &str, token: &str) -> Option<Option<MapState>> {
     let v: Value = serde_json::from_str(body).ok()?;
     if v.pointer("/auth/token").and_then(Value::as_str) != Some(token) {
         return None;
@@ -136,11 +154,26 @@ pub fn parse_state(body: &str, token: &str) -> Option<Option<(String, Option<Str
         .and_then(Value::as_str)
         .map(|s| s.trim().to_ascii_lowercase())
         .filter(|s| !s.is_empty() && s.len() <= 64);
-    let mode = v
-        .pointer("/map/mode")
-        .and_then(Value::as_str)
-        .map(str::to_string);
-    Some(name.map(|n| (n, mode)))
+    let text = |ptr: &str| {
+        v.pointer(ptr)
+            .and_then(Value::as_str)
+            .map(str::to_string)
+            .filter(|s| s.len() <= 32)
+    };
+    let num = |ptr: &str| {
+        v.pointer(ptr)
+            .and_then(Value::as_u64)
+            .filter(|n| *n <= 1000)
+            .map(|n| n as u32)
+    };
+    Some(name.map(|name| MapState {
+        name,
+        mode: text("/map/mode"),
+        phase: text("/map/phase"),
+        round: num("/map/round"),
+        score_ct: num("/map/team_ct/score"),
+        score_t: num("/map/team_t/score"),
+    }))
 }
 
 /// Reads one HTTP request (headers + body) from a local connection.
@@ -272,23 +305,32 @@ impl GsiService {
         self.set_map(None);
     }
 
-    fn set_map(&self, map: Option<(String, Option<String>)>) {
-        let changed = {
+    fn set_map(&self, map: Option<MapState>) {
+        let (changed, progressed) = {
             let mut st = self.status.lock().unwrap();
-            let name = map.as_ref().map(|m| m.0.clone());
+            let name = map.as_ref().map(|m| m.name.clone());
             let changed = st.map != name;
+            let before = (st.phase.clone(), st.round, st.score_ct, st.score_t);
+            let m = map.clone().unwrap_or_default();
+            st.phase = m.phase;
+            st.round = m.round;
+            st.score_ct = m.score_ct;
+            st.score_t = m.score_t;
+            let progressed = before != (st.phase.clone(), st.round, st.score_ct, st.score_t);
             st.map_name = name.as_deref().map(pretty);
             st.callouts = name
                 .as_deref()
                 .and_then(|n| maps().get(n))
                 .map_or(0, |m| m.prompt.len());
             st.map = name;
-            st.mode = map.and_then(|m| m.1);
-            changed
+            st.mode = map.and_then(|m| m.mode);
+            (changed, progressed)
         };
         if changed {
             let map = self.status().map;
             self.events.map(map.as_deref());
+        }
+        if changed || progressed {
             self.publish();
         }
     }
@@ -473,7 +515,19 @@ mod tests {
         let ok = r#"{"provider":{"appid":730},"map":{"name":"de_Mirage","mode":"competitive","phase":"live"},"auth":{"token":"t"}}"#;
         assert_eq!(
             parse_state(ok, "t"),
-            Some(Some(("de_mirage".into(), Some("competitive".into()))))
+            Some(Some(MapState {
+                name: "de_mirage".into(),
+                mode: Some("competitive".into()),
+                phase: Some("live".into()),
+                ..Default::default()
+            }))
+        );
+        // The score of the match, from the same block (no player data).
+        let end = r#"{"provider":{"appid":730},"map":{"name":"de_inferno","phase":"gameover","round":22,"team_ct":{"score":13,"name":"x"},"team_t":{"score":9}},"auth":{"token":"t"}}"#;
+        let m = parse_state(end, "t").unwrap().unwrap();
+        assert_eq!(
+            (m.phase.as_deref(), m.round, m.score_ct, m.score_t),
+            (Some("gameover"), Some(22), Some(13), Some(9))
         );
         assert_eq!(parse_state(ok, "other"), None);
         let menu = r#"{"provider":{"appid":730},"auth":{"token":"t"}}"#;
@@ -511,6 +565,19 @@ mod tests {
         assert_eq!(st.map.as_deref(), Some("de_nuke"));
         assert_eq!(st.map_name.as_deref(), Some("Nuke"));
         assert!(st.callouts > 10 && st.last_seen.is_some());
+        // The end of the match reaches the status (for the recap).
+        let statuses = *rec.statuses.lock().unwrap();
+        let over = format!(
+            r#"{{"provider":{{"appid":730}},"map":{{"name":"de_nuke","phase":"gameover","team_ct":{{"score":13}},"team_t":{{"score":11}}}},"auth":{{"token":"{token}"}}}}"#
+        );
+        post(port, &over);
+        let st = gsi.status();
+        assert_eq!(
+            (st.phase.as_deref(), st.score_ct, st.score_t),
+            (Some("gameover"), Some(13), Some(11))
+        );
+        assert!(*rec.statuses.lock().unwrap() > statuses, "published");
+        assert_eq!(rec.maps.lock().unwrap().len(), 1, "same map: no map event");
         // Back to the menu, then CS2 closed.
         let menu = format!(r#"{{"provider":{{"appid":730}},"auth":{{"token":"{token}"}}}}"#);
         post(port, &menu);

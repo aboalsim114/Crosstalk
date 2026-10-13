@@ -497,6 +497,11 @@ export interface GsiStatus {
   mode: string | null;
   callouts: number;
   lastSeen: number | null;
+  /** Match phase (warmup, live, intermission, gameover) and score, from the same map block. */
+  phase?: string | null;
+  round?: number | null;
+  scoreCt?: number | null;
+  scoreT?: number | null;
 }
 
 export const gsi = {
@@ -603,6 +608,14 @@ export const speakerId = {
   configure: (config: SpeakerConfig): Promise<SpeakerStatus | null> => (isTauri ? invoke<SpeakerStatus>('speaker_configure', { config }) : Promise.resolve(null)),
   test: (region: SpeakerRegion, delayMs: number): Promise<SpeakerTest | null> => (isTauri ? invoke<SpeakerTest>('speaker_test', { region, delayMs }) : Promise.resolve(null)),
   onStatus: (cb: (s: SpeakerStatus) => void) => (isTauri ? listen<SpeakerStatus>(SPEAKER_STATUS_EVENT, (e) => cb(e.payload)) : Promise.resolve(noop)),
+};
+
+// ---------- end-of-match recap (src-tauri/src/recap.rs) ----------
+
+export const recapFiles = {
+  /** Saves the PNG in Documents; returns the path. */
+  save: async (png: Blob): Promise<string> => invoke<string>('recap_save', { png: Array.from(new Uint8Array(await png.arrayBuffer())) }),
+  reveal: (path: string): Promise<void> => invoke<void>('recap_reveal', { path }),
 };
 
 // ---------- spoken reply (src-tauri/src/dictation.rs) ----------

@@ -586,7 +586,7 @@ pub fn issue_url(report: Option<&str>) -> String {
 }
 
 /// Opens a folder or a web page with the Windows shell.
-fn shell_open(target: &str) -> Result<(), String> {
+pub(crate) fn shell_open(target: &str) -> Result<(), String> {
     #[cfg(windows)]
     let cmd = std::process::Command::new("explorer").arg(target).spawn();
     #[cfg(not(windows))]
