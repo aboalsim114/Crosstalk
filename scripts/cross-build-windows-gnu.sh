@@ -33,15 +33,16 @@ export CMAKE_C_FLAGS="-include $compat" CMAKE_CXX_FLAGS="-include $compat"
 # time, so the app still starts (on the CPU) without a Vulkan driver. CMake
 # finds it as the SDK's vulkan-1 library; headers and glslc come from Ubuntu.
 vk="$root/src-tauri/target/vulkan-shim"
-mkdir -p "$vk/Lib"
+mkdir -p "$vk"
 x86_64-w64-mingw32-gcc-posix -O2 -Wall -c scripts/cross/vulkan_shim.c -o "$vk/vulkan_shim.o"
 rm -f "$vk/libvulkan.a" && x86_64-w64-mingw32-ar rcs "$vk/libvulkan.a" "$vk/vulkan_shim.o"
-cp "$vk/libvulkan.a" "$vk/Lib/libvulkan-1.a"
-# Only the Vulkan headers: all of /usr/include would hand glibc's to MinGW.
-mkdir -p "$vk/Include"
-ln -sfn /usr/include/vulkan "$vk/Include/vulkan"
-ln -sfn /usr/include/vk_video "$vk/Include/vk_video"
-ln -sfn /usr/bin "$vk/Bin"
+# FindVulkan looks in include/, lib/ and bin/ on a Linux host. Only the Vulkan
+# headers: all of /usr/include would hand glibc's to MinGW.
+mkdir -p "$vk/include" "$vk/lib"
+ln -sfn /usr/include/vulkan "$vk/include/vulkan"
+ln -sfn /usr/include/vk_video "$vk/include/vk_video"
+cp "$vk/libvulkan.a" "$vk/lib/libvulkan-1.a"
+ln -sfn /usr/bin "$vk/bin"
 export VULKAN_SDK="$vk"
 export CARGO_TARGET_X86_64_PC_WINDOWS_GNU_RUSTFLAGS="$CARGO_TARGET_X86_64_PC_WINDOWS_GNU_RUSTFLAGS -L native=$vk"
 
