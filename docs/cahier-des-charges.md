@@ -125,16 +125,16 @@ Statut : ✅ réalisé dans le dépôt (interface et données simulées comprise
 
 | ID | Exigence | Prio. | Statut |
 | --- | --- | --- | --- |
-| F-20 | Capturer uniquement l'audio de `cs2.exe` par process loopback WASAPI (`ActivateAudioInterfaceAsync`, documenté à partir du build 20348). Son fonctionnement sous Windows 10 22H2 (19045) est à vérifier en L0. | P0 | — |
-| F-21 | Mode « tout le son du PC » (loopback du périphérique de sortie) : repli quand le process loopback est indisponible, et mode volontaire pour traduire aussi Discord ou TeamSpeak. Avertissement explicite : capte aussi le navigateur et les autres applications. | P0 | — |
-| F-22 | Ne jamais capturer le microphone de l'utilisateur sans activation explicite (voir F-50). | P0 | — |
-| F-23 | Rééchantillonner en 16 kHz mono. Détection de voix (VAD Silero via ONNX Runtime) avec seuil réglable, pré-roll 250 ms, post-roll 400 ms, segment maximal de 5 s (8 s initialement : trop long avec le bruit du jeu, mesuré en partie le 12/10/2026). | P0 | — |
-| F-24 | Transcription locale avec whisper.cpp (crate `whisper-rs`), modèles tiny à large-v3-turbo, accélération CUDA ou Vulkan si disponible, sinon CPU. Whisper est le choix de départ, confirmé ou remplacé après le banc d'essai (A-11). | P0 | — |
+| F-20 | Capturer uniquement l'audio de `cs2.exe` par process loopback WASAPI (`ActivateAudioInterfaceAsync`, documenté à partir du build 20348). Son fonctionnement sous Windows 10 22H2 (19045) est à vérifier en L0. | P0 | ✅ (fonctionnement sous Windows 10 22H2 à vérifier) |
+| F-21 | Mode « tout le son du PC » (loopback du périphérique de sortie) : repli quand le process loopback est indisponible, et mode volontaire pour traduire aussi Discord ou TeamSpeak. Avertissement explicite : capte aussi le navigateur et les autres applications. | P0 | ✅ |
+| F-22 | Ne jamais capturer le microphone de l'utilisateur sans activation explicite (voir F-50). | P0 | ✅ (aucune capture micro) |
+| F-23 | Rééchantillonner en 16 kHz mono. Détection de voix (VAD Silero via ONNX Runtime) avec seuil réglable, pré-roll 250 ms, post-roll 400 ms, segment maximal de 5 s (8 s initialement : trop long avec le bruit du jeu, mesuré en partie le 12/10/2026). | P0 | ✅ (VAD Silero portée en ggml par whisper.cpp, sans ONNX Runtime) |
+| F-24 | Transcription locale avec whisper.cpp (crate `whisper-rs`), modèles tiny à large-v3-turbo, accélération CUDA ou Vulkan si disponible, sinon CPU. Whisper est le choix de départ, confirmé ou remplacé après le banc d'essai (A-11). | P0 | ◐ (CPU uniquement pour l’instant ; CUDA/Vulkan à venir) |
 | F-25 | Transcription provisoire pendant la parole (fenêtre glissante), remplacée par la version finale. Adoptée seulement si son coût GPU/CPU reste compatible avec la cible FPS. | P1 | ✅ (transcription et traduction provisoires ; coût CPU à mesurer en partie) |
-| F-26 | Détection de langue restreinte aux langues sources préférées (ru, en par défaut). | P0 | — |
-| F-27 | Abandonner les segments périmés (plus de 6 s d'attente) pour éviter l'accumulation de retard. | P0 | — |
+| F-26 | Détection de langue restreinte aux langues sources préférées (ru, en par défaut). | P0 | ✅ |
+| F-27 | Abandonner les segments périmés (plus de 6 s d'attente) pour éviter l'accumulation de retard. | P0 | ✅ |
 | F-28 | ~~Transcription cloud en option~~ : abandonnée (décision du 12/10/2026, aucun service payant ni clé API pour l'utilisateur). | — | abandonnée |
-| F-29 | Chaîne de nettoyage audio avant la VAD (détails §4.3 bis) : traitements légers en P0, traitements coûteux en Exp. | P0 | — |
+| F-29 | Chaîne de nettoyage audio avant la VAD (détails §4.3 bis) : traitements légers en P0, traitements coûteux en Exp. | P0 | ◐ (rééchantillonnage + passe-haut ; traitements Exp. non faits) |
 
 ### 4.3 bis Séparation de la voix et des bruits de jeu
 
@@ -221,7 +221,7 @@ Sept écrans, conformes à la maquette *v2 Cinematic*. **Réalisés en React ave
 | Audio & IA | Source de capture, test audio de 10 s, seuil VAD, choix et téléchargement des modèles Whisper, CPU/GPU, modèles de traduction locaux et test de traduction. Option d'identification expérimentale du locuteur. |
 | Langues & glossaire | Langue cible, langues sources préférées, option « ignorer le français », édition du glossaire. |
 | Historique | Désactivé par défaut ; texte seulement, fichier local `history.jsonl` ; recherche, export TXT/JSON dans Documents, effacement ; purge à 7 jours (20 000 lignes max). |
-| Diagnostic | Tests intégrés (journal, -condebug, parseur, capture, modèle, traduction, raccourcis, indicateur vocal), journal expurgé, export d'un rapport. |
+| Diagnostic | Tests intégrés (journal, -condebug, parseur, capture, modèle, traduction, raccourcis, indicateur vocal), journal expurgé, export d'un rapport. ✅ Journal réel (états des services, erreurs, plantages), export du rapport dans Documents, « Signaler un problème » (GitHub), dossier des journaux. Indicateur vocal : avec §4.8. |
 | À propos | Ce que l'application ne fait jamais, licences tierces, version, lancement avec Windows. |
 
 ### 4.7 Session et raccourcis
@@ -321,7 +321,7 @@ fenêtre CS2 ─► capture HUD ─► indicateur ─► OCR ─► corrélation
 | `%APPDATA%\Crosstalk\glossary.json` | Glossaire utilisateur |
 | `%LOCALAPPDATA%\Crosstalk\models\` | Modèles, avec vérification SHA-256 après téléchargement |
 | `%LOCALAPPDATA%\Crosstalk\history.jsonl` | Historique texte (une ligne JSON par phrase), si activé ; purgé après 7 jours |
-| `%LOCALAPPDATA%\Crosstalk\logs\` | Journaux expurgés, conservés 7 jours |
+| `%LOCALAPPDATA%\Crosstalk\logs\` | Journaux expurgés (`crosstalk-<date>.log`, un fichier par jour, conservés 7 jours) : états des services et erreurs, jamais de texte de partie ni de pseudo ; nom d'utilisateur Windows masqué |
 
 ## 7. Direction artistique
 

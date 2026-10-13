@@ -693,7 +693,7 @@ fn run_vad(inner: &Inner, det: &mut dyn VoiceDetector, st: &mut Front) {
         let probs = match det.probabilities(&chunk) {
             Ok(p) => p,
             Err(e) => {
-                eprintln!("crosstalk: {e}");
+                crate::logs::warn("vad", &e.to_string());
                 vec![0.0; VAD_HOP_FRAMES]
             }
         };
@@ -949,7 +949,7 @@ fn transcribe(inner: &Inner, job: Job) {
             if std::env::var_os("CROSSTALK_SPEECH_DIAGNOSTICS").is_some_and(|v| v == "1") {
                 eprintln!("crosstalk speech diagnostic: inference_error={e:?} audio_ms={audio_ms} queue_ms={queue_ms} inference_ms={asr_ms} timing={timing:?}");
             }
-            eprintln!("crosstalk: {e}");
+            crate::logs::warn("asr", &format!("transcription impossible : {e}"));
             inner.close_utterance(job.utterance);
             return;
         }
