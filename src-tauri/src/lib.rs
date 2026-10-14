@@ -5,7 +5,8 @@
 //!
 //! - `audio`     WASAPI capture of cs2.exe (process loopback, device fallback), levels
 //! - `speech`    Silero VAD + whisper.cpp transcription of the captured voices
-//! - `translation` local Opus-MT translation into the user's language
+//! - `translation` local Opus-MT translation into the user's language, with an
+//!   optional online LLM in front (user's own provider and key, off by default)
 //! - `chat`      CS2 text chat read from console.log
 //! - `game`      CS2 process detection (names and PIDs only, the game is never opened)
 //! - `tray`      notification-area icon; the app keeps running when the window is closed
@@ -91,6 +92,10 @@ pub fn run() {
             translation::translation_rescan,
             translation::translation_models,
             translation::translation_test,
+            translation::llm_status,
+            translation::llm_configure,
+            translation::llm_set_key,
+            translation::llm_clear_key,
             download_commands::models_download_status,
             download_commands::models_download_start,
             download_commands::models_download_cancel,
@@ -163,8 +168,9 @@ pub fn run() {
                 Arc::new(downloads::HttpFetcher),
                 Arc::new(download_commands::TauriDownloadEvents(handle.clone())),
             ));
-            let translation = translation::start(handle);
+            let (translation, llm) = translation::start(handle);
             app.manage(translation.clone());
+            app.manage(llm);
             let speech = wiring::start_speech(handle);
             app.manage(speech.clone());
             let history = history::History::new(history::default_path());

@@ -4,6 +4,7 @@
 pub mod callouts;
 pub mod engine;
 pub mod glossary;
+pub mod llm;
 pub mod marian;
 pub mod models;
 mod network;
@@ -33,14 +34,23 @@ impl service::TranslationEvents for TauriEvents {
     }
 }
 
-/// Starts the translation service with the Opus-MT models of the models directory.
-pub fn start(app: &AppHandle) -> Arc<TranslationService> {
-    TranslationService::start(
+/// Starts the translation service with the Opus-MT models of the models
+/// directory, behind the online LLM (off until the user turns it on).
+pub fn start(app: &AppHandle) -> (Arc<TranslationService>, Arc<llm::LlmClient>) {
+    let llm = Arc::new(llm::LlmClient::new(
+        llm::default_key_store(),
+        Box::new(llm::UreqTransport),
+    ));
+    let service = TranslationService::start(
         Arc::new(TauriEvents(app.clone())),
-        Arc::new(opus::OpusLoader),
+        Arc::new(llm::HybridLoader {
+            opus: Arc::new(opus::OpusLoader),
+            llm: llm.clone(),
+        }),
         crate::paths::models_dir(),
         TranslationConfig::default(),
-    )
+    );
+    (service, llm)
 }
 
 // ---------- commands ----------
@@ -70,6 +80,52 @@ pub fn translation_test(
     text: String,
 ) -> Translation {
     t.translate_blocking(&lang, &text)
+}
+
+// ---------- online LLM (Audio & IA › Traduction en ligne) ----------
+
+/// Settings and counters; tells whether a key is stored, never the key.
+#[tauri::command]
+pub fn llm_status(llm: State<'_, Arc<llm::LlmClient>>) -> llm::LlmStatus {
+    llm.status()
+}
+
+#[tauri::command]
+pub fn llm_configure(
+    llm: State<'_, Arc<llm::LlmClient>>,
+    t: State<'_, Arc<TranslationService>>,
+    config: llm::LlmConfig,
+) -> llm::LlmStatus {
+    let before = llm.status();
+    let st = llm.configure(config);
+    if before.config != st.config || before.active != st.active {
+        t.engines_changed();
+    }
+    st
+}
+
+/// Stores the key (Windows Credential Manager); it never comes back to the UI.
+#[tauri::command]
+pub fn llm_set_key(
+    llm: State<'_, Arc<llm::LlmClient>>,
+    t: State<'_, Arc<TranslationService>>,
+    key: String,
+) -> Result<llm::LlmStatus, String> {
+    let st = llm.set_key(&key)?;
+    t.engines_changed();
+    crate::logs::info("traduction", "clé API du LLM enregistrée");
+    Ok(st)
+}
+
+#[tauri::command]
+pub fn llm_clear_key(
+    llm: State<'_, Arc<llm::LlmClient>>,
+    t: State<'_, Arc<TranslationService>>,
+) -> Result<llm::LlmStatus, String> {
+    let st = llm.clear_key()?;
+    t.engines_changed();
+    crate::logs::info("traduction", "clé API du LLM effacée");
+    Ok(st)
 }
 
 #[cfg(test)]
