@@ -3,6 +3,7 @@ import { act, fireEvent, render, screen } from '@testing-library/react';
 import App, { handleShortcut } from './App';
 import { FALLBACK_INFO, getAppInfo, isTauri } from '../shared/ipc';
 import { useApp } from './state/store';
+import { introVersion } from './shell/Intro';
 
 const initial = useApp.getState();
 
@@ -20,6 +21,9 @@ describe('App', () => {
     render(<App />);
     expect(screen.getByTestId('intro')).toBeInTheDocument();
     expect(screen.getByText('en français.')).toBeInTheDocument();
+    // The version of this build (package.json), not a hard-coded one.
+    expect(screen.getByText(`${introVersion(__APP_VERSION__)} — MMXXVI`)).toBeInTheDocument();
+    expect(introVersion('0.3.0')).toBe('V0.3');
   });
 
   it('enters and starts a session from the intro', () => {

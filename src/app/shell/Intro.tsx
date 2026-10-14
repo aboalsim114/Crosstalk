@@ -24,6 +24,11 @@ export function introStatus(
   return [cs2Running ? 'CS2 DÉTECTÉ' : 'CS2 NON LANCÉ', engine.value.toUpperCase(), `TRADUCTION ${translation.value.toUpperCase()}`];
 }
 
+/** "V0.3" from "0.3.0": the version of this build, never a hard-coded one. */
+export function introVersion(version: string): string {
+  return `V${version.split('.').slice(0, 2).join('.')}`;
+}
+
 export function Intro() {
   const target = useApp((s) => s.target);
   const entered = useApp((s) => s.entered);
@@ -43,7 +48,7 @@ export function Intro() {
     >
       <div className="flex justify-between" style={{ font: fnt(500, 10, 'mono'), letterSpacing: '.22em', color: '#6e6961' }}>
         <motion.span variants={reveal}>UN OUTIL EXTERNE · AUCUNE INJECTION · AUCUNE LECTURE MÉMOIRE</motion.span>
-        <motion.span variants={reveal}>V0.2 — MMXXVI</motion.span>
+        <motion.span variants={reveal}>{introVersion(__APP_VERSION__)} — MMXXVI</motion.span>
       </div>
       <div className="flex flex-col items-center gap-[18px] text-center">
         <motion.div variants={reveal} style={{ font: fnt(500, 10.5, 'mono'), letterSpacing: '.3em', color: '#ffa24a' }}>
