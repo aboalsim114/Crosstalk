@@ -266,6 +266,7 @@ Ces points changent le comportement. Conformément à la règle « pas de change
 | F11 | Le serveur GSI accepte les connexions une par une. Un client local lent le bloque. | `src-tauri/src/gsi/mod.rs:362-397` |
 | F12 | Le journal écrit sur disque sous un verrou global, y compris depuis les threads VAD et ASR. | `src-tauri/src/logs.rs:88-100` |
 | F13 | Une panique dans `Downloader::run` laisse `running = true` (aucun garde ne le remet à faux). En release, la panique termine le processus, donc l'effet est limité aux tests. | `src-tauri/src/downloads.rs:248,314` |
+| F14 | Le journal écrit toujours « ru→fr », « en→fr »… quelle que soit la langue de l'utilisateur (`{src}→fr` en dur). Le test de caractérisation `summarizes_the_real_status_types` fige ce comportement en français, sans le corriger. | `src-tauri/src/logs.rs:340` |
 
 ## 3. Sécurité CS2 (inchangée)
 

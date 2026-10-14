@@ -298,7 +298,7 @@ pub fn ensure(models_dir: &Path) -> &'static Decision {
         let model = probe_model(models_dir, accel.as_deref());
         let d = decide(
             &dir,
-            crate::updater::current_build(),
+            crate::version::current_build(),
             accel.as_deref(),
             model.as_deref(),
             run_probe,

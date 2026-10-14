@@ -31,11 +31,11 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
+use crosstalk_lib::cpu::process_cpu_time;
 use crosstalk_lib::speech::bench::{
     char_errors, combat_track, parse_langs, peak_db, read_wav, run_pipeline, word_errors,
     write_wav_i16, SegmentResult,
 };
-use crosstalk_lib::speech::cpu::process_cpu_time;
 use crosstalk_lib::speech::engine::{default_threads, logical_threads, Recognizer};
 use crosstalk_lib::speech::vad::VoiceDetector;
 use crosstalk_lib::speech::{
@@ -271,7 +271,7 @@ fn main() {
     }
     let dir = arg(&args, "--models-dir")
         .map(PathBuf::from)
-        .unwrap_or_else(models::models_dir);
+        .unwrap_or_else(crosstalk_lib::paths::models_dir);
     let threads = arg(&args, "--threads")
         .map(|t| {
             let n = t

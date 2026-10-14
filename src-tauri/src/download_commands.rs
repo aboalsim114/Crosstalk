@@ -5,7 +5,6 @@
 use std::sync::Arc;
 
 use crate::downloads::{DownloadEvents, DownloadStatus, Downloader, TranslationPlan};
-use crate::speech::models as whisper;
 
 pub const EVENT: &str = "models://download";
 
@@ -39,7 +38,7 @@ pub fn models_download_status(
     plan: Option<TranslationPlan>,
 ) -> DownloadStatus {
     let plan = translation.then(|| plan.unwrap_or_default());
-    d.status(&whisper::models_dir(), &model, plan.as_ref())
+    d.status(&crate::paths::models_dir(), &model, plan.as_ref())
 }
 
 /// Starts fetching the missing models (no-op if complete or already running).
@@ -50,7 +49,7 @@ pub fn models_download_start(
     translation: bool,
     plan: Option<TranslationPlan>,
 ) -> DownloadStatus {
-    let dir = whisper::models_dir();
+    let dir = crate::paths::models_dir();
     let plan = translation.then(|| plan.unwrap_or_default());
     d.start(dir.clone(), &model, plan.as_ref());
     d.status(&dir, &model, plan.as_ref())

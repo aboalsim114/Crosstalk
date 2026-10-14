@@ -45,7 +45,7 @@ fn main() {
             eprintln!("pas de modèle direct {lang} → {to}");
             std::process::exit(2)
         });
-        models::pair_dir(&crosstalk_lib::speech::models::models_dir(), pair)
+        models::pair_dir(&crosstalk_lib::paths::models_dir(), pair)
     });
     let repeat: usize = opt("--repeat")
         .and_then(|v| v.parse().ok())

@@ -2,10 +2,12 @@
 //! no network, nothing to pay.
 
 pub mod callouts;
+pub mod engine;
 pub mod glossary;
 pub mod marian;
 pub mod models;
 mod network;
+pub mod opus;
 mod pth;
 pub mod service;
 
@@ -35,8 +37,8 @@ impl service::TranslationEvents for TauriEvents {
 pub fn start(app: &AppHandle) -> Arc<TranslationService> {
     TranslationService::start(
         Arc::new(TauriEvents(app.clone())),
-        Arc::new(service::OpusLoader),
-        crate::speech::models::models_dir(),
+        Arc::new(opus::OpusLoader),
+        crate::paths::models_dir(),
         TranslationConfig::default(),
     )
 }
@@ -49,21 +51,6 @@ pub fn translation_status(t: State<'_, Arc<TranslationService>>) -> TranslationS
 }
 
 #[tauri::command]
-pub fn translation_configure(
-    app: AppHandle,
-    t: State<'_, Arc<TranslationService>>,
-    config: TranslationConfig,
-) -> TranslationStatus {
-    use tauri::Manager;
-    let st = t.configure(config);
-    // "Répondre" writes from the user's language into the players'.
-    if let Some(r) = app.try_state::<Arc<crate::reply::ReplyService>>() {
-        r.set_languages(&st.config.target, &st.config.sources);
-    }
-    st
-}
-
-#[tauri::command]
 pub fn translation_rescan(t: State<'_, Arc<TranslationService>>) -> TranslationStatus {
     t.rescan()
 }
@@ -72,7 +59,7 @@ pub fn translation_rescan(t: State<'_, Arc<TranslationService>>) -> TranslationS
 #[tauri::command]
 pub fn translation_models(t: State<'_, Arc<TranslationService>>) -> Vec<models::PairInfo> {
     let c = t.status().config;
-    models::list(&crate::speech::models::models_dir(), &c.target, &c.sources)
+    models::list(&crate::paths::models_dir(), &c.target, &c.sources)
 }
 
 /// Manual test from the Audio page: blocks a worker thread, not the UI.

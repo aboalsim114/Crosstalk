@@ -1,9 +1,8 @@
-//! Model catalog and on-disk location.
+//! Whisper model catalog and the files expected on disk.
 //!
 //! Models are not bundled with the installer (75 MB to 1.5 GB). They live in
-//! `%LOCALAPPDATA%\Crosstalk\models` (or `CROSSTALK_MODELS_DIR`). In-app
-//! download with checksum verification is part of #15; until then the files
-//! are fetched with `scripts/download-models.ps1`.
+//! `crate::paths::models_dir()` and are downloaded by the installer or the app
+//! (`crate::downloads`), with size and checksum verification.
 
 use std::path::{Path, PathBuf};
 
@@ -80,21 +79,6 @@ pub fn url(spec: &ModelSpec) -> String {
         "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/{}",
         spec.file
     )
-}
-
-/// Where models are looked up.
-pub fn models_dir() -> PathBuf {
-    if let Some(dir) = std::env::var_os("CROSSTALK_MODELS_DIR") {
-        return PathBuf::from(dir);
-    }
-    #[cfg(windows)]
-    let base = std::env::var_os("LOCALAPPDATA").map(|d| PathBuf::from(d).join("Crosstalk"));
-    #[cfg(not(windows))]
-    let base = std::env::var_os("XDG_DATA_HOME")
-        .map(PathBuf::from)
-        .or_else(|| std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".local/share")))
-        .map(|d| d.join("crosstalk"));
-    base.unwrap_or_else(|| PathBuf::from(".")).join("models")
 }
 
 /// A model file is usable if it exists with its exact published size
@@ -184,12 +168,5 @@ mod tests {
         assert!(!l.iter().find(|m| m.id == "base").unwrap().installed);
         assert!(model_path(&d, "unknown").is_none());
         let _ = std::fs::remove_dir_all(&d);
-    }
-
-    #[test]
-    fn env_override_wins() {
-        // Read-only check of the default layout (env vars are process-global).
-        let d = models_dir();
-        assert!(d.ends_with("models"));
     }
 }

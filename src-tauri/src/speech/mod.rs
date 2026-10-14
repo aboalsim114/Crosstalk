@@ -1,12 +1,11 @@
-//! Speech recognition of the captured CS2 audio (Russian, English).
+//! Speech recognition of the captured CS2 audio, in the players' languages.
 //!
 //! 16 kHz conditioning → Silero VAD → segmentation with shot/explosion guards
 //! → whisper.cpp → hallucination filter → `speech://transcript` events. All
-//! local, on the CPU, below normal priority. Each accepted transcript is then
-//! translated into French by the translation service (`translation://result`).
+//! local, on the CPU, below normal priority. `crate::wiring` then hands each
+//! accepted transcript to the translation service (`translation://result`).
 
 pub mod bench;
-pub mod cpu;
 pub mod dsp;
 pub mod engine;
 pub mod filter;
@@ -20,9 +19,8 @@ pub mod vad;
 
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use std::time::Duration;
 
-use tauri::{AppHandle, Emitter, Manager, State};
+use tauri::State;
 
 pub use service::{EngineLoader, SpeechEvents, SpeechService};
 pub use types::*;
@@ -162,71 +160,6 @@ impl EngineLoader for WhisperLoader {
     fn backend(&self) -> String {
         "CPU · AVX2".into()
     }
-}
-
-/// Forwards speech events to every window.
-pub struct TauriEvents(pub AppHandle);
-
-impl SpeechEvents for TauriEvents {
-    fn status(&self, status: &SpeechStatus) {
-        let _ = self.0.emit(STATUS_EVENT, status);
-    }
-    fn transcript(&self, transcript: &Transcript) {
-        // Who was talking, read on CS2's voice indicator (opt-in).
-        let named;
-        let transcript = match self
-            .0
-            .try_state::<Arc<crate::speaker::SpeakerService>>()
-            .and_then(|s| {
-                s.speaker_for(
-                    Duration::from_millis(transcript.latency_ms as u64),
-                    Duration::from_millis(transcript.audio_ms as u64),
-                )
-            }) {
-            Some(name) => {
-                named = Transcript {
-                    speaker: Some(name),
-                    ..transcript.clone()
-                };
-                &named
-            }
-            None => transcript,
-        };
-        let _ = self.0.emit(TRANSCRIPT_EVENT, transcript);
-        if let Some(t) = self
-            .0
-            .try_state::<Arc<crate::translation::TranslationService>>()
-        {
-            // Live lines get a quick translation, final ones the careful one.
-            if transcript.partial {
-                t.submit_partial(transcript.id, transcript.lang.code(), &transcript.text);
-            } else {
-                t.submit(transcript.id, transcript.lang.code(), &transcript.text);
-            }
-        }
-    }
-    fn activity(&self, activity: VoiceActivity) {
-        if let Some(s) = self.0.try_state::<Arc<crate::speaker::SpeakerService>>() {
-            s.voice(activity.speaking);
-        }
-        let _ = self.0.emit(ACTIVITY_EVENT, activity);
-    }
-    fn stats(&self, stats: &SpeechStats) {
-        let _ = self.0.emit(STATS_EVENT, stats);
-    }
-    fn retract(&self, id: u64) {
-        let _ = self.0.emit(RETRACT_EVENT, id);
-    }
-}
-
-/// Starts the speech service with the whisper.cpp models.
-pub fn start(app: &AppHandle) -> Arc<SpeechService> {
-    SpeechService::start(
-        Arc::new(TauriEvents(app.clone())),
-        Arc::new(WhisperLoader),
-        models::models_dir(),
-        SpeechConfig::default(),
-    )
 }
 
 // ---------- commands ----------

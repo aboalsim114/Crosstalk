@@ -519,7 +519,7 @@ pub fn report_text(rows: &[DiagRow], lines: &[Line], models_dir: &Path, now: u64
     add(format!(
         "Crosstalk {} · build {} · commit {}",
         env!("CARGO_PKG_VERSION"),
-        crate::updater::current_build(),
+        crate::version::current_build(),
         env!("CROSSTALK_COMMIT")
     ));
     add(format!(
@@ -570,7 +570,7 @@ pub fn issue_url(report: Option<&str>) -> String {
     let body = format!(
         "**Ce qui se passe :**\n\n\n**Ce que j’attendais :**\n\n\n**Étapes pour reproduire :**\n1. \n\n---\nCrosstalk {} · build {} · commit {} · Windows {}\n{}",
         env!("CARGO_PKG_VERSION"),
-        crate::updater::current_build(),
+        crate::version::current_build(),
         env!("CROSSTALK_COMMIT"),
         crate::audio::platform::windows_build().map(|b| b.to_string()).unwrap_or_else(|| "?".into()),
         match report {
@@ -632,7 +632,7 @@ pub fn diag_report(rows: Vec<DiagRow>) -> Result<String, String> {
     let text = report_text(
         &rows,
         &global().recent(200),
-        &crate::speech::models::models_dir(),
+        &crate::paths::models_dir(),
         now,
     );
     let path = crate::history::documents_path("Crosstalk-diagnostic", "txt", now);
@@ -715,6 +715,69 @@ mod tests {
         let log = Logger::new(None);
         log.log("INFO", "t", &long);
         assert!(log.recent(1)[0].message.ends_with('…'));
+    }
+
+    /// The journal reads the statuses by their serialised field names: built
+    /// from the real types, so renaming a field breaks this test, not the
+    /// journal silently (docs/architecture/audit.md, A18).
+    #[test]
+    fn summarizes_the_real_status_types() {
+        use crate::audio::CaptureStatus;
+        use crate::speech::{EngineState, SpeechConfig, SpeechStatus};
+        use crate::translation::service::{PairState, PairStatus};
+        use crate::translation::{TranslationConfig, TranslationStatus};
+
+        let speech = SpeechStatus {
+            state: EngineState::Ready,
+            config: SpeechConfig {
+                model: "small".into(),
+                ..SpeechConfig::default()
+            },
+            model_path: None,
+            vad_ready: false,
+            models_dir: "models".into(),
+            error: Some("lent".into()),
+            load_ms: Some(900),
+            backend: "CPU · AVX2".into(),
+            threads: 4,
+        };
+        let line = &summarize("speech://status", &serde_json::to_value(&speech).unwrap())[0];
+        assert_eq!(
+            (line.1, line.3.as_str()),
+            (
+                "INFO",
+                "whisper-small : ready · CPU · AVX2 · 4 thread(s) · VAD absente · chargé en 900 ms · lent"
+            )
+        );
+
+        let translation = TranslationStatus {
+            config: TranslationConfig::default(),
+            pairs: vec![PairStatus {
+                source: "ru".into(),
+                target: "fr".into(),
+                repo: "Helsinki-NLP/opus-mt-ru-fr".into(),
+                state: PairState::Error,
+                error: Some("illisible".into()),
+                load_ms: Some(300),
+            }],
+            models_dir: "models".into(),
+            queued: 0,
+        };
+        let line = &summarize(
+            "translation://status",
+            &serde_json::to_value(&translation).unwrap(),
+        )[0];
+        assert_eq!(
+            (line.0.as_str(), line.1, line.3.as_str()),
+            (
+                "translation://status/ru",
+                "WARN",
+                "ru→fr : error · chargé en 300 ms · illisible"
+            )
+        );
+
+        let idle = serde_json::to_value(CaptureStatus::idle()).unwrap();
+        assert_eq!(summarize("audio://status", &idle)[0].3, "capture à l’arrêt");
     }
 
     #[test]
