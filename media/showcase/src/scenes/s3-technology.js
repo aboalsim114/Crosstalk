@@ -206,7 +206,7 @@ export default function technology(ctx) {
         const k5 = easeInOut(range(t, 19.9 + d * 0.5, 20.6 + d * 0.5));
 
         // Cloud (the callouts of scene 2, dissolved).
-        const th = s0 * Math.PI * 2, ph = Math.acos(2 * s1 - 1), r = 1.2 + s2 * 3.2;
+        const th = s0 * Math.PI * 2, ph = Math.acos(2 * s1 - 1), r = 0.7 + s2 * 2.4;
         let px = cx + 0.4 + r * Math.sin(ph) * Math.cos(th) * 1.4;
         let py = r * Math.cos(ph) * 0.7;
         let pz = -1.2 + r * Math.sin(ph) * Math.sin(th) * 0.8;
@@ -249,7 +249,7 @@ export default function technology(ctx) {
         tmp.lerp(ivory.clone().multiplyScalar(0.85), k3);
         tmp.lerp(emberHi.clone().lerp(white, 0.15 + s1 * 0.3), k4);
         col[j * 3] = tmp.r; col[j * 3 + 1] = tmp.g; col[j * 3 + 2] = tmp.b;
-        let a = lerp(0.35, isNoise ? 0.75 : 0.85, k1);
+        let a = lerp(0.16, isNoise ? 0.75 : 0.85, k1);
         a *= 1 - fall * 0.97 * (1 - k3);
         a = lerp(a, 0.62, k3);
         a *= 1 - smooth(range(t, 20.35, 20.95));

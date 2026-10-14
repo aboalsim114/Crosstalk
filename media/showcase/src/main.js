@@ -191,7 +191,7 @@ function render(t) {
 
   const f = Math.round(t * FPS);
   gctx.putImageData(grainFrames[f % grainFrames.length], 0, 0);
-  const black = 1 - smooth(range(t, 0, 0.5)) * (1 - smooth(range(t, DURATION - 1.1, DURATION - 0.05)));
+  const black = 1 - smooth(range(t, 0, 0.5)) * (1 - smooth(range(t, DURATION - 0.9, DURATION - 0.05)));
   fade.style.opacity = black.toFixed(3);
 }
 

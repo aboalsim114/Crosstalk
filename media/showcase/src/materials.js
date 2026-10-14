@@ -31,7 +31,7 @@ export function pointsMaterial({ additive = true } = {}) {
         vec4 mv = modelViewMatrix * vec4(p, 1.0);
         float d = -mv.z;
         float blur = min(uDof * abs(d - uFocus) / max(uFocus, 0.001), 0.9);
-        gl_PointSize = max(1.0, aSize * uScale / d * (1.0 + blur * 2.5));
+        gl_PointSize = clamp(aSize * uScale / d * (1.0 + blur * 2.5), 1.0, 22.0);
         vColor = aColor;
         vAlpha = aAlpha / (1.0 + blur * blur * 5.0);
         vSoft = clamp(0.35 + blur, 0.35, 1.0);

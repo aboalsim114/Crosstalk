@@ -192,8 +192,8 @@ pad(pads, ['D2', 'A2', 'F3', 'C4', 'E4'], 22.2, 28.2, gain=0.05, bright=0.75, a=
 pad(pads, ['Bb1', 'F2', 'D3', 'A3', 'C4'], 27.8, 33.4, gain=0.048, bright=0.7)
 pad(pads, ['G2', 'D3', 'Bb3', 'A3'], 33.0, 37.4, gain=0.034, bright=0.4, a=0.8)
 pad(pads, ['F2', 'C3', 'A3', 'G4'], 37.0, 42.4, gain=0.036, bright=0.55)
-pad(pads, ['A1', 'E2', 'D3', 'G3', 'B3'], 42.0, 46.9, gain=0.05, bright=0.6, a=1.0, r=0.8)
-pad(pads, ['D2', 'A2', 'F#3', 'A3', 'E4'], 46.7, 50.0, gain=0.06, bright=0.7, a=0.15, r=3.0)
+pad(pads, ['A1', 'E2', 'D3', 'G3', 'B3'], 42.0, 46.6, gain=0.05, bright=0.6, a=1.0, r=0.8)
+pad(pads, ['D2', 'A2', 'F#3', 'A3', 'E4'], 46.4, 50.0, gain=0.06, bright=0.7, a=0.15, r=3.0)
 
 # ---- Rhythm: 120 BPM through the pipeline, fuller on the app reveal ---------------
 BEAT = 0.5
@@ -261,10 +261,10 @@ fx.add(38.6, chime(hz('F#6'), 2.0), pan=0.5, gain=0.035)
 fx.add(39.6, riser(2.4), gain=0.06)
 for i, t in enumerate((42.1, 42.18, 42.35, 42.4)):
     fx.add(t, whoosh(1.0, 300, 4500, 0.5), pan=(-0.7, -0.4, 0.4, 0.7)[i], gain=0.04)
-fx.add(44.6, riser(2.1), gain=0.11)
-hits.add(46.7, boom(4.5), gain=0.55)
+fx.add(44.3, riser(2.1), gain=0.11)
+hits.add(46.4, boom(4.5), gain=0.55)
 for f, g, p in (('D5', 0.08, -0.3), ('F#5', 0.05, 0.25), ('A5', 0.05, 0.4), ('E6', 0.03, -0.1)):
-    hits.add(46.73, chime(hz(f), 4.5), pan=p, gain=g)
+    hits.add(46.43, chime(hz(f), 4.5), pan=p, gain=g)
 
 # ---- Mix -------------------------------------------------------------------------
 pl, pr = reverb(pads.L, pads.R, 3.5, 0.35)

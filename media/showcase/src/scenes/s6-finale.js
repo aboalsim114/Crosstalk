@@ -78,8 +78,8 @@ export default function finale(ctx) {
       });
 
       wave.group.visible = t > 45.5;
-      const grow = easeOut(range(t, 45.6, 46.4));
-      const flat = easeInOut(range(t, 46.2, 46.95));
+      const grow = easeOut(range(t, 45.4, 46.2));
+      const flat = easeInOut(range(t, 46.0, 46.75));
       wave.update({
         t: t * 1.3,
         amp: lerp(0.1, 0.9, grow) * (1 - flat * 0.985),
@@ -89,14 +89,14 @@ export default function finale(ctx) {
         y: lerp(-0.05, -0.08, flat),
         envW: lerp(2.6, 6, flat),
         fadeTail: flat * 0.85,
-        opacity: smooth(range(t, 45.5, 46.0)),
+        opacity: smooth(range(t, 45.3, 45.8)),
       });
 
-      reveal(logoChars, t, 46.75, 0.055, 1.1, { y: 26, blur: 14 });
-      reveal(tagWords, t, 47.45, 0.11, 1.0, { y: 14, blur: 8 });
-      reveal(availChars, t, 48.05, 0.022, 0.7, { y: 8, blur: 5 });
-      show(os, smooth(range(t, 48.4, 48.9)));
-      show(url, smooth(range(t, 48.5, 49.0)));
+      reveal(logoChars, t, 46.45, 0.055, 1.1, { y: 26, blur: 14 });
+      reveal(tagWords, t, 47.1, 0.11, 1.0, { y: 14, blur: 8 });
+      reveal(availChars, t, 47.6, 0.022, 0.7, { y: 8, blur: 5 });
+      show(os, smooth(range(t, 47.9, 48.4)));
+      show(url, smooth(range(t, 48.0, 48.5)));
     },
   };
 }
