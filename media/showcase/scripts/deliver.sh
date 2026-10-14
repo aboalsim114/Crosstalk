@@ -10,7 +10,7 @@ test -f out/score.wav || python3 scripts/score.py
 
 ffmpeg -y -loglevel error -i out/video.mp4 -i out/score.wav \
   -map 0:v -map 1:a -vf "hqdn3d=3:2:8:8" \
-  -c:v libx264 -preset slow -crf 22 -maxrate 6M -bufsize 12M -profile:v high -level 4.1 -pix_fmt yuv420p \
+  -c:v libx264 -preset slow -crf 23 -maxrate 5M -bufsize 10M -profile:v high -level 4.1 -pix_fmt yuv420p \
   -x264-params "aq-mode=3:aq-strength=0.9" -tune film \
   -colorspace bt709 -color_primaries bt709 -color_trc bt709 \
   -c:a aac -b:a 160k -ar 48000 -movflags +faststart -shortest \

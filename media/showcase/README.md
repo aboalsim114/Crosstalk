@@ -3,7 +3,16 @@
 Film produit de 50 s (1920 × 1080, 30 i/s, H.264 + AAC) affiché en tête du README du dépôt. Tout est généré par du code : scènes Three.js, typographie HTML, bande-son synthétisée. Aucun service payant, aucun asset de Counter-Strike 2.
 
 - Storyboard et direction artistique : [`STORYBOARD.md`](STORYBOARD.md)
-- Vidéo, GIF et couverture publiés : branche [`media`](https://github.com/aboalsim114/Crosstalk/tree/media/showcase) (hors de l'historique de `develop`)
+- Vidéo, GIF et couverture publiés : branche [`media`](https://github.com/aboalsim114/Crosstalk/tree/media/showcase), hors de l'historique de `develop` (une branche à commit unique, comme `downloads`).
+
+## Dans le README
+
+GitHub n'affiche pas de lecteur pour un MP4 placé dans un dépôt : sa page de fichier propose seulement « View raw », et le lien brut télécharge le fichier. Le README montre donc la couverture (`docs/assets/crosstalk-showcase-cover.jpg`, dans le dépôt) et le GIF (branche `media`), tous deux cliquables vers la vidéo servie par jsDelivr, qui la lit dans le navigateur :
+
+- lecture : `https://cdn.jsdelivr.net/gh/aboalsim114/Crosstalk@media/showcase/crosstalk-showcase.mp4` (jsDelivr sert les fichiers GitHub jusqu'à 20 Mo : gardez le MP4 en dessous) ;
+- téléchargement : `https://github.com/aboalsim114/Crosstalk/raw/media/showcase/crosstalk-showcase.mp4`.
+
+Pour un lecteur intégré directement dans le README, glissez le MP4 dans l'éditeur web de GitHub (édition du README) : GitHub l'héberge et insère un lien `user-attachments` qui s'affiche comme une vidéo.
 
 ## Contenu du dossier
 
@@ -36,7 +45,7 @@ for f in 02-dashboard 03-overlay 04-audio 05-languages; do ffmpeg -y -i public/s
 
 # 2. Bande-son, film, couverture, livrables
 npm run score
-npm run render                       # ≈ 30 min sur 4 cœurs sans GPU (SwiftShader)
+npm run render                       # ≈ 50 min sur 4 cœurs sans GPU (SwiftShader)
 node scripts/render.mjs --cover
 npm run deliver                      # → out/crosstalk-showcase.mp4 / .gif / -cover.jpg
 

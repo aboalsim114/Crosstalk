@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Publishes the showcase deliverables on the `media` branch, whose links (README.md)
 # never change:
-#   https://github.com/aboalsim114/Crosstalk/blob/media/showcase/crosstalk-showcase.mp4  (GitHub player)
-#   https://github.com/aboalsim114/Crosstalk/raw/media/showcase/crosstalk-showcase.mp4   (file)
+#   https://cdn.jsdelivr.net/gh/aboalsim114/Crosstalk@media/showcase/crosstalk-showcase.mp4  (plays in the browser; jsDelivr serves GitHub files up to 20 MB)
+#   https://github.com/aboalsim114/Crosstalk/raw/media/showcase/crosstalk-showcase.mp4   (download)
 #   https://github.com/aboalsim114/Crosstalk/raw/media/showcase/crosstalk-showcase.gif
 #
 # Like `downloads`, the branch holds a single commit replaced at every publish: the
@@ -19,7 +19,8 @@ for f in crosstalk-showcase.mp4 crosstalk-showcase.gif crosstalk-showcase-cover.
 done
 
 tmp=$(mktemp -d)
-trap 'git -C "$root" worktree remove --force "$tmp" >/dev/null 2>&1 || true; rm -rf "$tmp"' EXIT
+trap 'git -C "$root" worktree remove --force "$tmp" >/dev/null 2>&1 || true; rm -rf "$tmp"; git -C "$root" branch -D "media-$commit" >/dev/null 2>&1 || true' EXIT
+git -C "$root" branch -D "media-$commit" >/dev/null 2>&1 || true
 git -C "$root" worktree add --detach "$tmp" >/dev/null 2>&1
 cd "$tmp"
 git checkout -q --orphan "media-$commit"
@@ -43,6 +44,9 @@ dur=$(ffprobe -v error -show_entries format=duration -of default=nw=1:nk=1 showc
 git add -A
 git commit -qm "Médias de présentation ($commit)"
 git push -qf origin "HEAD:refs/heads/$branch"
-cd "$root"
-git branch -D "media-$commit" >/dev/null 2>&1 || true
-echo "publié : https://github.com/$repo/blob/$branch/showcase/crosstalk-showcase.mp4"
+size=$(stat -c %s "$here/out/crosstalk-showcase.mp4")
+[ "$size" -lt 20000000 ] || echo "attention : MP4 de $size octets, au-delà de la limite de 20 Mo de jsDelivr" >&2
+# Ask jsDelivr to refresh its copy of the branch (best effort).
+curl -fsS -o /dev/null "https://purge.jsdelivr.net/gh/$repo@$branch/showcase/crosstalk-showcase.mp4" || true
+curl -fsS -o /dev/null "https://purge.jsdelivr.net/gh/$repo@$branch/showcase/crosstalk-showcase.gif" || true
+echo "publié : https://cdn.jsdelivr.net/gh/$repo@$branch/showcase/crosstalk-showcase.mp4"
