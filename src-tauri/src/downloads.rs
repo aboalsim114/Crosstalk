@@ -183,6 +183,26 @@ impl Fetcher for HttpFetcher {
     }
 }
 
+/// Clears `running` when a download ends, normally or by a panic (which
+/// is then reported as an error).
+struct RunningGuard<'a>(&'a Downloader);
+
+impl Drop for RunningGuard<'_> {
+    fn drop(&mut self) {
+        if std::thread::panicking() {
+            let st = {
+                let mut s = self.0.status.lock().unwrap_or_else(|e| e.into_inner());
+                s.state = DownloadState::Error;
+                s.current = None;
+                s.error = Some("téléchargement interrompu (erreur interne)".into());
+                s.clone()
+            };
+            self.0.events.progress(&st);
+        }
+        self.0.running.store(false, Ordering::SeqCst);
+    }
+}
+
 pub struct Downloader {
     fetcher: Arc<dyn Fetcher>,
     events: Arc<dyn DownloadEvents>,
@@ -250,10 +270,13 @@ impl Downloader {
         }
         self.cancel.store(false, Ordering::SeqCst);
         let me = self.clone();
-        std::thread::Builder::new()
+        let spawned = std::thread::Builder::new()
             .name("models-download".into())
-            .spawn(move || me.run(files))
-            .expect("download thread");
+            .spawn(move || me.run(files));
+        if spawned.is_err() {
+            self.running.store(false, Ordering::SeqCst);
+            return false;
+        }
         true
     }
 
@@ -271,6 +294,9 @@ impl Downloader {
     }
 
     fn run(&self, files: Vec<FileSpec>) {
+        // Even if this thread panics, a later download can start and the
+        // interface does not stay on "Téléchargement…".
+        let _running = RunningGuard(self);
         let total: u64 = files.iter().map(|f| f.bytes).sum();
         let already: u64 = files.iter().map(partial_len).sum();
         self.publish(|s| {
@@ -498,6 +524,37 @@ mod tests {
         assert_eq!(end.state, DownloadState::Done);
         assert_eq!(std::fs::read(&f.path).unwrap(), body);
         assert!(!part_path(&f.path).exists());
+    }
+
+    /// Panics on the first file it serves.
+    struct Boom;
+    impl Fetcher for Boom {
+        fn fetch(
+            &self,
+            _: &str,
+            _: u64,
+            _: &mut dyn FnMut(&[u8]) -> Result<(), String>,
+        ) -> Result<(), String> {
+            panic!("bug in a fetcher");
+        }
+    }
+
+    #[test]
+    fn a_panic_during_a_download_does_not_block_the_next_one() {
+        let d = dir("panic");
+        let f = spec(&d, "p.bin", b"model", None);
+        let (tx, rx) = channel();
+        let dl = Downloader::new(Arc::new(Boom), Arc::new(Events(Mutex::new(tx))));
+        dl.running.store(true, Ordering::SeqCst);
+        let caught = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| dl.run(vec![f])));
+        assert!(caught.is_err());
+        assert!(
+            !dl.running.load(Ordering::SeqCst),
+            "a new download can start"
+        );
+        let end = wait_end(&rx);
+        assert_eq!(end.state, DownloadState::Error);
+        assert_eq!(end.current, None);
     }
 
     #[test]
