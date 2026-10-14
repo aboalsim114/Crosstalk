@@ -36,7 +36,7 @@ export function SetupBanner() {
           <div data-testid="setup-progress" style={{ width: `${v.percent}%`, height: '100%', background: color, transition: 'width .4s' }} />
         </div>
       )}
-      <span style={{ font: fnt(400, 10.5), color: '#5a5650' }}>Une seule fois · Hugging Face · fichiers vérifiés (taille, SHA-1) · ensuite tout fonctionne hors ligne</span>
+      <span style={{ font: fnt(400, 10.5), color: '#5a5650' }}>Une seule fois · Hugging Face · fichiers vérifiés (taille, SHA-1 / SHA-256) · ensuite tout fonctionne hors ligne</span>
     </div>
   );
 }

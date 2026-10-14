@@ -26,11 +26,17 @@ mod opus_models;
 #[allow(dead_code)]
 #[path = "../../src-tauri/src/speech/models.rs"]
 mod whisper_models;
+#[allow(dead_code)]
+#[path = "../../src-tauri/src/translation/llm/catalog.rs"]
+mod llm_catalog;
 mod speech {
     pub(crate) use crate::whisper_models as models;
 }
 mod translation {
     pub(crate) use crate::opus_models as models;
+    pub(crate) mod llm {
+        pub(crate) use crate::llm_catalog as catalog;
+    }
 }
 
 mod install;

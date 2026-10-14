@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { isTauri, translation as nativeTranslation, type Translation } from '../backend';
 import { Radio, Seg, Slider, Toggle, ToggleRow, fnt } from '../components/atoms';
 import { LevelMeter } from '../components/LevelMeter';
+import { LlmCard } from './LlmCard';
 import { SpeakerCard } from './SpeakerCard';
 import { captureSummary, cs2Summary, isCapturing, refreshDevices, runCaptureTest, testMessage, useAudio } from '../state/audio';
 import { MODELS, type ModelId } from '../state/data';
@@ -350,12 +351,14 @@ function ModelCard() {
   );
 }
 
+const ENGINE_NAME: Record<string, string> = { translategemma: 'TranslateGemma', 'opus-mt': 'Opus-MT', lexique: 'lexique CS', cache: 'cache' };
+
 const TEST_SAMPLES: Record<'ru' | 'en', string> = {
   ru: 'Двое идут на B, у них AWP.',
   en: 'Two players on B, they have an AWP.',
 };
 
-/** Local translation: Opus-MT on this PC, no API key, nothing sent online. */
+/** Local translation on this PC (TranslateGemma, Opus-MT as fallback): switch, test. */
 export function TranslationCard() {
   const on = useApp((s) => s.tg.translate);
   const toggle = useApp((s) => s.toggle);
@@ -378,8 +381,8 @@ export function TranslationCard() {
   return (
     <div className="glass flex flex-col gap-3 p-5" data-testid="translation-card">
       <div className="flex items-center justify-between">
-        <span className="lbl">TRADUCTION LOCALE · OPUS-MT</span>
-        <span style={{ font: fnt(500, 9.5, 'mono'), letterSpacing: '.12em', color: '#6e6961' }}>CPU · SANS CLÉ API</span>
+        <span className="lbl">TRADUCTION LOCALE · TEST & SECOURS OPUS-MT</span>
+        <span style={{ font: fnt(500, 9.5, 'mono'), letterSpacing: '.12em', color: '#6e6961' }}>SANS CLÉ API</span>
       </div>
       <div style={{ font: fnt(400, 11, 'sans', 1.5), color: '#8f8a83' }}>
         Les voix russes et anglaises sont traduites en français sur ce PC. Aucune clé API, aucun abonnement, rien n’est envoyé en ligne.
@@ -425,7 +428,7 @@ export function TranslationCard() {
             </div>
             {result && (
               <div role="status" data-testid="translation-result" style={{ font: fnt(400, 12, 'sans', 1.5), color: result.translated ? '#ece6dc' : '#ff8a7a' }}>
-                {result.translated ? `« ${result.translated} » · ${formatMs(result.ms)}${result.cached ? ' · cache' : ''}` : `Non traduit : ${result.error}`}
+                {result.translated ? `« ${result.translated} » · ${formatMs(result.ms)}${result.cached ? ' · cache' : ''}${result.engine ? ` · ${ENGINE_NAME[result.engine] ?? result.engine}` : ''}` : `Non traduit : ${result.error}`}
               </div>
             )}
           </div>
@@ -438,7 +441,7 @@ export function TranslationCard() {
             </span>
           </div>
           <div style={{ font: fnt(400, 10.5, 'sans', 1.5), color: '#5a5650' }}>
-            Modèles téléchargés automatiquement au premier lancement (environ 620 Mo). Helsinki-NLP Opus-MT, licence Apache-2.0.
+            Opus-MT (Helsinki-NLP, licence Apache-2.0, environ 620 Mo) reste installé comme solution de secours et pour les traductions provisoires sur le processeur.
           </div>
         </>
       ) : (
@@ -458,6 +461,7 @@ export function AudioPage() {
       </div>
       <div className="flex flex-col gap-4">
         <ModelCard />
+        {isTauri && <LlmCard />}
         <TranslationCard />
       </div>
     </div>

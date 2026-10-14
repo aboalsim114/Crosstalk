@@ -108,6 +108,7 @@ pub fn run() {
             translation::translation_rescan,
             translation::translation_models,
             translation::translation_test,
+            translation::translation_llm_verify,
             download_commands::models_download_status,
             download_commands::models_download_start,
             download_commands::models_download_cancel,

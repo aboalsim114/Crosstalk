@@ -14,7 +14,7 @@ const LOCAL_KEY = 'crosstalk.settings';
 
 type Persisted = Pick<
   AppState,
-  'mode' | 'fmt' | 'corner' | 'opacity' | 'textSize' | 'duration' | 'maxBlocks' | 'overlayOn' | 'tg' | 'chatPath' | 'ownName' | 'capture' | 'vad' | 'model' | 'accel' | 'src' | 'stream' | 'speaker' | 'voiceFocus' | 'uiLang'
+  'mode' | 'fmt' | 'corner' | 'opacity' | 'textSize' | 'duration' | 'maxBlocks' | 'overlayOn' | 'tg' | 'chatPath' | 'ownName' | 'capture' | 'vad' | 'model' | 'accel' | 'src' | 'stream' | 'speaker' | 'voiceFocus' | 'uiLang' | 'trEngine' | 'llmBackend'
 >;
 
 const oneOf =
@@ -46,6 +46,8 @@ const CHECKS: { [K in keyof Persisted]: (v: unknown) => boolean } = {
   speaker: (v) => typeof v === 'object' && v !== null,
   voiceFocus: isBool,
   uiLang: isUiLang,
+  trEngine: oneOf('auto', 'translategemma', 'opus'),
+  llmBackend: oneOf('auto', 'cpu', 'gpu'),
 };
 
 export function snapshot(s: AppState, deviceId: string | null) {

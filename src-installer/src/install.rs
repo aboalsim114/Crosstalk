@@ -2,11 +2,14 @@
 //!
 //! 0. PRÉPARATION   (0–12 %)  free space, Crosstalk not running.
 //! 1. EXTRACTION    (12–62 %) application files into a staging folder, then
-//!    the models (Silero VAD, Whisper base, Opus-MT ru/en → fr) downloaded into
-//!    %LOCALAPPDATA%\Crosstalk\models, weighted by their size.
+//!    the models (Silero VAD, Whisper base/small, TranslateGemma 4B, Opus-MT
+//!    as fallback) downloaded into %LOCALAPPDATA%\Crosstalk\models, weighted
+//!    by their size; TranslateGemma is checked by SHA-256.
 //! 2. CONFIGURATION (62–88 %) staged files moved into place, Crosstalk
 //!    registered for the user (HKCU\Software\Crosstalk).
-//! 3. FINALISATION  (88–100 %) Start menu (and desktop) shortcuts.
+//! 3. FINALISATION  (88–100 %) Start menu (and desktop) shortcuts, then
+//!    TranslateGemma loaded once by the installed engine (`crosstalk-llm
+//!    --check`): a failure is reported, not fatal (Opus-MT takes over).
 //!
 //! Cancelling during phases 0–1 removes the staging folder: an installed
 //! version stays intact and downloaded models are kept (the next attempt
@@ -21,6 +24,7 @@ use std::sync::{mpsc, Arc, Mutex};
 use serde::Serialize;
 
 use crate::downloads::{self, DownloadEvents, DownloadState, DownloadStatus, Downloader, Fetcher};
+use crate::translation::llm::catalog as llm;
 
 /// One embedded application file, deflated (see build.rs).
 pub struct Entry {
@@ -30,6 +34,7 @@ pub struct Entry {
 }
 
 pub const APP_EXE: &str = "crosstalk.exe";
+pub const LLM_EXE: &str = "crosstalk-llm.exe";
 /// Whisper models installed: every one the app runs on the CPU in this
 /// version (base: fast, small: more precise). Medium and large-v3-turbo, too
 /// slow without a GPU, can still be fetched from the app.
@@ -46,6 +51,9 @@ pub struct Progress {
     pub done: bool,
     pub error: Option<String>,
     pub cancelled: bool,
+    /// Installed, but something to know (TranslateGemma could not load).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub warning: Option<String>,
 }
 
 impl Progress {
@@ -57,6 +65,7 @@ impl Progress {
             done: false,
             error: None,
             cancelled: false,
+            warning: None,
         }
     }
 }
@@ -85,6 +94,51 @@ pub trait Platform: Send + Sync {
     fn register(&self, dir: &Path, version: &str) -> Result<(), String>;
     /// Start menu shortcut, and the desktop one when asked (removed otherwise).
     fn shortcuts(&self, exe: &Path, desktop: bool) -> Result<(), String>;
+    /// Loads the translation model once with the installed engine, without
+    /// a window; returns where it runs ("cpu", "vulkan").
+    fn check_llm(&self, exe: &Path, model: &Path) -> Result<String, String> {
+        check_llm(exe, model, std::time::Duration::from_secs(240))
+    }
+}
+
+/// `crosstalk-llm --check`: the ready line, or why the model did not load.
+pub fn check_llm(exe: &Path, model: &Path, timeout: std::time::Duration) -> Result<String, String> {
+    use std::io::BufRead;
+    let mut cmd = std::process::Command::new(exe);
+    cmd.arg("--model")
+        .arg(model)
+        .arg("--check")
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::null());
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        cmd.creation_flags(0x0800_0000); // CREATE_NO_WINDOW
+    }
+    let mut child = cmd.spawn().map_err(|e| format!("moteur introuvable : {e}"))?;
+    let out = child.stdout.take().expect("piped");
+    let (tx, rx) = mpsc::channel();
+    std::thread::spawn(move || {
+        let mut line = String::new();
+        let _ = std::io::BufReader::new(out).read_line(&mut line);
+        let _ = tx.send(line);
+    });
+    let line = match rx.recv_timeout(timeout) {
+        Ok(l) => l,
+        Err(_) => {
+            let _ = child.kill();
+            let _ = child.wait();
+            return Err("chargement trop long".into());
+        }
+    };
+    let _ = child.wait();
+    let v: serde_json::Value =
+        serde_json::from_str(line.trim()).map_err(|_| "réponse illisible du moteur".to_string())?;
+    match v["event"].as_str() {
+        Some("ready") => Ok(v["backend"].as_str().unwrap_or("cpu").to_string()),
+        _ => Err(v["message"].as_str().unwrap_or("erreur inconnue").to_string()),
+    }
 }
 
 pub struct Installer {
@@ -97,6 +151,7 @@ pub struct Installer {
     running: AtomicBool,
     installed: AtomicBool,
     downloader: Mutex<Option<Arc<Downloader>>>,
+    warning: Mutex<Option<String>>,
 }
 
 /// Download progress, forwarded to the installation thread.
@@ -131,6 +186,7 @@ impl Installer {
             running: AtomicBool::new(false),
             installed: AtomicBool::new(false),
             downloader: Mutex::new(None),
+            warning: Mutex::new(None),
         })
     }
 
@@ -179,6 +235,7 @@ impl Installer {
             return Err(Stop::Failed("une installation est déjà en cours".into()));
         }
         self.cancel.store(false, Ordering::SeqCst);
+        *self.warning.lock().unwrap() = None;
         let staging = opts.dir.join(STAGING);
         let result = self.steps(opts, &staging, report);
         *self.downloader.lock().unwrap() = None;
@@ -187,6 +244,7 @@ impl Installer {
                 self.installed.store(true, Ordering::SeqCst);
                 Progress {
                     done: true,
+                    warning: self.warning.lock().unwrap().clone(),
                     ..Progress::at(3, 100.0, "Installation terminée")
                 }
             }
@@ -334,6 +392,33 @@ impl Installer {
         self.platform
             .shortcuts(&dir.join(APP_EXE), opts.desktop)
             .map_err(fail)?;
+
+        // The translation model must really load, not only be present.
+        let m = llm::default_model();
+        let engine = dir.join(LLM_EXE);
+        let verified = matches!(
+            llm::install_state(&self.models_dir, m),
+            llm::Install::Verified { .. }
+        );
+        if verified && engine.is_file() {
+            report(Progress::at(3, 95.0, format!("Chargement de test de {}", m.name)));
+            match self
+                .platform
+                .check_llm(&engine, &llm::model_path(&self.models_dir, m))
+            {
+                Ok(backend) => report(Progress::at(
+                    3,
+                    99.0,
+                    format!("{} prêt ({})", m.name, if backend == "cpu" { "processeur".to_string() } else { format!("carte graphique, {backend}") }),
+                )),
+                Err(e) => {
+                    *self.warning.lock().unwrap() = Some(format!(
+                        "{} n’a pas pu être chargé ({e}). Crosstalk utilisera Opus-MT ; Audio & IA › Traduction permet de réessayer.",
+                        m.name
+                    ));
+                }
+            }
+        }
         Ok(())
     }
 
@@ -354,12 +439,25 @@ impl Installer {
                 DownloadState::Downloading | DownloadState::Idle => report(Progress::at(
                     1,
                     pct(st.done_bytes),
-                    format!(
-                        "{} · {} / {} Mo",
-                        st.current.as_deref().unwrap_or("Modèles"),
-                        mb(st.done_bytes),
-                        mb(st.total_bytes)
-                    ),
+                    if st.verifying {
+                        format!(
+                            "{} · vérification de l’intégrité (SHA-256)",
+                            st.current.as_deref().unwrap_or("Modèles")
+                        )
+                    } else {
+                        format!(
+                            "{} · {} / {} Mo · {:.0} %{}",
+                            st.current.as_deref().unwrap_or("Modèles"),
+                            mb(st.done_bytes),
+                            mb(st.total_bytes),
+                            100.0 * st.done_bytes as f64 / st.total_bytes.max(1) as f64,
+                            if st.bytes_per_sec > 0 {
+                                format!(" · {:.1} Mo/s", st.bytes_per_sec as f64 / MB)
+                            } else {
+                                String::new()
+                            }
+                        )
+                    },
                 )),
                 DownloadState::Done => return Ok(()),
                 DownloadState::Cancelled => return Err(Stop::Cancelled),
@@ -434,6 +532,8 @@ mod tests {
         free: Option<u64>,
         registered: Mutex<Option<(PathBuf, String)>>,
         shortcuts: Mutex<Option<(PathBuf, bool)>>,
+        llm_checks: Mutex<Vec<PathBuf>>,
+        llm_fails: bool,
     }
     impl Platform for Fake {
         fn free_space(&self, _: &Path) -> Option<u64> {
@@ -450,6 +550,36 @@ mod tests {
             *self.shortcuts.lock().unwrap() = Some((exe.into(), desktop));
             Ok(())
         }
+        fn check_llm(&self, _exe: &Path, model: &Path) -> Result<String, String> {
+            self.llm_checks.lock().unwrap().push(model.into());
+            if self.llm_fails {
+                Err("mémoire insuffisante".into())
+            } else {
+                Ok("vulkan".into())
+            }
+        }
+    }
+
+    /// TranslateGemma "installed": sparse file of the exact size + manifest.
+    fn place_llm(models: &Path) {
+        let m = llm::default_model();
+        std::fs::create_dir_all(models.join(m.dir)).unwrap();
+        std::fs::File::create(llm::model_path(models, m))
+            .unwrap()
+            .set_len(m.bytes)
+            .unwrap();
+        llm::write_manifest(
+            &llm::manifest_path(models, m),
+            &llm::Manifest {
+                model: m.id.into(),
+                file: m.file.into(),
+                bytes: m.bytes,
+                sha256: "ab".repeat(32),
+                source: llm::url(m),
+                verified_at: 0,
+            },
+        )
+        .unwrap();
     }
 
     /// Serves every model as zeros of the right size, unless told to fail.
@@ -559,6 +689,7 @@ mod tests {
         let inst = installer(&root, fetcher.clone(), Arc::new(Fake::default()));
         assert!(inst.model_bytes() > 700_000_000, "{}", inst.model_bytes());
         // Every model already present (sparse files of the exact size) but the VAD.
+        place_llm(&inst.models_dir);
         for f in downloads::missing_all(&inst.models_dir, WHISPER_MODELS, true) {
             if f.path.ends_with(whisper::VAD_FILE) {
                 continue;
@@ -693,4 +824,107 @@ mod tests {
         assert!(!root.join("app").join("crosstalk.exe").exists());
         let _ = std::fs::remove_dir_all(&root);
     }
+    fn files_with_engine() -> &'static [Entry] {
+        Box::leak(Box::new([
+            Entry {
+                name: "crosstalk.exe",
+                size: 3,
+                data: pack(b"exe"),
+            },
+            Entry {
+                name: "crosstalk-llm.exe",
+                size: 3,
+                data: pack(b"llm"),
+            },
+        ]))
+    }
+
+    #[test]
+    fn the_translation_model_is_loaded_once_at_the_end() {
+        for fails in [false, true] {
+            let root = tmp(if fails { "llm-fail" } else { "llm-ok" });
+            let fake = Arc::new(Fake {
+                llm_fails: fails,
+                ..Fake::default()
+            });
+            let inst = Installer::new(
+                files_with_engine(),
+                root.join("models"),
+                "0.2.0",
+                Arc::new(Zeros {
+                    fail: false,
+                    calls: AtomicUsize::new(0),
+                }),
+                fake.clone(),
+            );
+            place_llm(&inst.models_dir);
+            let seen = Mutex::new(Vec::new());
+            let r = inst.run(
+                &Options {
+                    dir: root.join("app"),
+                    desktop: false,
+                    models: false,
+                },
+                &|p| seen.lock().unwrap().push(p),
+            );
+            // A model that does not load never fails the installation.
+            assert_eq!(r, Ok(()));
+            assert_eq!(fake.llm_checks.lock().unwrap().len(), 1);
+            let seen = seen.into_inner().unwrap();
+            let last = seen.last().unwrap();
+            assert!(last.done);
+            if fails {
+                assert!(last.warning.as_deref().unwrap().contains("Opus-MT"));
+            } else {
+                assert!(last.warning.is_none());
+                assert!(seen.iter().any(|p| p.detail.contains("prêt (carte graphique")));
+            }
+            std::fs::remove_dir_all(&root).unwrap();
+        }
+    }
+
+    #[test]
+    fn without_a_checked_model_the_engine_is_not_started() {
+        let root = tmp("llm-none");
+        let fake = Arc::new(Fake::default());
+        let inst = Installer::new(
+            files_with_engine(),
+            root.join("models"),
+            "0.2.0",
+            Arc::new(Zeros {
+                fail: false,
+                calls: AtomicUsize::new(0),
+            }),
+            fake.clone(),
+        );
+        let r = inst.run(
+            &Options {
+                dir: root.join("app"),
+                desktop: false,
+                models: false,
+            },
+            &|_| {},
+        );
+        assert_eq!(r, Ok(()));
+        assert!(fake.llm_checks.lock().unwrap().is_empty());
+        std::fs::remove_dir_all(&root).unwrap();
+    }
+
+    /// The real `crosstalk-llm --check` on the tiny model (CROSSTALK_LLM_EXE).
+    #[test]
+    fn real_engine_check_when_built() {
+        let Some(exe) = std::env::var_os("CROSSTALK_LLM_EXE") else {
+            eprintln!("CROSSTALK_LLM_EXE absent : test du vrai moteur sauté");
+            return;
+        };
+        let data = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../src-llm/tests/data");
+        let t = std::time::Duration::from_secs(60);
+        assert_eq!(
+            check_llm(Path::new(&exe), &data.join("tiny-gemma3.gguf"), t).unwrap(),
+            "cpu"
+        );
+        let e = check_llm(Path::new(&exe), &data.join("absent.gguf"), t).unwrap_err();
+        assert!(e.contains("introuvable"), "{e}");
+    }
+
 }

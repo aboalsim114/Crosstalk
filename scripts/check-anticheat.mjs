@@ -3,7 +3,7 @@
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 
-const ROOTS = ['src-tauri/src', 'src-tauri/examples', 'src-installer/src'];
+const ROOTS = ['src-tauri/src', 'src-tauri/examples', 'src-installer/src', 'src-llm/src'];
 const FORBIDDEN =
   /\b(OpenProcess|ReadProcessMemory|WriteProcessMemory|NtReadVirtualMemory|NtWriteVirtualMemory|VirtualAllocEx|CreateRemoteThread|SetWindowsHookEx[AW]?|DebugActiveProcess)\b/;
 

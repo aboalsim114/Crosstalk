@@ -23,6 +23,8 @@ serde_json = "1"
 # Same download code as the app (src-tauri/src/downloads.rs).
 ureq = "2.12"
 sha1_smol = "1"
+# SHA-256 of TranslateGemma's GGUF (same download code as the app).
+sha2 = "0.10"
 flate2 = { version = "1", default-features = false, features = ["rust_backend"] }
 
 [target.'cfg(windows)'.dependencies]

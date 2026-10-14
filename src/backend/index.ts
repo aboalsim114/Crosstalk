@@ -256,16 +256,61 @@ export interface ModelInfo {
   url: string;
 }
 
-// ---------- local translation (Opus-MT, no API key) ----------
+// ---------- local translation (TranslateGemma / Opus-MT, no API key) ----------
 
 export interface TranslationTerm {
   source: string;
   /** Imposed French rendering; null keeps the term as spoken. */
   target: string | null;
 }
+export type EngineChoice = 'auto' | 'translategemma' | 'opus';
+export type LlmBackend = 'auto' | 'cpu' | 'gpu';
 export interface TranslationConfig {
   enabled: boolean;
   glossary: TranslationTerm[];
+  /** Absent in older settings: automatic. */
+  engine?: EngineChoice;
+  llmBackend?: LlmBackend;
+  llmThreads?: number;
+}
+export type LlmInstall = { state: 'missing' } | { state: 'partial'; bytes: number } | { state: 'unverified' } | { state: 'verified'; sha256: string } | { state: 'corrupt' };
+export type LlmState = 'missing' | 'unverified' | 'off' | 'idle' | 'loading' | 'ready' | 'slow' | 'error';
+/** TranslateGemma (src-tauri/src/translation/llm/runtime.rs). */
+export interface LlmStatus {
+  id: string;
+  name: string;
+  quant: string;
+  baseModel: string;
+  repo: string;
+  file: string;
+  license: string;
+  licenseUrl: string;
+  sizeMb: number;
+  ramMb: number;
+  install: LlmInstall;
+  helper: boolean;
+  state: LlmState;
+  choice: EngineChoice;
+  backendChoice: LlmBackend;
+  backend: string | null;
+  device: string | null;
+  gpuSkipped: string | null;
+  threads: number | null;
+  loadMs: number | null;
+  lastMs: number | null;
+  p50Ms: number | null;
+  p95Ms: number | null;
+  translations: number;
+  rssMb: number | null;
+  error: string | null;
+}
+export interface LlmManifest {
+  model: string;
+  file: string;
+  bytes: number;
+  sha256: string;
+  source: string;
+  verifiedAt: number;
 }
 export type PairState = 'missing' | 'loading' | 'ready' | 'error';
 export interface PairStatus {
@@ -280,6 +325,7 @@ export interface TranslationStatus {
   pairs: PairStatus[];
   modelsDir: string;
   queued: number;
+  llm?: LlmStatus | null;
 }
 /** French translation of a transcript (matched by `id`), or why it is missing. */
 export interface Translation {
@@ -294,6 +340,8 @@ export interface Translation {
   glossary: boolean;
   /** Quick translation of a live line, replaced by the final one. */
   partial?: boolean;
+  /** "translategemma", "opus-mt", "lexique" or "cache". */
+  engine?: string | null;
 }
 
 export const translation = {
@@ -303,6 +351,8 @@ export const translation = {
   rescan: (): Promise<TranslationStatus | null> => (isTauri ? invoke<TranslationStatus>('translation_rescan') : Promise.resolve(null)),
   test: (lang: string, text: string): Promise<Translation | null> =>
     isTauri ? invoke<Translation>('translation_test', { lang, text }) : Promise.resolve(null),
+  /** Reads TranslateGemma's file again and checks its SHA-256 (deleted if corrupted). */
+  verifyLlm: (): Promise<LlmManifest | null> => (isTauri ? invoke<LlmManifest>('translation_llm_verify') : Promise.resolve(null)),
   onStatus: (cb: (s: TranslationStatus) => void) =>
     isTauri ? listen<TranslationStatus>('translation://status', (e) => cb(e.payload)) : Promise.resolve(noop),
   onResult: (cb: (t: Translation) => void) => (isTauri ? listen<Translation>('translation://result', (e) => cb(e.payload)) : Promise.resolve(noop)),
@@ -319,6 +369,8 @@ export interface DownloadStatus {
   missingFiles: number;
   missingBytes: number;
   error: string | null;
+  bytesPerSec?: number;
+  verifying?: boolean;
 }
 
 export const modelDownload = {

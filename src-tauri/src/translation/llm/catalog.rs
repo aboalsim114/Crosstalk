@@ -18,7 +18,7 @@ pub enum PromptFormat {
     TranslateGemma,
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct LlmSpec {
     pub id: &'static str,
     pub name: &'static str,

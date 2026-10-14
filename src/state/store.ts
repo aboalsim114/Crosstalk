@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { Translation } from '../backend';
+import type { EngineChoice, LlmBackend, Translation } from '../backend';
 import { config } from '../config';
 import { isCapturing, useAudio } from './audio';
 import type { UiLang } from '../i18n';
@@ -90,6 +90,10 @@ export interface AppState {
   accel: Accel;
   /** "Focus voix": keep the centred voice chat, turn down game sounds from the sides. */
   voiceFocus: boolean;
+  /** Translation engine: TranslateGemma, Opus-MT or automatic. */
+  trEngine: EngineChoice;
+  /** Where TranslateGemma runs. */
+  llmBackend: LlmBackend;
   src: Record<SourceLang, boolean>;
   gloss: GlossEntry[];
   newTerm: string;
@@ -170,6 +174,8 @@ const initial: AppState = {
   model: 'base',
   accel: 'auto',
   voiceFocus: false,
+  trEngine: 'auto',
+  llmBackend: 'auto',
   src: { ru: true, en: true, de: false, es: false, pt: false, pl: false },
   gloss: GLOSSARY,
   newTerm: '',

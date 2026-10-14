@@ -28,7 +28,9 @@ export function setupView(s: DownloadStatus | null): SetupView {
       return {
         visible: true,
         title: `Préparation de Crosstalk · ${pct} %`,
-        detail: `${s.current ?? 'Téléchargement des modèles'} · ${mb(s.doneBytes)} / ${mb(s.totalBytes)}`,
+        detail: s.verifying
+          ? `${s.current ?? 'Modèle'} · vérification de l’intégrité (SHA-256)`
+          : `${s.current ?? 'Téléchargement des modèles'} · ${mb(s.doneBytes)} / ${mb(s.totalBytes)}${s.bytesPerSec ? ` · ${(s.bytesPerSec / 1_000_000).toFixed(1).replace('.', ',')} Mo/s` : ''}`,
         percent: pct,
         tone: 'progress',
         canCancel: true,

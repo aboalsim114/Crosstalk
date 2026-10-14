@@ -87,6 +87,25 @@ pub fn translation_test(
     t.translate_blocking(&lang, &text)
 }
 
+/// "Vérifier / réparer" TranslateGemma: reads the whole file again and
+/// compares its SHA-256 (a corrupted file is deleted, to download again).
+#[tauri::command(async)]
+pub fn translation_llm_verify(
+    t: State<'_, Arc<TranslationService>>,
+    rt: State<'_, Arc<llm::LlmRuntime>>,
+) -> Result<llm::catalog::Manifest, String> {
+    let r = crate::downloads::verify_installed(
+        rt.models_dir(),
+        rt.spec(),
+        &crate::downloads::HttpFetcher,
+    );
+    if r.is_err() {
+        rt.stop();
+    }
+    t.rescan();
+    r
+}
+
 #[cfg(test)]
 mod fixture_tests {
     //! Equivalence with Hugging Face transformers on `tests/fixtures/marian-tiny`
