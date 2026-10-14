@@ -38,6 +38,11 @@ pub const APP_EXE: &str = "crosstalk.exe";
 pub const WHISPER_MODELS: &[&str] = &["base", "small"];
 const STAGING: &str = ".crosstalk-setup";
 const MB: f64 = 1e6;
+/// Phase bounds in percent, as the interface shows them (`PH` in
+/// src/installer/model.ts, checked by a test).
+const PREPARATION_END: f64 = 12.0;
+const EXTRACTION_END: f64 = 62.0;
+const CONFIGURATION_END: f64 = 88.0;
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -247,6 +252,56 @@ impl Installer {
         } else {
             Vec::new()
         };
+        self.check_space(dir, app, &todo)?;
+        ensure_not_running(dir).map_err(fail)?;
+        std::fs::create_dir_all(dir)
+            .map_err(|e| fail(format!("Impossible de créer {} : {e}", dir.display())))?;
+        self.check()?;
+        report(Progress::at(
+            0,
+            PREPARATION_END,
+            "Espace disponible vérifié",
+        ));
+
+        // 1. EXTRACTION, weighted by bytes: application then models.
+        let total = (app + todo.iter().map(|f| f.bytes).sum::<u64>()).max(1) as f64;
+        let pct =
+            |done: u64| PREPARATION_END + (EXTRACTION_END - PREPARATION_END) * done as f64 / total;
+        self.extract_payload(dir, staging, app, &pct, report)?;
+        if !todo.is_empty() {
+            self.download_models(report, &|d| pct(app + d))?;
+        }
+        self.check()?;
+
+        // 2. CONFIGURATION: from here on the installation is no longer cancelled.
+        self.commit_staging(dir, staging, report)?;
+        self.platform.register(dir, self.version).map_err(fail)?;
+        report(Progress::at(
+            2,
+            CONFIGURATION_END,
+            "Crosstalk enregistré dans Windows",
+        ));
+
+        // 3. FINALISATION
+        report(Progress::at(
+            3,
+            92.0,
+            if opts.desktop {
+                "Création des raccourcis (menu Démarrer, bureau)"
+            } else {
+                "Création du raccourci (menu Démarrer uniquement)"
+            },
+        ));
+        self.platform
+            .shortcuts(&dir.join(APP_EXE), opts.desktop)
+            .map_err(fail)?;
+        Ok(())
+    }
+
+    /// Room for the application in `dir` and for the models still to fetch
+    /// (minus what earlier attempts already downloaded), on one or two volumes.
+    fn check_space(&self, dir: &Path, app: u64, todo: &[downloads::FileSpec]) -> Result<(), Stop> {
+        let fail = |e: String| Stop::Failed(e);
         let models: u64 = todo.iter().map(|f| f.bytes).sum::<u64>()
             - todo.iter().map(downloads::partial_len).sum::<u64>();
         let free_dir = self.platform.free_space(dir);
@@ -276,15 +331,19 @@ impl Installer {
                 }
             }
         }
-        ensure_not_running(dir).map_err(fail)?;
-        std::fs::create_dir_all(dir)
-            .map_err(|e| fail(format!("Impossible de créer {} : {e}", dir.display())))?;
-        self.check()?;
-        report(Progress::at(0, 12.0, "Espace disponible vérifié"));
+        Ok(())
+    }
 
-        // 1. EXTRACTION, weighted by bytes: application then models.
-        let total = (app + todo.iter().map(|f| f.bytes).sum::<u64>()).max(1) as f64;
-        let pct = |done: u64| 12.0 + 50.0 * done as f64 / total;
+    /// Inflates the embedded application files into the staging folder.
+    fn extract_payload(
+        &self,
+        dir: &Path,
+        staging: &Path,
+        app: u64,
+        pct: &dyn Fn(u64) -> f64,
+        report: &dyn Fn(Progress),
+    ) -> Result<(), Stop> {
+        let fail = |e: String| Stop::Failed(e);
         let _ = std::fs::remove_dir_all(staging);
         std::fs::create_dir_all(staging)
             .map_err(|e| fail(format!("Impossible d’écrire dans {} : {e}", dir.display())))?;
@@ -326,12 +385,17 @@ impl Installer {
             }
             done += written;
         }
-        if !todo.is_empty() {
-            self.download_models(report, &|d| pct(app + d))?;
-        }
-        self.check()?;
+        Ok(())
+    }
 
-        // 2. CONFIGURATION: from here on the installation is no longer cancelled.
+    /// Moves the staged files into place (no longer cancellable).
+    fn commit_staging(
+        &self,
+        dir: &Path,
+        staging: &Path,
+        report: &dyn Fn(Progress),
+    ) -> Result<(), Stop> {
+        let fail = |e: String| Stop::Failed(e);
         report(Progress::at(2, 64.0, "Mise en place des fichiers"));
         ensure_not_running(dir).map_err(fail)?;
         for (i, f) in self.files.iter().enumerate() {
@@ -344,22 +408,6 @@ impl Installer {
             ));
         }
         let _ = std::fs::remove_dir_all(staging);
-        self.platform.register(dir, self.version).map_err(fail)?;
-        report(Progress::at(2, 88.0, "Crosstalk enregistré dans Windows"));
-
-        // 3. FINALISATION
-        report(Progress::at(
-            3,
-            92.0,
-            if opts.desktop {
-                "Création des raccourcis (menu Démarrer, bureau)"
-            } else {
-                "Création du raccourci (menu Démarrer uniquement)"
-            },
-        ));
-        self.platform
-            .shortcuts(&dir.join(APP_EXE), opts.desktop)
-            .map_err(fail)?;
         Ok(())
     }
 
@@ -723,6 +771,20 @@ mod tests {
         assert!(!root.join("app").join("crosstalk.exe").exists());
         let _ = std::fs::remove_dir_all(&root);
     }
+    #[test]
+    fn phase_bounds_match_the_interface() {
+        let ts = include_str!("../../src/installer/model.ts");
+        let line = ts
+            .lines()
+            .find(|l| l.starts_with("export const PH = "))
+            .expect("PH in model.ts");
+        let expected = format!(
+            "export const PH = [0, {}, {}, {}, 100];",
+            PREPARATION_END, EXTRACTION_END, CONFIGURATION_END
+        );
+        assert_eq!(line, expected);
+    }
+
     #[test]
     fn the_installed_translation_models_follow_windows_language() {
         let p = default_plan(Some("ru-RU"));
