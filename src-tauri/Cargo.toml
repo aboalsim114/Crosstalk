@@ -1,6 +1,6 @@
 [package]
 name = "crosstalk"
-version = "0.2.0"
+version = "0.3.0"
 description = "Traduction en temps réel des voix et du chat de Counter-Strike 2"
 authors = ["Crosstalk contributors"]
 license = "MIT"

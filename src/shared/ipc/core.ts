@@ -15,7 +15,7 @@ export interface AppInfo {
   target: string;
 }
 
-export const FALLBACK_INFO: AppInfo = { name: 'Crosstalk', version: '0.2.0', target: 'windows-x86_64' };
+export const FALLBACK_INFO: AppInfo = { name: 'Crosstalk', version: '0.3.0', target: 'windows-x86_64' };
 
 export async function getAppInfo(): Promise<AppInfo> {
   if (!isTauri) return FALLBACK_INFO;
