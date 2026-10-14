@@ -118,10 +118,29 @@ function startAudioBridge(): Promise<() => void>[] {
   return unlisten;
 }
 
+/**
+ * Sends settings to the Rust core when they change: `key` makes them
+ * comparable (null: nothing to send yet), `apply` runs `ms` after the last
+ * change. `stop` also drops a pending send.
+ */
+export function debouncedSync(key: (s: AppState) => string | null, apply: (s: AppState) => void, ms: number) {
+  let lastKey = '';
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  return {
+    push: (s: AppState) => {
+      const k = key(s);
+      if (k === null || k === lastKey) return;
+      lastKey = k;
+      clearTimeout(timer);
+      timer = setTimeout(() => apply(s), ms);
+    },
+    stop: () => clearTimeout(timer),
+  };
+}
+
 /** Settings that the Rust speech service needs, as a comparable key. */
 export const speechConfigKey = (s: AppState) => JSON.stringify(speechConfigFrom(s));
 
-/** Mirrors the Rust speech recognition: status, real transcripts, voice activity. */
 /**
  * First run: the installer is small, the app downloads its models by itself
  * (and again when the user picks another Whisper model or turns translation on).
@@ -129,26 +148,17 @@ export const speechConfigKey = (s: AppState) => JSON.stringify(speechConfigFrom(
 function startSetupBridge(): Promise<() => void>[] {
   const unlisten: Promise<() => void>[] = [];
   unlisten.push(modelDownload.onProgress((status) => useSetup.setState({ status })));
-  let lastKey = '';
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  const push = (s: AppState) => {
-    // First launch: nothing is fetched before the user chose their languages.
-    if (!s.langSetupDone) return;
-    const key = JSON.stringify(setupNeeds(s));
-    if (key === lastKey) return;
-    lastKey = key;
-    clearTimeout(timer);
-    timer = setTimeout(() => startSetup(s), 300);
-  };
-  push(useApp.getState());
-  unlisten.push(Promise.resolve(useApp.subscribe((s) => push(s))));
+  // First launch: nothing is fetched before the user chose their languages.
+  const sync = debouncedSync((s) => (s.langSetupDone ? JSON.stringify(setupNeeds(s)) : null), startSetup, 300);
+  sync.push(useApp.getState());
+  unlisten.push(Promise.resolve(useApp.subscribe((s) => sync.push(s))));
+  unlisten.push(Promise.resolve(sync.stop));
   return unlisten;
 }
 
 /** Settings that the Rust translation service needs, as a comparable key. */
 export const translationConfigKey = (s: AppState) => JSON.stringify(translationConfigFrom(s));
 
-/** Mirrors the local translation: model states, and each French line onto its transcript. */
 /** Mirrors the console.log chat: followed while the session captures, lines into the Script. */
 function startChatBridge(): Promise<() => void>[] {
   const unlisten: Promise<() => void>[] = [];
@@ -160,27 +170,25 @@ function startChatBridge(): Promise<() => void>[] {
       if (capturesDuring(app.session)) app.addChat(chatEntry(m));
     }),
   );
-  let lastKey = '';
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  const push = (s: AppState) => {
-    const key = JSON.stringify(chatConfigFrom(s));
-    if (key === lastKey) return;
-    lastKey = key;
-    clearTimeout(timer);
-    timer = setTimeout(() => chat.configure(chatConfigFrom(s)).then((status) => status && useChat.setState({ status })), 400);
-  };
-  push(useApp.getState());
+  const sync = debouncedSync(
+    (s) => JSON.stringify(chatConfigFrom(s)),
+    (s) => chat.configure(chatConfigFrom(s)).then((status) => status && useChat.setState({ status })),
+    400,
+  );
+  sync.push(useApp.getState());
   if (capturesDuring(useApp.getState().session)) chat.start();
   const unsub = useApp.subscribe((next, prev) => {
-    push(next);
+    sync.push(next);
     const action = captureActionFor(prev.session, next.session);
     if (action === 'start') chat.start().then((status) => status && useChat.setState({ status }));
     if (action === 'stop') chat.stop();
   });
   unlisten.push(Promise.resolve(unsub));
+  unlisten.push(Promise.resolve(sync.stop));
   return unlisten;
 }
 
+/** Mirrors the local translation: model states, and each translated line onto its transcript. */
 function startTranslationBridge(): Promise<() => void>[] {
   const unlisten: Promise<() => void>[] = [];
   translation.status().then((status) => status && useTranslation.setState({ status }));
@@ -192,20 +200,18 @@ function startTranslationBridge(): Promise<() => void>[] {
       useApp.getState().applyTranslation(t);
     }),
   );
-  let lastKey = '';
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  const push = (s: AppState) => {
-    const key = translationConfigKey(s);
-    if (key === lastKey) return;
-    lastKey = key;
-    clearTimeout(timer);
-    timer = setTimeout(() => translation.configure(translationConfigFrom(s)).then((status) => status && useTranslation.setState({ status })), 250);
-  };
-  push(useApp.getState());
-  unlisten.push(Promise.resolve(useApp.subscribe((s) => push(s))));
+  const sync = debouncedSync(
+    translationConfigKey,
+    (s) => translation.configure(translationConfigFrom(s)).then((status) => status && useTranslation.setState({ status })),
+    250,
+  );
+  sync.push(useApp.getState());
+  unlisten.push(Promise.resolve(useApp.subscribe((s) => sync.push(s))));
+  unlisten.push(Promise.resolve(sync.stop));
   return unlisten;
 }
 
+/** Mirrors the Rust speech recognition: status, real transcripts, voice activity. */
 function startSpeechBridge(): Promise<() => void>[] {
   const unlisten: Promise<() => void>[] = [];
   speech.status().then((status) => useSpeech.setState({ status }));
@@ -228,17 +234,14 @@ function startSpeechBridge(): Promise<() => void>[] {
   unlisten.push(speech.onRetract((id) => useApp.getState().retractTranscript(id)));
 
   // Model, VAD threshold, languages and glossary follow the UI settings.
-  let lastKey = '';
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  const push = (s: AppState) => {
-    const key = speechConfigKey(s);
-    if (key === lastKey) return;
-    lastKey = key;
-    clearTimeout(timer);
-    timer = setTimeout(() => speech.configure(speechConfigFrom(s)).then((status) => status && useSpeech.setState({ status })), 250);
-  };
-  push(useApp.getState());
-  unlisten.push(Promise.resolve(useApp.subscribe((s) => push(s))));
+  const sync = debouncedSync(
+    speechConfigKey,
+    (s) => speech.configure(speechConfigFrom(s)).then((status) => status && useSpeech.setState({ status })),
+    250,
+  );
+  sync.push(useApp.getState());
+  unlisten.push(Promise.resolve(useApp.subscribe((s) => sync.push(s))));
+  unlisten.push(Promise.resolve(sync.stop));
   return unlisten;
 }
 

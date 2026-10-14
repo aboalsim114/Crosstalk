@@ -1,6 +1,6 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
-import { applyNativeAction, overlayConfig, overlayPayload } from './native';
+import { applyNativeAction, debouncedSync, overlayConfig, overlayPayload } from './native';
 import { OverlayWindow, visibleLines } from './overlay/OverlayWindow';
 import { useApp, type FeedEntry } from './state/store';
 
@@ -76,5 +76,33 @@ describe('overlay window', () => {
     const base = overlayPayload(useApp.getState());
     render(<OverlayWindow initial={{ ...base, feed: [line(Date.now())] }} />);
     expect(screen.getByText('« Bombe sur A. »')).toBeInTheDocument();
+  });
+});
+
+describe('settings sent to the Rust core', () => {
+  it('waits for the settings to settle, sends each change once, and stop drops a pending send', () => {
+    vi.useFakeTimers();
+    try {
+      const sent: number[] = [];
+      const sync = debouncedSync((s) => (s.textSize > 0 ? String(s.textSize) : null), (s) => sent.push(s.textSize), 250);
+      const s = useApp.getState();
+      sync.push({ ...s, textSize: 20 });
+      sync.push({ ...s, textSize: 22 });
+      vi.advanceTimersByTime(249);
+      expect(sent).toEqual([]);
+      vi.advanceTimersByTime(1);
+      expect(sent).toEqual([22]);
+      // Same settings: nothing new; no key yet: nothing either.
+      sync.push({ ...s, textSize: 22 });
+      sync.push({ ...s, textSize: 0 });
+      vi.advanceTimersByTime(1000);
+      expect(sent).toEqual([22]);
+      sync.push({ ...s, textSize: 24 });
+      sync.stop();
+      vi.advanceTimersByTime(1000);
+      expect(sent).toEqual([22]);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
