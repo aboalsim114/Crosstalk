@@ -614,6 +614,13 @@ export const speakerId = {
   onStatus: (cb: (s: SpeakerStatus) => void) => (isTauri ? listen<SpeakerStatus>(SPEAKER_STATUS_EVENT, (e) => cb(e.payload)) : Promise.resolve(noop)),
 };
 
+// ---------- interface language (src-tauri/src/tray.rs) ----------
+
+/** Translated tray menu labels, by item id. */
+export const uiLocale = {
+  setTray: (labels: Record<string, string>): Promise<void> => (isTauri ? invoke<void>('ui_set_tray_labels', { labels }) : Promise.resolve()),
+};
+
 // ---------- end-of-match recap (src-tauri/src/recap.rs) ----------
 
 export const recapFiles = {

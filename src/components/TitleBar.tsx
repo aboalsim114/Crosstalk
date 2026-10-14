@@ -1,4 +1,5 @@
 import { windowControls } from '../backend';
+import { useT } from '../i18n';
 import { isRunning, useApp } from '../state/store';
 import { fnt } from './atoms';
 
@@ -12,6 +13,7 @@ export function timecode(startedAt: number, now: number, running: boolean): stri
 
 export function TitleBar() {
   const tc = useApp((s) => timecode(s.startedAt, s.now, isRunning(s)));
+  const t = useT();
   return (
     <div
       data-tauri-drag-region
@@ -29,13 +31,13 @@ export function TitleBar() {
         </span>
       </div>
       <div className="flex h-9" style={{ font: fnt(400, 12, 'mono', '36px'), color: '#6e6961' }}>
-        <div className="win-btn" role="button" aria-label="Réduire" onClick={() => windowControls.minimize()}>
+        <div className="win-btn" role="button" aria-label={t('window.minimize')} onClick={() => windowControls.minimize()}>
           —
         </div>
-        <div className="win-btn" role="button" aria-label="Agrandir" onClick={() => windowControls.toggleMaximize()}>
+        <div className="win-btn" role="button" aria-label={t('window.maximize')} onClick={() => windowControls.toggleMaximize()}>
           ▢
         </div>
-        <div className="win-btn close" role="button" aria-label="Fermer" onClick={() => windowControls.close()}>
+        <div className="win-btn close" role="button" aria-label={t('window.close')} onClick={() => windowControls.close()}>
           ✕
         </div>
       </div>

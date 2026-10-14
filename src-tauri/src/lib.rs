@@ -151,7 +151,8 @@ pub fn run() {
             speaker::speaker_configure,
             speaker::speaker_test,
             recap::recap_save,
-            recap::recap_reveal
+            recap::recap_reveal,
+            tray::ui_set_tray_labels
         ])
         .setup(|app| {
             let handle = app.handle();
