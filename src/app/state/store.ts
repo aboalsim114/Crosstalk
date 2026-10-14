@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { StreamOpts, Translation } from '../../shared/ipc';
+import { LLM_DEFAULT_URL, type LlmConfig, type StreamOpts, type Translation } from '../../shared/ipc';
 import { config } from '../config';
 import { isCapturing, useAudio } from '../../features/audio/audio';
 import type { UiLang } from '../../shared/i18n';
@@ -26,6 +26,9 @@ export interface SpeakerOpts {
   region: { x: number; y: number; w: number; h: number };
 }
 export const SPEAKER_DEFAULTS: SpeakerOpts = { enabled: false, region: { x: 0, y: 0.5, w: 0.25, h: 0.3 } };
+/** Online translation by an LLM (Audio & IA): the user's provider, off by default. The key is not here. */
+export type LlmOpts = LlmConfig;
+export const LLM_DEFAULTS: LlmOpts = { enabled: false, provider: 'openai', baseUrl: LLM_DEFAULT_URL.openai, model: '' };
 export const STREAM_DEFAULTS: StreamOpts = { enabled: false, names: false, original: false, watermark: true, size: 34, max: 3, duration: 8 };
 
 export type SourceLang = PlayerLang;
@@ -78,6 +81,7 @@ export interface AppState {
   uiLang: UiLang;
   stream: StreamOpts;
   speaker: SpeakerOpts;
+  llm: LlmOpts;
   capture: CaptureSource;
   vad: number;
   model: ModelId;
@@ -111,6 +115,7 @@ export interface AppActions {
   toggle: (k: ToggleKey) => void;
   setStream: (p: Partial<StreamOpts>) => void;
   setSpeaker: (p: Partial<SpeakerOpts>) => void;
+  setLlm: (p: Partial<LlmOpts>) => void;
   toggleSession: () => void;
   togglePause: () => void;
   emergency: () => void;
@@ -164,6 +169,7 @@ const initial: AppState = {
   uiLang: 'fr',
   stream: STREAM_DEFAULTS,
   speaker: SPEAKER_DEFAULTS,
+  llm: LLM_DEFAULTS,
   capture: 'process',
   vad: 55,
   model: 'base',
@@ -283,6 +289,7 @@ export const useApp = create<AppState & AppActions>()((set, get) => {
     toggle: (k) => set((s) => ({ tg: { ...s.tg, [k]: !s.tg[k] } })),
     setStream: (p) => set((s) => ({ stream: { ...s.stream, ...p } })),
     setSpeaker: (p) => set((s) => ({ speaker: { ...s.speaker, ...p } })),
+    setLlm: (p) => set((s) => ({ llm: { ...s.llm, ...p } })),
     toggleSource: (k) => set((s) => ({ src: { ...s.src, [k]: !s.src[k] } })),
     toggleOverlay: () => set((s) => ({ overlayOn: !s.overlayOn })),
 

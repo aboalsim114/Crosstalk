@@ -15,7 +15,7 @@ const LOCAL_KEY = 'crosstalk.settings';
 
 type Persisted = Pick<
   AppState,
-  'mode' | 'fmt' | 'corner' | 'opacity' | 'textSize' | 'duration' | 'maxBlocks' | 'overlayOn' | 'tg' | 'chatPath' | 'ownName' | 'capture' | 'vad' | 'model' | 'accel' | 'src' | 'stream' | 'speaker' | 'voiceFocus' | 'uiLang' | 'target' | 'langSetupDone'
+  'mode' | 'fmt' | 'corner' | 'opacity' | 'textSize' | 'duration' | 'maxBlocks' | 'overlayOn' | 'tg' | 'chatPath' | 'ownName' | 'capture' | 'vad' | 'model' | 'accel' | 'src' | 'stream' | 'speaker' | 'llm' | 'voiceFocus' | 'uiLang' | 'target' | 'langSetupDone'
 >;
 
 const oneOf =
@@ -45,6 +45,7 @@ const CHECKS: { [K in keyof Persisted]: (v: unknown) => boolean } = {
   src: (v) => typeof v === 'object' && v !== null,
   stream: (v) => typeof v === 'object' && v !== null,
   speaker: (v) => typeof v === 'object' && v !== null,
+  llm: (v) => typeof v === 'object' && v !== null,
   voiceFocus: isBool,
   uiLang: isUiLang,
   target: isTargetLang,
@@ -85,6 +86,8 @@ export function restore(raw: unknown, defaults: AppState): { app: Partial<AppSta
       app.stream = merged as unknown as AppState['stream'];
     } else if (k === 'speaker') {
       app.speaker = restoreSpeaker(v as Record<string, unknown>, defaults.speaker);
+    } else if (k === 'llm') {
+      app.llm = restoreLlm(v as Record<string, unknown>, defaults.llm);
     } else if (k === 'accel') {
       app.accel = v === 'cuda' ? 'auto' : (v as AppState['accel']); // "cuda" was simulated before the Vulkan build
     } else if (k === 'tg' || k === 'src') {
@@ -96,6 +99,16 @@ export function restore(raw: unknown, defaults: AppState): { app: Partial<AppSta
   }
   const deviceId = s.deviceId === null || isString(s.deviceId) ? (s.deviceId as string | null) : undefined;
   return { app, deviceId };
+}
+
+/** Online LLM settings (provider, address, model). The API key is never in this file. */
+function restoreLlm(v: Record<string, unknown>, base: AppState['llm']): AppState['llm'] {
+  return {
+    enabled: isBool(v.enabled) ? v.enabled : base.enabled,
+    provider: v.provider === 'openai' || v.provider === 'anthropic' ? v.provider : base.provider,
+    baseUrl: isString(v.baseUrl) ? v.baseUrl : base.baseUrl,
+    model: isString(v.model) ? v.model : base.model,
+  };
 }
 
 /** "Qui parle ?" options: a boolean and an area inside CS2's window. */

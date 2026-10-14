@@ -2,9 +2,10 @@
 // in-game overlay window out. Only active inside the Tauri app.
 
 import { resolveLocale, type Locale } from '../shared/i18n';
-import { audioCapture, chat, cs2, dictation, isTauri, modelDownload, onNativeAction, overlayWindow, reply, speech, translation, type CaptureStatus, type NativeAction, type OverlayWindowConfig } from '../shared/ipc';
+import { audioCapture, chat, cs2, dictation, isTauri, llm, modelDownload, onNativeAction, overlayWindow, reply, speech, translation, type CaptureStatus, type NativeAction, type OverlayWindowConfig } from '../shared/ipc';
 import { refreshModels, speechConfigFrom, transcriptEntry, useSpeech } from '../features/speech/speech';
 import { recordTime, translationConfigFrom, useTranslation } from '../features/translation/translation';
+import { llmConfigFrom, refreshLlm, useLlm } from '../features/translation/llm';
 import { setupNeeds, startSetup, useSetup } from '../features/setup/setup';
 import { chatConfigFrom, chatEntry, useChat } from '../features/chat/chat';
 import { captureModeFor, levelToUnit, recordTestLevel, refreshDevices, useAudio } from '../features/audio/audio';
@@ -211,6 +212,24 @@ function startTranslationBridge(): Promise<() => void>[] {
   return unlisten;
 }
 
+/** Online LLM: settings follow the UI (the key is sent only from its card); counters refreshed every 3 s. */
+function startLlmBridge(): Promise<() => void>[] {
+  const unlisten: Promise<() => void>[] = [];
+  const sync = debouncedSync(
+    (s) => JSON.stringify(llmConfigFrom(s)),
+    (s) => llm.configure(llmConfigFrom(s)).then((status) => status && useLlm.setState({ status })),
+    400,
+  );
+  sync.push(useApp.getState());
+  unlisten.push(Promise.resolve(useApp.subscribe((s) => sync.push(s))));
+  unlisten.push(Promise.resolve(sync.stop));
+  const timer = setInterval(() => {
+    if (useApp.getState().llm.enabled) refreshLlm();
+  }, 3000);
+  unlisten.push(Promise.resolve(() => clearInterval(timer)));
+  return unlisten;
+}
+
 /** Mirrors the Rust speech recognition: status, real transcripts, voice activity. */
 function startSpeechBridge(): Promise<() => void>[] {
   const unlisten: Promise<() => void>[] = [];
@@ -252,6 +271,7 @@ export function startNativeBridge(): () => void {
   unlisten.push(...startAudioBridge());
   unlisten.push(...startSpeechBridge());
   unlisten.push(...startTranslationBridge());
+  unlisten.push(...startLlmBridge());
   unlisten.push(...startChatBridge());
   unlisten.push(...startSetupBridge());
 

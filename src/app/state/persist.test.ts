@@ -27,6 +27,16 @@ describe('settings kept between launches', () => {
     expect(app0.speaker.enabled).toBe(false);
   });
 
+  it('keeps the online LLM settings, off by default, without any key', () => {
+    expect(app0.llm.enabled).toBe(false);
+    const llm = { enabled: true, provider: 'anthropic' as const, baseUrl: 'https://api.anthropic.com/v1', model: 'claude-haiku-4-5' };
+    const snap = snapshot({ ...app0, llm }, null);
+    expect(restore(JSON.parse(JSON.stringify(snap.config)), app0).app.llm).toEqual(llm);
+    expect(JSON.stringify(snap)).not.toMatch(/key/i);
+    const bad = restore({ version: 1, settings: { llm: { enabled: 'yes', provider: 'gemini', baseUrl: 42, model: 'x'.repeat(600) } } }, app0).app.llm;
+    expect(bad).toEqual(app0.llm);
+  });
+
   it('round-trips the settings, the device and the glossary', () => {
     const s = { ...app0, model: 'small' as const, ownName: 'Иван', fmt: 'minimal' as const, opacity: 40, tg: { ...app0.tg, ignoreOwn: false } };
     const snap = snapshot(s, 'dev-1');
