@@ -577,8 +577,18 @@ export interface StreamLine {
   translated?: string;
   test?: boolean;
 }
+/** Mode streamer settings, as `stream_configure` takes them (src-tauri/src/stream). */
+export interface StreamOpts {
+  enabled: boolean;
+  names: boolean;
+  original: boolean;
+  watermark: boolean;
+  size: number;
+  max: number;
+  duration: number;
+}
 export interface StreamStatus {
-  options: import('../state/store').StreamOpts;
+  options: StreamOpts;
   listening: boolean;
   url: string;
   clients: number;
@@ -588,7 +598,7 @@ export interface StreamStatus {
 
 export const streamOverlay = {
   status: (): Promise<StreamStatus | null> => (isTauri ? invoke<StreamStatus>('stream_status') : Promise.resolve(null)),
-  configure: (options: import('../state/store').StreamOpts): Promise<StreamStatus | null> => (isTauri ? invoke<StreamStatus>('stream_configure', { options }) : Promise.resolve(null)),
+  configure: (options: StreamOpts): Promise<StreamStatus | null> => (isTauri ? invoke<StreamStatus>('stream_configure', { options }) : Promise.resolve(null)),
   push: (line: StreamLine): Promise<boolean> => (isTauri ? invoke<boolean>('stream_push', { line }) : Promise.resolve(false)),
 };
 

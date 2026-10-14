@@ -14,7 +14,8 @@
     "tauri": "tauri",
     "app:dev": "tauri dev",
     "app:build": "tauri build",
-    "check:anticheat": "node scripts/check-anticheat.mjs"
+    "check:anticheat": "node scripts/check-anticheat.mjs",
+    "check:architecture": "node scripts/check-architecture.mjs"
   },
   "dependencies": {
     "@fontsource-variable/archivo": "^5.3.0",
