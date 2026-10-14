@@ -6,7 +6,7 @@
 #   dist-test/Crosstalk-<commit>-setup.exe
 #   dist-test/crosstalk-<commit>-windows-x64-gcc-test/
 #
-# Requirements (Ubuntu 24.04): apt install mingw-w64 nsis libclang-dev cmake glslc libvulkan-dev
+# Requirements (Ubuntu 24.04): apt install mingw-w64 nsis libclang-dev cmake glslc libvulkan-dev spirv-headers
 #                              rustup target add x86_64-pc-windows-gnu
 # The official release stays the MSVC build (scripts/validate.ps1); the compiler only
 # changes after a measured comparison (docs/testing/speech-recognition.md).
@@ -41,7 +41,11 @@ rm -f "$vk/libvulkan.a" && x86_64-w64-mingw32-ar rcs "$vk/libvulkan.a" "$vk/vulk
 mkdir -p "$vk/include" "$vk/lib"
 ln -sfn /usr/include/vulkan "$vk/include/vulkan"
 ln -sfn /usr/include/vk_video "$vk/include/vk_video"
+# llama.cpp's Vulkan backend also needs the SPIR-V headers, and asks for the
+# loader as vulkan-1 in $VULKAN_SDK (crosstalk-llm).
+ln -sfn /usr/include/spirv "$vk/include/spirv"
 cp "$vk/libvulkan.a" "$vk/lib/libvulkan-1.a"
+cp "$vk/libvulkan.a" "$vk/libvulkan-1.a"
 ln -sfn /usr/bin "$vk/bin"
 export VULKAN_SDK="$vk"
 export CARGO_TARGET_X86_64_PC_WINDOWS_GNU_RUSTFLAGS="$CARGO_TARGET_X86_64_PC_WINDOWS_GNU_RUSTFLAGS -L native=$vk"
@@ -56,8 +60,22 @@ fix_archives() {
 build() { (cd src-tauri && cargo build --release --locked --target $target --features gpu "$@"); }
 
 # First pass builds whisper.cpp (and fails at link), second pass links.
-build --example asr_bench --example audio_probe --example translate || { fix_archives; build --example asr_bench --example audio_probe --example translate; }
+build --example asr_bench --example audio_probe --example translate --example translate_bench || { fix_archives; build --example asr_bench --example audio_probe --example translate --example translate_bench; }
 fix_archives
+
+# TranslateGemma's engine (src-llm: llama.cpp, Vulkan), its own lock file and
+# target directory. Same MinGW archive names as whisper.cpp; once fixed, the
+# build script must run again to link them (LLAMA_BUILD_SHARED_LIBS=0 keeps
+# the static build and makes cargo rerun it).
+fix_llm_archives() {
+  for d in src-llm/target/$target/release/build/llama-cpp-sys-2-*/out; do
+    [ -d "$d" ] || continue
+    find "$d" -name '*.a' ! -name 'lib*' | while read -r f; do cp --update=none "$f" "$(dirname "$f")/lib$(basename "$f")"; done
+  done
+}
+build_llm() { (cd src-llm && cargo build --release --locked --target $target --features gpu); }
+build_llm || { fix_llm_archives; LLAMA_BUILD_SHARED_LIBS=0 build_llm; }
+llm_exe="src-llm/target/$target/release/crosstalk-llm.exe"
 # The app through the Tauri CLI (builds and embeds its UI). MinGW builds need
 # libstdc++ and WebView2Loader.dll next to the exe.
 gcc_dir=$(dirname "$(x86_64-w64-mingw32-g++-posix -print-libgcc-file-name)")
@@ -68,7 +86,7 @@ version=$(node -p "require('./src-tauri/tauri.conf.json').version")
 # The installer (src-installer, "Crosstalk Installer" design) embeds those files,
 # built in the app's target directory so shared dependencies compile once.
 payload=$(mktemp -d)
-cp "$rel/crosstalk.exe" "$rel/WebView2Loader.dll" "$payload/"
+cp "$rel/crosstalk.exe" "$rel/WebView2Loader.dll" "$llm_exe" "$payload/"
 cp "$gcc_dir/libstdc++-6.dll" "$gcc_dir/libgcc_s_seh-1.dll" /usr/x86_64-w64-mingw32/lib/libwinpthread-1.dll "$payload/"
 (cd src-installer && CROSSTALK_PAYLOAD_DIR="$payload" CARGO_TARGET_DIR="$root/src-tauri/target" \
   npx tauri build --target $target --no-bundle -- --locked)
@@ -93,6 +111,8 @@ cp "$rel/crosstalk.exe" "$out/"
 cp "$rel/examples/asr_bench.exe" "$out/crosstalk-asr-bench.exe"
 cp "$rel/examples/audio_probe.exe" "$out/crosstalk-audio-probe.exe"
 cp "$rel/examples/translate.exe" "$out/crosstalk-translate.exe"
+cp "$rel/examples/translate_bench.exe" "$out/crosstalk-translate-bench.exe"
+cp "$llm_exe" src-tauri/tests/data/translation-corpus.tsv "$out/"
 cp "$rel/WebView2Loader.dll" "$out/"
 cp "$gcc_dir/libstdc++-6.dll" "$gcc_dir/libgcc_s_seh-1.dll" /usr/x86_64-w64-mingw32/lib/libwinpthread-1.dll "$out/"
 cp scripts/download-models.ps1 scripts/fetch-asr-corpus.py "$out/"

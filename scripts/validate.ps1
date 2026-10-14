@@ -115,9 +115,12 @@ Step 'Tests Rust' "$root\src-tauri" { cargo test --all-targets --locked }
 if (-not $SkipBundle) {
     Step 'Installateurs NSIS + MSI (MSVC)' $root { npx tauri build --target $target }
 }
-Step 'audio_probe + asr_bench + translate (release, MSVC)' "$root\src-tauri" {
-    cargo build --release --locked --example audio_probe --example asr_bench --example translate --target $target
+Step 'audio_probe + asr_bench + translate + translate_bench (release, MSVC)' "$root\src-tauri" {
+    cargo build --release --locked --example audio_probe --example asr_bench --example translate --example translate_bench --target $target
 }
+# TranslateGemma's engine (llama.cpp; Vulkan needs the Vulkan SDK, VULKAN_SDK).
+Step 'crosstalk-llm : tests' "$root\src-llm" { cargo test --release --locked }
+Step 'crosstalk-llm (release, MSVC, Vulkan)' "$root\src-llm" { cargo build --release --locked --features gpu --target $target }
 
 # --- Paquet de test ---------------------------------------------------------
 $rel = "src-tauri\target\$target\release"
@@ -125,6 +128,8 @@ New-Item -ItemType Directory -Force -Path $dest | Out-Null
 Copy-Item "$rel\examples\audio_probe.exe" "$dest\crosstalk-audio-probe.exe"
 Copy-Item "$rel\examples\asr_bench.exe" "$dest\crosstalk-asr-bench.exe"
 Copy-Item "$rel\examples\translate.exe" "$dest\crosstalk-translate.exe"
+Copy-Item "$rel\examples\translate_bench.exe" "$dest\crosstalk-translate-bench.exe"
+Copy-Item "src-llm\target\$target\release\crosstalk-llm.exe", src-tauri\tests\data\translation-corpus.tsv $dest
 Copy-Item scripts\download-models.ps1, scripts\fetch-asr-corpus.py $dest
 if (-not $SkipBundle) {
     Copy-Item "$rel\crosstalk.exe" $dest

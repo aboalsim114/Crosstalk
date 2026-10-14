@@ -93,6 +93,8 @@ pub struct Reply {
     pub truncated: bool,
     /// Resident memory of the helper after the request (MB).
     pub rss_mb: u32,
+    /// CPU time used by the helper since it started (ms, all threads).
+    pub cpu_ms: u64,
 }
 
 impl Reply {
@@ -107,6 +109,7 @@ impl Reply {
             ms: 0,
             truncated: false,
             rss_mb: 0,
+            cpu_ms: 0,
         }
     }
 }
@@ -131,6 +134,8 @@ pub enum Event {
         /// Why the GPU was not used although asked for.
         gpu_skipped: Option<String>,
         rss_mb: u32,
+        /// Video memory taken by loading the model (free before − after, MB).
+        vram_used_mb: Option<u64>,
     },
     Error {
         message: String,

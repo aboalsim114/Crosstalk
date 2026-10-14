@@ -104,7 +104,9 @@ pub struct Manifest {
 
 pub fn read_manifest(models_dir: &Path, m: &LlmSpec) -> Option<Manifest> {
     let raw = std::fs::read(manifest_path(models_dir, m)).ok()?;
-    serde_json::from_slice(&raw).ok()
+    // Windows PowerShell 5 writes UTF-8 with a BOM (download-models.ps1).
+    let raw = raw.strip_prefix(b"\xEF\xBB\xBF").unwrap_or(&raw);
+    serde_json::from_slice(raw).ok()
 }
 
 pub fn write_manifest(path: &Path, manifest: &Manifest) -> Result<(), String> {
@@ -221,6 +223,22 @@ mod tests {
                 sha256: "ab".repeat(32)
             }
         );
+        // Written by download-models.ps1 (PowerShell 5: BOM, CRLF).
+        let mut ps = b"\xEF\xBB\xBF".to_vec();
+        ps.extend(
+            serde_json::to_vec_pretty(&man)
+                .unwrap()
+                .iter()
+                .flat_map(|&b| {
+                    if b == b'\n' {
+                        vec![b'\r', b'\n']
+                    } else {
+                        vec![b]
+                    }
+                }),
+        );
+        std::fs::write(manifest_path(&dir, m), ps).unwrap();
+        assert!(matches!(install_state(&dir, m), Install::Verified { .. }));
         man.bytes = 1;
         write_manifest(&manifest_path(&dir, m), &man).unwrap();
         assert_eq!(install_state(&dir, m), Install::Corrupt);

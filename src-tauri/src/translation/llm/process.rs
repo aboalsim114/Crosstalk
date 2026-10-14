@@ -52,6 +52,8 @@ pub struct Ready {
     pub gpu_skipped: Option<String>,
     #[serde(default)]
     pub rss_mb: u32,
+    #[serde(default)]
+    pub vram_used_mb: Option<u64>,
 }
 
 #[derive(Debug, Clone, Deserialize, PartialEq)]
@@ -71,6 +73,8 @@ pub struct Reply {
     pub truncated: bool,
     #[serde(default)]
     pub rss_mb: u32,
+    #[serde(default)]
+    pub cpu_ms: u64,
 }
 
 #[derive(Deserialize)]
@@ -283,6 +287,7 @@ fn empty_ready() -> Ready {
         architecture: None,
         gpu_skipped: None,
         rss_mb: 0,
+        vram_used_mb: None,
     }
 }
 

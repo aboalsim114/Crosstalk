@@ -1,0 +1,54 @@
+# Corpus de traduction Counter-Strike 2 (inventé pour Crosstalk, aucune voix ni phrase de vrais joueurs).
+# Colonnes : id, langue, catégorie, texte, traduction de référence, termes à conserver.
+# Termes à conserver : séparés par « | » ; « / » sépare des formes acceptées (« 2/deux »).
+# Le contrôle automatique vérifie ces termes, la longueur et l'absence de commentaire ;
+# la justesse du sens se juge à la lecture (colonne « référence »).
+id	lang	cat	text	reference	keep
+ru01	ru	court	раш Б	rush B	B
+ru02	ru	court	двое на А	deux sur A	A|2/deux
+ru03	ru	court	минус один	moins un	1/un
+ru04	ru	court	у них авп	ils ont un AWP	AWP/awp
+ru05	ru	court	сейв	on sauve
+ru06	ru	nombres	он лоу, двадцать хп	il est low, vingt PV	20/vingt
+ru07	ru	nombres	трое идут через мид	trois passent par le mid	3/trois|mid
+ru08	ru	nombres	последний на Б, у него десять хп	le dernier est sur B, il a dix PV	B|10/dix
+ru09	ru	positions	один на шорте, один в банане	un au short, un dans la banane	short|banane/banana
+ru10	ru	positions	плент на А, идём на ретейк	la bombe est posée sur A, on va reprendre	A
+ru11	ru	positions	кто-то в окне на мираже	quelqu'un à la fenêtre sur Mirage	Mirage/mirage|fenêtre
+ru12	ru	armes	у него дигл, осторожно	il a un Deagle, attention	deagle/Deagle
+ru13	ru	armes	кидаю смок на коннектор	je lance une smoke sur connector	smoke/fumigène|connector/connecteur
+ru14	ru	armes	флешка, заходим	flash, on entre	flash
+ru15	ru	armes	молик в банан	molotov dans la banane	molotov/molly|banane/banana
+ru16	ru	argot	эко раунд, ничего не покупаем	round éco, on n'achète rien	éco/eco
+ru17	ru	argot	фулл бай в этом раунде	full achat ce round
+ru18	ru	argot	дефузи, я прикрою	désamorce, je te couvre
+ru19	ru	argot	он сидит в углу с авп, не пикайте	il est dans le coin avec l'AWP, ne pickez pas	AWP/awp
+ru20	ru	long	Давайте в этом раунде все вместе пойдём на Б через туннели, я кину флешку.	Ce round, on va tous ensemble sur B par les tunnels, je lance une flash.	B|flash
+ru21	ru	long	Не торопитесь, ждём смок, потом трое заходят на А, двое держат мид.	Ne vous pressez pas, on attend la smoke, puis trois entrent sur A et deux tiennent le mid.	A|3/trois|2/deux|mid
+ru22	ru	ambigu	он там	il est là
+ru23	ru	ambigu	давай давай давай	allez allez allez
+ru24	ru	ambigu	тут один, добейте его	il y en a un ici, achevez-le	1/un
+en01	en	court	rush B	rush B	B
+en02	en	court	two on A	deux sur A	A|2/deux
+en03	en	court	one down	un de moins	1/un
+en04	en	court	they have an AWP	ils ont un AWP	AWP
+en05	en	court	save	on sauve
+en06	en	nombres	he's one shot, twenty HP	il est à un tir, vingt PV	20/vingt
+en07	en	nombres	three going mid	trois vont au mid	3/trois|mid
+en08	en	nombres	last one on B, he has ten HP	le dernier est sur B, il a dix PV	B|10/dix
+en09	en	positions	one short, one banana	un au short, un en banane	short|banane/banana
+en10	en	positions	bomb planted A, let's retake	la bombe est posée sur A, on reprend	A
+en11	en	positions	someone in window on Mirage	quelqu'un à la fenêtre sur Mirage	Mirage|fenêtre
+en12	en	armes	he has a Deagle, careful	il a un Deagle, attention	Deagle/deagle
+en13	en	armes	smoking connector	je smoke connector	smoke/fumigène|connector/connecteur
+en14	en	armes	flash out, go go	flash, on y va	flash
+en15	en	armes	molly banana	molotov en banane	molly/molotov|banane/banana
+en16	en	argot	eco round, don't buy	round éco, n'achetez rien	éco/eco
+en17	en	argot	full buy this round	full achat ce round
+en18	en	argot	defuse, I'll cover you	désamorce, je te couvre
+en19	en	argot	he's holding an angle with the AWP, don't peek	il tient un angle avec l'AWP, ne peekez pas	AWP
+en20	en	long	This round let's all go B through tunnels together, I'll throw the flash.	Ce round, on va tous sur B ensemble par les tunnels, je lance la flash.	B|flash
+en21	en	long	Don't rush, wait for the smoke, then three of us push A and two hold mid.	Ne foncez pas, attendez la smoke, puis trois poussent sur A et deux tiennent le mid.	A|3/trois|2/deux|mid
+en22	en	ambigu	he's there	il est là
+en23	en	ambigu	nice one	bien joué
+en24	en	ambigu	one here, finish him	un ici, achevez-le	1/un

@@ -51,6 +51,12 @@ impl Engine {
         let model = LlamaModel::load_from_file(backend, &args.model, &params)
             .map_err(|e| format!("chargement du modèle impossible : {e}"))?;
         let model: &'static LlamaModel = Box::leak(Box::new(model));
+        let gpu_free_after = || {
+            list_llama_ggml_backend_devices()
+                .into_iter()
+                .find(|d| gpu.as_ref().is_some_and(|g| g.index == d.index))
+                .map(|d| d.memory_free as u64)
+        };
         let n_batch = 512u32;
         let mut cp = LlamaContextParams::default()
             .with_n_ctx(NonZeroU32::new(args.ctx))
@@ -84,6 +90,12 @@ impl Engine {
             architecture: meta("general.architecture"),
             gpu_skipped,
             rss_mb: rss_mb(),
+            vram_used_mb: match (gpu.as_ref().filter(|_| gpu_layers > 0), gpu_free_after()) {
+                (Some(g), Some(after)) if (g.memory_free as u64) >= after && after > 0 => {
+                    Some((g.memory_free as u64 - after) / (1024 * 1024))
+                }
+                _ => None,
+            },
         };
         Ok(Self {
             model,
@@ -112,6 +124,7 @@ impl Engine {
                 ms: t.elapsed().as_millis() as u32,
                 truncated,
                 rss_mb: rss_mb(),
+                cpu_ms: cpu_ms(),
             },
             Err(e) => {
                 // Unknown cache state after a failure: start clean next time.
@@ -213,6 +226,51 @@ pub fn gpu_choice(args: &Args, gpu_free_bytes: Option<u64>) -> (u32, Option<Stri
         );
     }
     (args.gpu_layers, None)
+}
+
+/// CPU time of this process (user + kernel, ms).
+#[cfg(windows)]
+pub fn cpu_ms() -> u64 {
+    #[repr(C)]
+    #[derive(Default, Clone, Copy)]
+    struct FileTime {
+        low: u32,
+        high: u32,
+    }
+    extern "system" {
+        fn GetCurrentProcess() -> isize;
+        fn GetProcessTimes(
+            process: isize,
+            creation: *mut FileTime,
+            exit: *mut FileTime,
+            kernel: *mut FileTime,
+            user: *mut FileTime,
+        ) -> i32;
+    }
+    let mut t = [FileTime::default(); 4];
+    let ok = unsafe {
+        let [a, b, c, d] = &mut t;
+        GetProcessTimes(GetCurrentProcess(), a, b, c, d)
+    };
+    if ok == 0 {
+        return 0;
+    }
+    let ticks = |f: FileTime| ((f.high as u64) << 32) | f.low as u64;
+    (ticks(t[2]) + ticks(t[3])) / 10_000
+}
+
+#[cfg(not(windows))]
+pub fn cpu_ms() -> u64 {
+    // Fields 14 and 15 of /proc/self/stat: user and system time, in ticks of
+    // 1/100 s on Linux.
+    std::fs::read_to_string("/proc/self/stat")
+        .ok()
+        .and_then(|s| {
+            let rest = s.rsplit_once(')')?.1;
+            let f: Vec<&str> = rest.split_whitespace().collect();
+            Some((f.get(11)?.parse::<u64>().ok()? + f.get(12)?.parse::<u64>().ok()?) * 10)
+        })
+        .unwrap_or(0)
 }
 
 /// Resident memory of this process (MB).
@@ -321,8 +379,14 @@ mod tests {
     }
 
     #[test]
-    fn resident_memory_is_measured() {
+    fn resident_memory_and_cpu_time_are_measured() {
         assert!(super::rss_mb() > 0);
+        let t = std::time::Instant::now();
+        let mut x = 0u64;
+        while t.elapsed().as_millis() < 120 {
+            x = x.wrapping_add(std::hint::black_box(1));
+        }
+        assert!(x > 0 && super::cpu_ms() > 0);
     }
 
     #[test]

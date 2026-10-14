@@ -6,9 +6,12 @@ Ce que contient ce dossier
 - crosstalk.exe              l'application (version portable, sans installateur)
 - crosstalk-asr-bench.exe    banc d'essai : test en direct sur CS2, mesures
 - crosstalk-audio-probe.exe  diagnostic de la capture audio (déjà validé)
-- crosstalk-translate.exe    test de la traduction locale en ligne de commande
+- crosstalk-translate.exe    test de la traduction locale (Opus-MT) en ligne de commande
+- crosstalk-llm.exe          moteur TranslateGemma (llama.cpp), lancé par Crosstalk
+- crosstalk-translate-bench.exe + translation-corpus.tsv
+                             banc Opus-MT contre TranslateGemma (voir section 1 bis)
 - download-models.ps1        installe Whisper, la VAD Silero et (option
-                             -Translation) les modèles de traduction Opus-MT
+                             -Translation) TranslateGemma 4B et Opus-MT
 - fetch-asr-corpus.py        corpus de référence FLEURS (facultatif)
 - WebView2Loader.dll, libstdc++-6.dll, libgcc_s_seh-1.dll, libwinpthread-1.dll
                              DLL nécessaires : gardez-les à côté des .exe
@@ -27,7 +30,7 @@ IMPORTANT, à lire avant de tester
 4. Rien n'est enregistré ni envoyé : audio en mémoire, transcription et
    traduction locales. Aucune clé API, aucun abonnement.
 
-1. Installer les modèles (Whisper base + VAD + traduction : environ 770 Mo)
+1. Installer les modèles (Whisper base + VAD + traduction : environ 3,3 Go)
 --------------------------------------------------------------------------
 PowerShell, dans ce dossier :
 
@@ -41,6 +44,16 @@ Les fichiers vont dans %LOCALAPPDATA%\Crosstalk\models. Le script vérifie la
 taille exacte et le SHA-1 officiel, puis affiche le SHA-256 : notez celui de
 ggml-silero-v5.1.2.bin.
 (Facultatif, plus précis mais plus lent : -Models base,small)
+
+1 bis. TranslateGemma contre Opus-MT (CS2 fermé, 5 à 15 minutes)
+---------------------------------------------------------------
+    .\crosstalk-translate-bench.exe --markdown banc-traduction.md
+    .\crosstalk-translate-bench.exe --backend cpu --markdown banc-cpu.md
+
+Le premier essaie la carte graphique (s'il reste assez de mémoire vidéo), le
+second force le processeur. Envoyez les deux fichiers .md : ils contiennent
+les traductions des 48 phrases inventées du corpus, les temps p50 / p95, la
+mémoire et la charge CPU. Rien d'autre (aucune voix, aucun nom).
 
 2. Test de fumée, CS2 fermé (1 minute)
 --------------------------------------

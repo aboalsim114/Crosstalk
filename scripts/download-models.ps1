@@ -3,7 +3,7 @@
 # no API key, no subscription. In-app download arrives with feat/settings-persistence (#15).
 #
 #   powershell -ExecutionPolicy Bypass -File scripts\download-models.ps1                 # base + VAD
-#   powershell -ExecutionPolicy Bypass -File scripts\download-models.ps1 -Translation    # + Opus-MT ru/en -> fr (~620 Mo)
+#   powershell -ExecutionPolicy Bypass -File scripts\download-models.ps1 -Translation    # + TranslateGemma 4B (2,49 Go) + Opus-MT ru/en -> fr (~620 Mo)
 #   powershell -ExecutionPolicy Bypass -File scripts\download-models.ps1 -Models tiny,base,small
 param(
   [string[]]$Models = @('base'),
@@ -64,5 +64,35 @@ if ($Translation) {
       Get-Model "https://huggingface.co/Helsinki-NLP/$pair/resolve/main/$file" (Join-Path $pairDir $file) $pairs[$pair][$file] $null
     }
   }
+}
+# TranslateGemma 4B (Google, Gemma Terms of Use), GGUF Q4_K_M converted by
+# mradermacher. Checked by the SHA-256 Hugging Face announces (X-Linked-Etag,
+# the Git LFS object id), then recorded in the manifest Crosstalk reads.
+$tg = @{ Repo = 'mradermacher/translategemma-4b-it-GGUF'; File = 'translategemma-4b-it.Q4_K_M.gguf'; Size = 2489909760; Dir = 'translategemma-4b-it'; Id = 'translategemma-4b-q4km' }
+function Get-AnnouncedSha256($url) {
+  $req = [System.Net.HttpWebRequest]::Create($url)
+  $req.Method = 'HEAD'
+  $req.AllowAutoRedirect = $false
+  $req.UserAgent = 'Crosstalk'
+  try { $resp = $req.GetResponse() } catch [System.Net.WebException] { $resp = $_.Exception.Response }
+  $etag = $resp.Headers['X-Linked-Etag']
+  if (-not $etag) { $etag = $resp.Headers['ETag'] }
+  $resp.Close()
+  $h = ($etag -replace '^W/', '').Trim('"').ToLower()
+  if ($h -notmatch '^[0-9a-f]{64}$') { throw "empreinte SHA-256 non publiee pour $url" }
+  return $h
+}
+if ($Translation) {
+  $tgDir = Join-Path $Dir $tg.Dir
+  New-Item -ItemType Directory -Force -Path $tgDir | Out-Null
+  $url = "https://huggingface.co/$($tg.Repo)/resolve/main/$($tg.File)"
+  $path = Join-Path $tgDir $tg.File
+  $expected = Get-AnnouncedSha256 $url
+  Get-Model $url $path $tg.Size $null
+  $h = (Get-FileHash -Algorithm SHA256 $path).Hash.ToLower()
+  if ($h -ne $expected) { Remove-Item $path; throw "SHA-256 invalide pour $path (attendu $expected)" }
+  $manifest = [ordered]@{ model = $tg.Id; file = $tg.File; bytes = $tg.Size; sha256 = $h; source = $url; verifiedAt = [int64]([DateTimeOffset]::UtcNow.ToUnixTimeSeconds()) }
+  $manifest | ConvertTo-Json | Set-Content -Encoding UTF8 (Join-Path $tgDir 'crosstalk-manifest.json')
+  Write-Host "TranslateGemma verifie : sha256 $h"
 }
 Write-Host "Modeles installes dans $Dir. Dans Crosstalk : Audio & IA > Rechercher les modeles."
