@@ -4,13 +4,16 @@
 //! All native features live here, behind Tauri commands, events and plugins:
 //!
 //! - `audio`     WASAPI capture of cs2.exe (process loopback, device fallback), levels
-//! - `speech`    Silero VAD + whisper.cpp transcription of the captured voices (ru, en)
+//! - `speech`    Silero VAD + whisper.cpp transcription of the captured voices
+//! - `translation` local Opus-MT translation into the user's language
+//! - `chat`      CS2 text chat read from console.log
 //! - `game`      CS2 process detection (names and PIDs only, the game is never opened)
 //! - `tray`      notification-area icon; the app keeps running when the window is closed
 //! - `shortcuts` system-wide Ctrl+Alt+F8 / F9 / F10
 //! - `overlay`   transparent, always-on-top, click-through subtitle window
 //! - autostart   optional launch with Windows (`--minimized`, straight to the tray)
-//! - `pipeline`  seams for audio capture, speech recognition, translation and CS2
+//!
+//! See docs/architecture/overview.md for the whole picture.
 
 mod actions;
 pub mod audio;
@@ -26,9 +29,6 @@ mod history;
 mod logs;
 mod overlay;
 mod reply;
-// Traits and helpers for the upcoming native pipeline; wired in later phases.
-#[allow(dead_code)]
-mod pipeline;
 mod recap;
 mod settings;
 mod shortcuts;
