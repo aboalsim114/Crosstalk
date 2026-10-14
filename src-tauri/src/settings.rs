@@ -1,7 +1,7 @@
 //! User settings on disk (cahier des charges §6.3):
 //!
 //! - `%APPDATA%\Crosstalk\config.json`: settings, versioned (the UI migrates
-//!   older versions, see `src/state/persist.ts`);
+//!   older versions, see `src/app/state/persist.ts`);
 //! - `%APPDATA%\Crosstalk\glossary.json`: the user's glossary.
 //!
 //! Written atomically (temporary file then rename). A file that cannot be

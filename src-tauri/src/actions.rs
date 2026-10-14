@@ -8,7 +8,7 @@ use tauri::{AppHandle, Emitter, Manager};
 
 use crate::audio::{AudioService, StopReason};
 
-/// Event name the UI listens to (see `src/backend/index.ts`).
+/// Event name the UI listens to (see `src/shared/ipc/actions.ts`).
 pub const ACTION_EVENT: &str = "crosstalk://action";
 pub const MAIN_WINDOW: &str = "main";
 

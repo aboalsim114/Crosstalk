@@ -38,18 +38,23 @@ Un seul bloc de 7 modules liés en cycle : `downloads ↔ logs ↔ reply ↔ spe
 Aucun cycle. Les arêtes principales (`A → B` : A utilise B) :
 
 ```
-wiring ──► speech, translation, speaker, chat, audio
+wiring ──► audio, chat, paths, reply, speaker, speech, translation
 gsi ──► chat, history, reply, speech, translation
-speech ──► audio, logs, settings, version, paths, cpu
-translation ──► paths, cpu
-reply ──► translation, paths
+dictation ──► audio, clipboard, logs, reply, speech
+speech ──► audio, cpu, logs, settings, version
+translation ──► cpu, paths
+reply ──► translation
 speaker ──► logs, overlay, reply
 chat ──► logs
-logs ──► audio, history, version, paths
+logs ──► audio, history, paths, version
 updater ──► downloads, version
-downloads ──► speech::models, translation::models, paths
+downloads ──► speech (catalogue), translation (catalogue)
+download_commands ──► downloads, paths, speech, translation
 audio ──► game
+actions ──► audio, logs        shortcuts, tray ──► actions        recap ──► history, logs
 ```
+
+Relevé par `crate::<module>` hors tests (commande dans [refactoring-report.md](refactoring-report.md)). `paths`, `cpu`, `version`, `game`, `history`, `settings`, `overlay`, `clipboard` n'importent aucun autre module.
 
 ## Dépendances externes
 

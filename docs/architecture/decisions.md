@@ -39,7 +39,7 @@ Chaque décision indique le contexte, le choix et ce qui le remettrait en cause.
   - `cpu` : temps CPU du processus, priorité basse, `CpuMeter` ;
   - `version::current_build()`.
 
-  `speech::models::models_dir` reste disponible (réexport), pour l'installateur et l'exemple `asr_bench`. Le calcul du chemin ne change pas.
+  Les appelants (dont l'installateur et les exemples `asr_bench` et `translate`) importent directement ces modules : pas de réexport de compatibilité, la crate n'a pas d'utilisateur externe. Le calcul du chemin ne change pas.
 - **Remise en cause** : —
 
 ## D-06 — On garde `lock().unwrap()`
