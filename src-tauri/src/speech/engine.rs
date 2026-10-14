@@ -23,6 +23,18 @@ pub fn audio_ctx_for(samples: usize, fast: bool) -> Option<i32> {
     Some(((secs * 50.0).ceil() as i32).clamp(128, 1500))
 }
 
+/// Text tokens Whisper may produce for `samples` (16 kHz): fast Russian is
+/// about 9 tokens per second, so 12 per second plus a margin never cuts real
+/// speech, while a looping decode stops after a short segment's worth.
+pub fn max_tokens_for(samples: usize) -> i32 {
+    let secs = samples as f32 / super::dsp::SAMPLE_RATE as f32;
+    ((16.0 + 12.0 * secs).ceil() as i32).clamp(24, 96)
+}
+
+/// Sampling temperature of the second pass after a looping greedy decode
+/// (the first fallback step of OpenAI's reference decoder).
+pub const RETRY_TEMPERATURE: f32 = 0.2;
+
 #[derive(Debug, Default, Clone, Copy)]
 pub struct InferenceTiming {
     pub language_ms: u32,
@@ -379,6 +391,38 @@ mod whisper_impl {
             let (lang, lang_prob) = self.detect_language(samples, opts.languages, threads)?;
             self.timing.language_ms = language_started.elapsed().as_millis() as u32;
 
+            let p = self.params(lang, threads, samples.len(), opts);
+            let full_started = std::time::Instant::now();
+            let mut rec = self.decode(p, samples, lang, lang_prob)?;
+            // Greedy decoding can lock into a loop. When the loop is a whole
+            // sentence repeated, the filter keeps that sentence for free
+            // (`collapse_repeats`). Otherwise ("they are rotating mid, they
+            // are rotating mid, …" cut short), decode once more with sampling,
+            // the first fallback step of OpenAI's reference decoder. A retry
+            // over the full 30 s window was measured too slow on the CPU
+            // (+4 s, later lines then went stale).
+            use super::super::filter::{clean, collapse_repeats, is_looping};
+            if is_looping(&rec.text) && collapse_repeats(&clean(&rec.text)).is_none() {
+                let mut p = self.params(lang, threads, samples.len(), opts);
+                p.set_temperature(RETRY_TEMPERATURE);
+                let retry = self.decode(p, samples, lang, lang_prob)?;
+                if !is_looping(&retry.text) {
+                    rec = retry;
+                }
+            }
+            self.timing.full_ms = full_started.elapsed().as_millis() as u32;
+            Ok(rec)
+        }
+    }
+
+    impl WhisperRecognizer {
+        fn params<'a>(
+            &self,
+            lang: Lang,
+            threads: usize,
+            samples: usize,
+            opts: &'a RecognizeOptions,
+        ) -> FullParams<'a, 'a> {
             let mut p = FullParams::new(SamplingStrategy::Greedy { best_of: 1 });
             p.set_n_threads(threads as i32);
             p.set_language(Some(lang.code()));
@@ -397,21 +441,28 @@ mod whisper_impl {
             p.set_temperature(0.0);
             p.set_temperature_inc(0.0);
             p.set_no_speech_thold(super::super::filter::NO_SPEECH_MAX);
-            // Callouts are short: cap the output to stop runaway loops early.
-            p.set_max_tokens(96);
-            if let Some(ctx) = audio_ctx_for(samples.len(), opts.fast_encoder) {
+            // Callouts are short: cap the output to what the segment can hold,
+            // which also stops a runaway loop early.
+            p.set_max_tokens(max_tokens_for(samples));
+            if let Some(ctx) = audio_ctx_for(samples, opts.fast_encoder) {
                 p.set_audio_ctx(ctx);
             }
             if !opts.prompt.is_empty() {
                 p.set_initial_prompt(opts.prompt);
             }
+            p
+        }
 
-            let full_started = std::time::Instant::now();
+        fn decode(
+            &mut self,
+            p: FullParams,
+            samples: &[f32],
+            lang: Lang,
+            lang_prob: f32,
+        ) -> Result<Recognition, SpeechError> {
             self.state
                 .full(p, samples)
                 .map_err(|e| SpeechError::Inference(format!("whisper : {e}")))?;
-
-            self.timing.full_ms = full_started.elapsed().as_millis() as u32;
             let mut text = String::new();
             let (mut logprob_sum, mut tokens) = (0.0f32, 0usize);
             let mut no_speech_prob = 0.0f32;
@@ -487,6 +538,14 @@ mod tests {
         assert_eq!(audio_ctx_for(32_000, true), Some(150)); // 2 s + 1 s margin
         assert_eq!(audio_ctx_for(1_000, true), Some(128));
         assert_eq!(audio_ctx_for(16_000 * 40, true), Some(1500));
+    }
+
+    #[test]
+    fn the_token_budget_follows_the_segment_length() {
+        assert_eq!(max_tokens_for(16_000), 28); // 1 s
+        assert_eq!(max_tokens_for(26_560), 36); // 1.66 s (a loop seen on a 3-word callout)
+        assert_eq!(max_tokens_for(800), 24); // floor
+        assert_eq!(max_tokens_for(16_000 * 8), 96); // longest segment: the former cap
     }
 
     #[test]

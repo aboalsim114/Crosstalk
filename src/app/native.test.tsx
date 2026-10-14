@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
-import { applyNativeAction, debouncedSync, overlayConfig, overlayPayload } from './native';
+import { applyNativeAction, debouncedSync, overlayConfig, overlayFlagsSync, overlayPayload } from './native';
 import { OverlayWindow, visibleLines } from '../windows/overlay/OverlayWindow';
 import { useApp, type FeedEntry } from './state/store';
 
@@ -38,6 +38,29 @@ describe('overlay window flags', () => {
     const s = useApp.getState();
     expect(overlayConfig({ ...s, opacity: 10 }, s).corner).toBeNull();
     expect(overlayConfig({ ...s, corner: 'bl' }, s).corner).toBe('bl');
+  });
+
+  it('applies the saved corner even when the overlay window did not exist yet', async () => {
+    // Seen in the built app: the first call fails ("overlay window missing")
+    // and the overlay stayed top-right although the saved corner was bottom-left.
+    const sent: (string | null)[] = [];
+    let missing = true;
+    const flags = overlayFlagsSync((cfg) => {
+      sent.push(cfg.corner);
+      return missing ? Promise.reject('overlay window missing') : Promise.resolve();
+    });
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const saved = { ...useApp.getState(), corner: 'bl' as const };
+    flags.sync(saved);
+    await Promise.resolve();
+    missing = false;
+    flags.ready(saved);
+    expect(sent).toEqual(['bl', 'bl']);
+    // Unchanged flags are not sent twice.
+    flags.sync(saved, saved);
+    flags.sync(saved, saved);
+    expect(sent).toEqual(['bl', 'bl', null]);
+    warn.mockRestore();
   });
 
   it('sends at most three lines to the overlay', () => {

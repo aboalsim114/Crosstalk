@@ -92,14 +92,23 @@ export const NEVERS = [
   'Écrire dans le chat sans action de votre part',
 ];
 
+/**
+ * What the shipped app is built from (src-tauri/Cargo.toml, package.json) and
+ * the models it downloads, with their licences as published (Hugging Face
+ * metadata checked on 2026-10-14). Keep in step with the dependencies.
+ */
 export const LICENSES: [string, string][] = [
   ['tauri', 'MIT / Apache-2.0'],
-  ['whisper.cpp', 'MIT'],
+  ['whisper.cpp · ggml', 'MIT'],
   ['whisper-rs', 'Unlicense'],
-  ['tokio', 'MIT'],
+  ['candle (Hugging Face)', 'MIT / Apache-2.0'],
   ['windows-rs', 'MIT / Apache-2.0'],
-  ['rubato', 'MIT'],
-  ['three.js (rendu 3D)', 'MIT'],
+  ['ureq', 'MIT / Apache-2.0'],
+  ['React · three.js · motion', 'MIT'],
+  ['Modèles Whisper (OpenAI)', 'MIT'],
+  ['Silero VAD', 'MIT'],
+  ['Opus-MT (Helsinki-NLP)', 'Apache-2.0'],
+  ['Opus-MT ru-en, en-de', 'CC-BY-4.0'],
 ];
 
 /** `status: 'transcrit'` marks a real transcript shown in its original language. */

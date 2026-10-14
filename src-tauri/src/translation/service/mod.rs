@@ -263,8 +263,11 @@ fn pairs_for(config: &TranslationConfig) -> HashMap<String, Pair> {
         .map(|s| {
             (
                 s,
+                // Not examined yet: the worker says Missing or Ready once it
+                // has looked. Missing here showed "modèles absents" (and a
+                // WARN in the journal) for seconds at every start.
                 Pair {
-                    state: PairState::Missing,
+                    state: PairState::Loading,
                     error: None,
                     load_ms: None,
                 },

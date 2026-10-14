@@ -53,6 +53,11 @@ $machine = [ordered]@{
     'Rust'        = (rustc --version)
     'CMake'       = ((cmake --version) | Select-Object -First 1)
     'LIBCLANG'    = $env:LIBCLANG_PATH
+    # The MSVC build does not enable the `gpu` feature: Whisper on the graphics
+    # card (Vulkan) exists only in the MinGW test build, which delay-loads
+    # vulkan-1.dll (scripts/cross/vulkan_shim.c). Said here so that nobody
+    # takes this package for one with GPU support (docs/quality/bugs.md, CT-002).
+    'Whisper GPU' = 'absent de ce build MSVC (processeur uniquement)'
 }
 
 $results = New-Object System.Collections.Generic.List[object]
@@ -106,7 +111,7 @@ if ($Release) {
 # --- Contrôles --------------------------------------------------------------
 Step 'Dépendances JS (npm ci)' $root { npm ci }
 Step 'Garde anti-triche' $root { npm run check:anticheat }
-Step 'Règles d’architecture' $root { npm run check:architecture }
+Step 'Règles d''architecture' $root { npm run check:architecture }
 Step 'Typecheck UI' $root { npm run typecheck }
 Step 'Tests UI (Vitest)' $root { npm test }
 Step 'Build UI' $root { npm run build }

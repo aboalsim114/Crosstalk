@@ -401,3 +401,12 @@ fn each_line_reports_its_engine_and_a_new_llm_setup_clears_the_cache() {
     let lex = next(&_rx);
     assert_eq!(lex.engine.as_deref(), Some("lexicon"));
 }
+
+#[test]
+fn models_not_yet_examined_are_loading_not_missing() {
+    // Shown at every start before the worker looked: "modèles absents" and a
+    // journal warning although the models were installed.
+    let pairs = super::pairs_for(&TranslationConfig::default());
+    assert!(!pairs.is_empty());
+    assert!(pairs.values().all(|p| p.state == PairState::Loading));
+}
