@@ -341,7 +341,8 @@ impl IActivateAudioInterfaceCompletionHandler_Impl for ActivationDone_Impl {
         &self,
         _operation: Ref<'_, IActivateAudioInterfaceAsyncOperation>,
     ) -> windows::core::Result<()> {
-        // SAFETY: the event outlives the activation (closed after the wait).
+        // SAFETY: the event outlives the activation: closed after a completed
+        // wait, never closed (leaked) when the wait timed out.
         unsafe { SetEvent(HANDLE(self.event as *mut _)) }
     }
 }
@@ -349,7 +350,9 @@ impl IActivateAudioInterfaceCompletionHandler_Impl for ActivationDone_Impl {
 fn open_process(pid: u32) -> Result<WasapiStream, AudioError> {
     let com = Com::init()?;
     let unavailable = |what: String| AudioError::ProcessLoopbackUnavailable(what);
-    let params = AUDIOCLIENT_ACTIVATION_PARAMS {
+    // On the heap: if the activation times out, Windows may still read them
+    // and signal the event later, so they are then leaked instead of freed.
+    let params = Box::new(AUDIOCLIENT_ACTIVATION_PARAMS {
         ActivationType: AUDIOCLIENT_ACTIVATION_TYPE_PROCESS_LOOPBACK,
         Anonymous: AUDIOCLIENT_ACTIVATION_PARAMS_0 {
             ProcessLoopbackParams: AUDIOCLIENT_PROCESS_LOOPBACK_PARAMS {
@@ -357,16 +360,16 @@ fn open_process(pid: u32) -> Result<WasapiStream, AudioError> {
                 ProcessLoopbackMode: PROCESS_LOOPBACK_MODE_INCLUDE_TARGET_PROCESS_TREE,
             },
         },
-    };
-    let blob = BlobPropVariant {
+    });
+    let blob = Box::new(BlobPropVariant {
         vt: VT_BLOB.0,
         reserved: [0; 3],
         cb_size: std::mem::size_of::<AUDIOCLIENT_ACTIVATION_PARAMS>() as u32,
-        p_blob_data: &params as *const _ as *const u8,
-    };
+        p_blob_data: &*params as *const _ as *const u8,
+    });
 
-    // SAFETY: the event, `params` and `blob` all outlive the asynchronous
-    // activation, which is awaited (or timed out) before they are dropped.
+    // SAFETY: the event, `params` and `blob` outlive the asynchronous
+    // activation: freed after a completed wait, leaked after a timeout.
     unsafe {
         let done = CreateEventW(None, true, false, None).map_err(os)?;
         let handler: IActivateAudioInterfaceCompletionHandler = ActivationDone {
@@ -376,7 +379,7 @@ fn open_process(pid: u32) -> Result<WasapiStream, AudioError> {
         let op = ActivateAudioInterfaceAsync(
             VIRTUAL_AUDIO_DEVICE_PROCESS_LOOPBACK,
             &IAudioClient::IID,
-            Some(&blob as *const BlobPropVariant as *const PROPVARIANT),
+            Some(&*blob as *const BlobPropVariant as *const PROPVARIANT),
             &handler,
         );
         let op = match op {
@@ -387,12 +390,18 @@ fn open_process(pid: u32) -> Result<WasapiStream, AudioError> {
             }
         };
         let waited = WaitForSingleObject(done, ACTIVATION_TIMEOUT_MS);
-        let _ = CloseHandle(done);
         if waited != WAIT_OBJECT_0 {
+            // The activation may still complete: its handler signals `done`
+            // and Windows may read the parameters. Keep all three alive
+            // (a few bytes and one handle, only when this rare timeout happens).
+            std::mem::forget(handler);
+            Box::leak(params);
+            Box::leak(blob);
             return Err(AudioError::Timeout(
                 "activation de la capture par processus",
             ));
         }
+        let _ = CloseHandle(done);
         let mut hr = HRESULT(0);
         let mut unknown: Option<IUnknown> = None;
         op.GetActivateResult(&mut hr, &mut unknown)
