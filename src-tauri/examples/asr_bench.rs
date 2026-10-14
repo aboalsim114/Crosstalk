@@ -19,6 +19,16 @@
 //! `--full-encoder` encodes Whisper's full 30 s window instead of the segment
 //! duration (the app's default), to compare speed and accuracy.
 //! `--vad-only` runs the VAD and segmenter without Whisper (no model needed).
+//!
+//! crosstalk-asr-bench --manifest corpus/manifest.tsv --compare-fronts plain,focus,focus+band --model base [--repeat 4]
+//!
+//! compares audio front-ends on the same synthetic stereo CS2 scenes (voice in
+//! the centre, spatialised combat around it, combat-only gaps before and
+//! after): word/char error rates, voice lines missed, false subtitles in the
+//! gaps, rejections, Whisper time, front-end cost. With `--vad-only`: what
+//! reaches Whisper, no model needed. Fronts: plain (A, current), focus (B,
+//! "Focus voix"), band (200 Hz voice band), focus+band, and for evaluation
+//! only rnnoise / focus+rnnoise (C: RNNoise denoiser, bench dependency).
 //! Options: `--models-dir DIR` (default: the app's folder), `--threads N`,
 //! `--lang ru,en`, `--vad-threshold 0.55`, `--combat-peak-db -3`, `--markdown out.md`.
 //! `--verbose` prints raw offline results, rejection reasons, language/full timings.
@@ -32,8 +42,9 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use crosstalk_lib::speech::bench::{
-    char_errors, combat_track, parse_langs, peak_db, read_wav, run_pipeline, word_errors,
-    write_wav_i16, SegmentResult,
+    apply_front, char_errors, combat_scene, combat_track, parse_langs, peak_db, read_wav,
+    run_pipeline, score_scene, voice_snr_db, word_errors, write_wav_i16, Front, SegmentResult,
+    SCENE_RATE,
 };
 use crosstalk_lib::speech::cpu::process_cpu_time;
 use crosstalk_lib::speech::engine::{default_threads, logical_threads, Recognizer};
@@ -323,6 +334,19 @@ fn main() {
         return live(secs, &dir, &model_list, config, threads);
     }
 
+    if let Some(list) = arg(&args, "--compare-fronts") {
+        return compare_fronts(
+            &args,
+            &list,
+            &dir,
+            &model_list,
+            detector.as_mut(),
+            &config,
+            threads,
+            peak,
+        );
+    }
+
     if args.iter().any(|a| a == "--vad-only") {
         return vad_only(&args, detector.as_mut(), &config, peak);
     }
@@ -607,4 +631,242 @@ fn live(secs: u64, dir: &Path, model: &str, config: SpeechConfig, threads: usize
         cpu,
         cpu / std::thread::available_parallelism().map(|n| n.get() as f64).unwrap_or(1.0)
     );
+}
+
+/// A front-end of the comparison: the library's, or a denoiser evaluated
+/// here only (not in the app).
+#[derive(Debug, Clone, Copy)]
+enum Fe {
+    Lib(Front),
+    /// C: RNNoise (nnnoiseless, BSD-3, weights in the crate), after the
+    /// focus or alone.
+    Denoise {
+        focus: bool,
+    },
+}
+
+impl Fe {
+    fn parse(s: &str) -> Option<Self> {
+        match s.trim() {
+            "rnnoise" | "c" => Some(Fe::Denoise { focus: false }),
+            "focus+rnnoise" => Some(Fe::Denoise { focus: true }),
+            other => Front::parse(other).map(Fe::Lib),
+        }
+    }
+    fn label(self) -> &'static str {
+        match self {
+            Fe::Lib(f) => f.label(),
+            Fe::Denoise { focus: false } => "C · RNNoise",
+            Fe::Denoise { focus: true } => "B + RNNoise",
+        }
+    }
+    /// The library front whose linear part applies to the SNR reference.
+    fn reference(self) -> Front {
+        match self {
+            Fe::Lib(f) => f,
+            Fe::Denoise { .. } => Front::Plain,
+        }
+    }
+    fn apply(self, stereo: &[f32]) -> Vec<f32> {
+        match self {
+            Fe::Lib(f) => apply_front(stereo, SCENE_RATE, f),
+            Fe::Denoise { focus } => {
+                let base = apply_front(
+                    stereo,
+                    SCENE_RATE,
+                    if focus { Front::Focus } else { Front::Plain },
+                );
+                rnnoise(&base)
+            }
+        }
+    }
+}
+
+/// RNNoise at 48 kHz (10 ms frames, i16 scale), delay compensated.
+fn rnnoise(x: &[f32]) -> Vec<f32> {
+    use nnnoiseless::DenoiseState;
+    let n = DenoiseState::FRAME_SIZE;
+    let mut st = DenoiseState::new();
+    let mut out = Vec::with_capacity(x.len() + n);
+    let (mut inp, mut buf) = (vec![0.0f32; n], vec![0.0f32; n]);
+    for chunk in x.chunks(n) {
+        inp.fill(0.0);
+        for (d, s) in inp.iter_mut().zip(chunk) {
+            *d = s * 32768.0;
+        }
+        st.process_frame(&mut buf, &inp);
+        out.extend(buf.iter().map(|s| s / 32768.0));
+    }
+    let mut out = out.split_off(n.min(out.len()));
+    out.resize(x.len(), 0.0);
+    out
+}
+
+#[derive(Default)]
+struct FrontTotals {
+    t: Totals,
+    scenes: usize,
+    missed: usize,
+    false_alarms: usize,
+    front_s: f64,
+    coverage: f64,
+    snr_db: f64,
+}
+
+/// A/B(/C) comparison of audio front-ends on identical stereo combat scenes.
+#[allow(clippy::too_many_arguments)]
+fn compare_fronts(
+    args: &[String],
+    list: &str,
+    dir: &Path,
+    model_list: &str,
+    detector: &mut dyn VoiceDetector,
+    config: &SpeechConfig,
+    threads: usize,
+    peak: f32,
+) {
+    let fronts: Vec<Fe> = list
+        .split(',')
+        .map(|f| Fe::parse(f).unwrap_or_else(|| fail(&format!("traitement inconnu : {f}"))))
+        .collect();
+    let manifest =
+        arg(args, "--manifest").unwrap_or_else(|| fail("--compare-fronts exige --manifest"));
+    let clips = read_manifest(Path::new(&manifest));
+    let repeat: u64 = arg(args, "--repeat")
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(1)
+        .max(1);
+    let vad_only = args.iter().any(|a| a == "--vad-only");
+    let models: Vec<Option<&str>> = if vad_only {
+        vec![None]
+    } else {
+        model_list
+            .split(',')
+            .map(str::trim)
+            .filter(|m| !m.is_empty())
+            .map(Some)
+            .collect()
+    };
+    let mut md = format!(
+        "### Comparaison des traitements audio\n\nScènes **synthétiques** : {} extrait(s) × {repeat} tirage(s), voix au centre (−6 dBFS), combat spatialisé (crête {:.1} dBFS) avant, pendant et après chaque phrase. {}.\n\n| Modèle | Scène | Traitement | WER ru | WER en | CER ru | CER en | Voix manquées | Couverture | Faux positifs | RSB voix | Rejets | Whisper p50 / p95 | Traitement audio | CPU / temps réel |\n|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|\n",
+        clips.len(),
+        20.0 * peak.log10(),
+        if vad_only { "Sans Whisper : « voix manquées » = aucun segment envoyé à Whisper sur la phrase ; « faux positifs » = segments envoyés pendant le combat seul" } else { "« Faux positifs » = sous-titres acceptés pendant le combat seul" }
+    );
+    for model in models {
+        let mut recognizer = model.map(|m| {
+            WhisperLoader
+                .load_recognizer(dir, m, config.accel)
+                .unwrap_or_else(|e| fail(&format!("modèle {m} : {e}")))
+        });
+        let config = SpeechConfig {
+            model: model.unwrap_or("—").into(),
+            ..config.clone()
+        };
+        for (scene_name, own) in [("combat autour", false), ("+ ses propres tirs", true)] {
+            for &front in &fronts {
+                let mut ft = FrontTotals::default();
+                let (cpu0, wall0) = (process_cpu_time(), Instant::now());
+                for (i, clip) in clips.iter().enumerate() {
+                    let bytes = std::fs::read(&clip.path)
+                        .unwrap_or_else(|e| fail(&format!("{}: {e}", clip.path.display())));
+                    let wav = read_wav(&bytes)
+                        .unwrap_or_else(|e| fail(&format!("{}: {e}", clip.path.display())));
+                    for r in 0..repeat {
+                        // Same seed for every front: the same recordings.
+                        let sc = combat_scene(
+                            &wav.mono,
+                            wav.rate,
+                            peak,
+                            7000 + 31 * i as u64 + 1009 * r,
+                            own,
+                        );
+                        let tf = Instant::now();
+                        let mono = front.apply(&sc.stereo);
+                        ft.front_s += tf.elapsed().as_secs_f64();
+                        ft.snr_db += voice_snr_db(
+                            &sc.clean,
+                            &mono,
+                            sc.voice_ms,
+                            SCENE_RATE,
+                            front.reference(),
+                        ) as f64;
+                        ft.t.audio_s += mono.len() as f64 / SCENE_RATE as f64;
+                        let results = run_pipeline(
+                            &mono,
+                            SCENE_RATE,
+                            detector,
+                            recognizer
+                                .as_mut()
+                                .map(|r| r.as_mut() as &mut dyn Recognizer),
+                            &config,
+                            threads,
+                        )
+                        .unwrap_or_else(|e| fail(&e.to_string()));
+                        account(&mut ft.t, &results, clip.lang);
+                        let s = score_scene(&results, sc.voice_ms, recognizer.is_some());
+                        ft.scenes += 1;
+                        ft.missed += usize::from(s.missed);
+                        ft.false_alarms += s.false_alarms;
+                        ft.coverage += s.coverage as f64;
+                        if let (Some(l), true) = (
+                            clip.lang,
+                            recognizer.is_some() && !clip.reference.is_empty(),
+                        ) {
+                            let (we, w) = word_errors(&clip.reference, &s.text);
+                            let (ce, c) = char_errors(&clip.reference, &s.text);
+                            let k = lang_idx(l);
+                            ft.t.word_err[k] += we;
+                            ft.t.words[k] += w;
+                            ft.t.char_err[k] += ce;
+                            ft.t.chars[k] += c;
+                        }
+                        if args.iter().any(|a| a == "--verbose") {
+                            println!(
+                                "  [{scene_name} · {}] « {} » (manquée : {}, faux positifs : {})",
+                                front.label(),
+                                s.text,
+                                s.missed,
+                                s.false_alarms
+                            );
+                        }
+                    }
+                }
+                ft.t.wall_s = wall0.elapsed().as_secs_f64();
+                ft.t.cpu_s = match (cpu0, process_cpu_time()) {
+                    (Some(a), Some(b)) => (b - a).as_secs_f64(),
+                    _ => f64::NAN,
+                };
+                let t = &ft.t;
+                let line = format!(
+                    "| {} | {scene_name} | {} | {} | {} | {} | {} | {}/{} | {:.0} % | {} | {:.1} dB | {} | {} | {:.2} ms/s | {:.0} % |\n",
+                    model.unwrap_or("VAD seule"),
+                    front.label(),
+                    rate(t.word_err[0], t.words[0]),
+                    rate(t.word_err[1], t.words[1]),
+                    rate(t.char_err[0], t.chars[0]),
+                    rate(t.char_err[1], t.chars[1]),
+                    ft.missed,
+                    ft.scenes,
+                    100.0 * ft.coverage / ft.scenes.max(1) as f64,
+                    ft.false_alarms,
+                    ft.snr_db / ft.scenes.max(1) as f64,
+                    rejected(t),
+                    if t.asr_ms.is_empty() { "—".into() } else { format!("{} / {} ms", pct(&t.asr_ms, 0.5), pct(&t.asr_ms, 0.95)) },
+                    1000.0 * ft.front_s / t.audio_s.max(1e-9),
+                    100.0 * t.cpu_s / t.audio_s.max(1e-9),
+                );
+                print!("{line}");
+                md.push_str(&line);
+                if let Some(out) = arg(args, "--markdown") {
+                    let _ = std::fs::write(&out, &md);
+                }
+            }
+        }
+    }
+    md.push_str("\nTraitement audio : temps de calcul du traitement par seconde d'audio (48 kHz stéréo). CPU / temps réel : tout le pipeline (traitement, VAD, Whisper).\n");
+    if let Some(out) = arg(args, "--markdown") {
+        std::fs::write(&out, &md).unwrap_or_else(|e| fail(&format!("{out}: {e}")));
+        println!("\nRapport écrit dans {out}");
+    }
 }

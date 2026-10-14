@@ -91,6 +91,9 @@ opt-level = 3
 [profile.release.package.whisper-rs]
 opt-level = 3
 
+[dev-dependencies]
+nnnoiseless = { version = "0.5.2", default-features = false }
+
 [profile.release]
 codegen-units = 1
 lto = true

@@ -94,8 +94,13 @@ pub const HIGH_PASS_HZ: f32 = 120.0;
 
 impl HighPass {
     pub fn new(cutoff_hz: f32, sample_rate: u32) -> Self {
+        Self::with_q(cutoff_hz, sample_rate, std::f32::consts::FRAC_1_SQRT_2)
+    }
+
+    /// Any Q (cascades of these make steeper Butterworth filters).
+    pub fn with_q(cutoff_hz: f32, sample_rate: u32, q: f32) -> Self {
         let w0 = 2.0 * std::f32::consts::PI * cutoff_hz / sample_rate as f32;
-        let alpha = w0.sin() / (2.0 * std::f32::consts::FRAC_1_SQRT_2);
+        let alpha = w0.sin() / (2.0 * q);
         let cos = w0.cos();
         let a0 = 1.0 + alpha;
         Self {
