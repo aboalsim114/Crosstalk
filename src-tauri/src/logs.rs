@@ -8,7 +8,10 @@
 use std::collections::{HashMap, VecDeque};
 use std::io::Write;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::mpsc::{sync_channel, Receiver, SyncSender, TrySendError};
 use std::sync::{Mutex, OnceLock};
+use std::time::Duration;
 
 use regex::Regex;
 use serde::{Deserialize, Serialize};
@@ -20,6 +23,9 @@ pub const KEEP_DAYS: u64 = 7;
 const RECENT: usize = 400;
 const MAX_MESSAGE: usize = 500;
 const DAY_MS: u64 = 24 * 3600 * 1000;
+/// Lines waiting for the disk; beyond that (disk stalled) they are counted
+/// and the count is written once the disk keeps up again.
+const WRITE_QUEUE: usize = 1024;
 const ISSUES_URL: &str = "https://github.com/aboalsim114/Crosstalk/issues/new";
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -43,9 +49,45 @@ impl Line {
     }
 }
 
+/// Disk writes go through the `journal` thread: the threads that log (VAD,
+/// Whisper, capture) never wait for the disk, nor hold a lock during it.
 pub struct Logger {
     dir: Option<PathBuf>,
     inner: Mutex<Inner>,
+    writer: Option<SyncSender<Job>>,
+    /// Lines not written because the queue was full.
+    dropped: AtomicU64,
+}
+
+enum Job {
+    Line {
+        path: PathBuf,
+        text: String,
+    },
+    /// Answers once every line queued before it is on disk.
+    Flush(SyncSender<()>),
+}
+
+fn write_loop(dir: PathBuf, jobs: Receiver<Job>) {
+    for job in jobs {
+        match job {
+            Job::Line { path, text } => {
+                let ok = std::fs::create_dir_all(&dir).is_ok()
+                    && std::fs::OpenOptions::new()
+                        .create(true)
+                        .append(true)
+                        .open(&path)
+                        .and_then(|mut f| writeln!(f, "{text}"))
+                        .is_ok();
+                if !ok {
+                    eprintln!("crosstalk: journal non écrit ({})", path.display());
+                }
+            }
+            Job::Flush(done) => {
+                let _ = done.send(());
+            }
+        }
+    }
 }
 
 #[derive(Default)]
@@ -58,9 +100,54 @@ struct Inner {
 impl Logger {
     /// `dir: None` keeps the lines in memory only (tests, unwritable folder).
     pub fn new(dir: Option<PathBuf>) -> Self {
+        let writer = dir.clone().and_then(|d| {
+            let (tx, rx) = sync_channel(WRITE_QUEUE);
+            std::thread::Builder::new()
+                .name("journal".into())
+                .spawn(move || write_loop(d, rx))
+                .ok()
+                .map(|_| tx)
+        });
         Self {
             dir,
             inner: Mutex::new(Inner::default()),
+            writer,
+            dropped: AtomicU64::new(0),
+        }
+    }
+
+    /// Waits (at most `timeout`) until the lines logged so far are on disk.
+    pub fn flush(&self, timeout: Duration) -> bool {
+        let Some(writer) = &self.writer else {
+            return true;
+        };
+        let (tx, rx) = sync_channel(1);
+        writer.send(Job::Flush(tx)).is_ok() && rx.recv_timeout(timeout).is_ok()
+    }
+
+    fn write(&self, ts: u64, text: String) {
+        let (Some(dir), Some(writer)) = (&self.dir, &self.writer) else {
+            return;
+        };
+        let path = dir.join(file_name(ts));
+        let lost = self.dropped.swap(0, Ordering::Relaxed);
+        if lost > 0 {
+            let note = format!(
+                "{} WARN  journal: {lost} ligne(s) non écrite(s), disque trop lent",
+                utc((ts / 1000) as i64)
+            );
+            if writer
+                .try_send(Job::Line {
+                    path: path.clone(),
+                    text: note,
+                })
+                .is_err()
+            {
+                self.dropped.fetch_add(lost, Ordering::Relaxed);
+            }
+        }
+        if let Err(TrySendError::Full(_)) = writer.try_send(Job::Line { path, text }) {
+            self.dropped.fetch_add(1, Ordering::Relaxed);
         }
     }
 
@@ -85,23 +172,12 @@ impl Logger {
             message,
         };
         let text = line.text();
-        let mut inner = self.inner.lock().unwrap_or_else(|e| e.into_inner());
-        if let Some(dir) = &self.dir {
-            let path = dir.join(file_name(ts));
-            let ok = std::fs::create_dir_all(dir).is_ok()
-                && std::fs::OpenOptions::new()
-                    .create(true)
-                    .append(true)
-                    .open(&path)
-                    .and_then(|mut f| writeln!(f, "{text}"))
-                    .is_ok();
-            if !ok {
-                eprintln!("crosstalk: journal non écrit ({})", path.display());
-            }
-        }
         if cfg!(debug_assertions) {
             eprintln!("{text}");
         }
+        let mut inner = self.inner.lock().unwrap_or_else(|e| e.into_inner());
+        // Queued under the lock: the file keeps the order of the lines.
+        self.write(ts, text);
         if inner.recent.len() == RECENT {
             inner.recent.pop_front();
         }
@@ -157,6 +233,8 @@ pub fn init(dir: PathBuf) {
             .or_else(|| info.payload().downcast_ref::<String>().cloned())
             .unwrap_or_default();
         error("panic", &format!("{what}{at}"));
+        // The release build aborts right after: the line must reach the disk.
+        global().flush(Duration::from_millis(500));
         previous(info);
     }));
 }
@@ -665,6 +743,7 @@ mod tests {
         let log = Logger::new(Some(dir.clone()));
         log.log_at(NOW - DAY, "INFO", "audio", "hier");
         log.log_at(NOW, "WARN", "asr", "aujourd’hui");
+        assert!(log.flush(Duration::from_secs(5)));
         let today = std::fs::read_to_string(dir.join("crosstalk-2026-10-13.log")).unwrap();
         assert_eq!(today, "2026-10-13 12:00:00 UTC WARN  asr: aujourd’hui\n");
         assert!(dir.join("crosstalk-2026-10-12.log").exists());
@@ -675,6 +754,39 @@ mod tests {
             log.log_at(NOW, "INFO", "x", &i.to_string());
         }
         assert_eq!(log.recent(usize::MAX).len(), RECENT);
+    }
+
+    #[test]
+    fn a_burst_of_lines_is_written_or_counted_never_silently_lost() {
+        let dir = tempdir("burst");
+        let log = Logger::new(Some(dir.clone()));
+        for i in 0..3000 {
+            log.log_at(NOW, "INFO", "asr", &format!("ligne {i}"));
+        }
+        // Once the disk has caught up, the next line carries the count of
+        // what it could not take.
+        assert!(log.flush(Duration::from_secs(10)));
+        log.log_at(NOW, "INFO", "asr", "fin");
+        assert!(log.flush(Duration::from_secs(10)));
+        let text = std::fs::read_to_string(dir.join("crosstalk-2026-10-13.log")).unwrap();
+        let written: Vec<u32> = text
+            .lines()
+            .filter_map(|l| l.split("ligne ").nth(1)?.parse().ok())
+            .collect();
+        let lost: u64 = text
+            .lines()
+            .filter_map(|l| {
+                l.split("journal: ")
+                    .nth(1)?
+                    .split(' ')
+                    .next()?
+                    .parse::<u64>()
+                    .ok()
+            })
+            .sum();
+        assert_eq!(written.len() as u64 + lost, 3000, "{lost} lost");
+        assert!(written.windows(2).all(|w| w[0] < w[1]), "order kept");
+        assert!(text.trim_end().ends_with("asr: fin"));
     }
 
     #[test]
