@@ -13,9 +13,9 @@
 use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -25,6 +25,10 @@ pub const CFG_NAME: &str = "gamestate_integration_crosstalk.cfg";
 /// Local port CS2 posts to (127.0.0.1 only).
 pub const PORT: u16 = 31982;
 const MAX_BODY: usize = 256 * 1024;
+/// A request must arrive whole within this time, however slowly it trickles.
+const REQUEST_DEADLINE: Duration = Duration::from_secs(2);
+/// Requests read at once: a slow local client never holds up CS2's messages.
+const MAX_CONNECTIONS: usize = 4;
 const CS2_APPID: u64 = 730;
 
 #[derive(Debug, Clone, Deserialize)]
@@ -178,11 +182,19 @@ pub fn parse_state(body: &str, token: &str) -> Option<Option<MapState>> {
 
 /// Reads one HTTP request (headers + body) from a local connection.
 fn read_request(stream: &mut TcpStream) -> Option<String> {
-    stream.set_read_timeout(Some(Duration::from_secs(2))).ok()?;
+    let end = Instant::now() + REQUEST_DEADLINE;
+    let read = |stream: &mut TcpStream, chunk: &mut [u8]| -> Option<usize> {
+        let left = end.checked_duration_since(Instant::now())?;
+        if left.is_zero() {
+            return None;
+        }
+        stream.set_read_timeout(Some(left)).ok()?;
+        stream.read(chunk).ok()
+    };
     let mut buf = Vec::with_capacity(4096);
     let mut chunk = [0u8; 4096];
     let header_end = loop {
-        let n = stream.read(&mut chunk).ok()?;
+        let n = read(stream, &mut chunk)?;
         if n == 0 {
             return None;
         }
@@ -206,7 +218,7 @@ fn read_request(stream: &mut TcpStream) -> Option<String> {
         return None;
     }
     while buf.len() < header_end + len {
-        let n = stream.read(&mut chunk).ok()?;
+        let n = read(stream, &mut chunk)?;
         if n == 0 {
             return None;
         }
@@ -220,6 +232,8 @@ pub struct GsiService {
     status: Mutex<GsiStatus>,
     token: Mutex<Option<String>>,
     started: AtomicBool,
+    /// Requests being read (at most `MAX_CONNECTIONS`).
+    connections: AtomicUsize,
     port: u16,
 }
 
@@ -237,6 +251,7 @@ impl GsiService {
             }),
             token: Mutex::new(None),
             started: AtomicBool::new(false),
+            connections: AtomicUsize::new(0),
             port,
         })
     }
@@ -356,6 +371,17 @@ impl GsiService {
         true
     }
 
+    /// Reads one message from CS2 and answers it (403 when refused).
+    fn answer(&self, mut stream: TcpStream) {
+        let ok = read_request(&mut stream).is_some_and(|b| self.on_message(&b));
+        let reply = if ok {
+            "HTTP/1.1 200 OK\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
+        } else {
+            "HTTP/1.1 403 Forbidden\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
+        };
+        let _ = stream.write_all(reply.as_bytes());
+    }
+
     /// Starts the local server once (127.0.0.1 only).
     fn listen(self: &Arc<Self>) {
         if self.started.swap(true, Ordering::SeqCst) {
@@ -373,14 +399,23 @@ impl GsiService {
                     .name("gsi".into())
                     .spawn(move || {
                         for stream in listener.incoming() {
-                            let Ok(mut stream) = stream else { continue };
-                            let ok = read_request(&mut stream).is_some_and(|b| me.on_message(&b));
-                            let reply = if ok {
-                                "HTTP/1.1 200 OK\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
-                            } else {
-                                "HTTP/1.1 403 Forbidden\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
-                            };
-                            let _ = stream.write_all(reply.as_bytes());
+                            let Ok(stream) = stream else { continue };
+                            // Each request on its own thread, a few at once:
+                            // beyond that, the connection is closed.
+                            if me.connections.fetch_add(1, Ordering::SeqCst) >= MAX_CONNECTIONS {
+                                me.connections.fetch_sub(1, Ordering::SeqCst);
+                                continue;
+                            }
+                            let worker = me.clone();
+                            let spawned = std::thread::Builder::new()
+                                .name("gsi-request".into())
+                                .spawn(move || {
+                                    worker.answer(stream);
+                                    worker.connections.fetch_sub(1, Ordering::SeqCst);
+                                });
+                            if spawned.is_err() {
+                                me.connections.fetch_sub(1, Ordering::SeqCst);
+                            }
                         }
                     })
                     .expect("gsi thread");
@@ -595,6 +630,47 @@ mod tests {
         let st = gsi.uninstall(&dir).unwrap();
         assert!(!st.installed && !cfg_dir(&dir).join(CFG_NAME).exists());
         assert!(post(port, &good).starts_with("HTTP/1.1 403"));
+    }
+
+    #[test]
+    fn a_slow_local_client_neither_blocks_cs2_nor_stays_connected() {
+        let dir = cs2("slow");
+        let port = 31982 + 9 + (std::process::id() % 500) as u16;
+        let gsi = GsiService::with_port(Arc::new(Rec::default()), port);
+        gsi.install(&dir).unwrap();
+        let token =
+            token_of(&std::fs::read_to_string(cfg_dir(&dir).join(CFG_NAME)).unwrap()).unwrap();
+        // A client that sends one byte every 300 ms, forever.
+        let mut slow = TcpStream::connect(("127.0.0.1", port)).unwrap();
+        let started = Instant::now();
+        let trickle = std::thread::spawn(move || {
+            for b in b"POST / HTTP/1.1\r\nHost: 127.0.0.1\r\n"
+                .iter()
+                .cycle()
+                .take(40)
+            {
+                if slow.write_all(&[*b]).is_err() {
+                    return Some(started.elapsed());
+                }
+                std::thread::sleep(Duration::from_millis(300));
+            }
+            None
+        });
+        std::thread::sleep(Duration::from_millis(200));
+        // CS2's message is answered at once.
+        let t = Instant::now();
+        let good = format!(
+            r#"{{"provider":{{"appid":730}},"map":{{"name":"de_nuke"}},"auth":{{"token":"{token}"}}}}"#
+        );
+        assert!(post(port, &good).starts_with("HTTP/1.1 200"));
+        assert!(t.elapsed() < Duration::from_secs(1), "{:?}", t.elapsed());
+        // The slow client is cut off after the deadline (write fails once closed).
+        let cut = trickle
+            .join()
+            .unwrap()
+            .expect("slow client never disconnected");
+        assert!(cut < Duration::from_secs(5), "{cut:?}");
+        let _ = gsi.uninstall(&dir);
     }
 
     #[test]
