@@ -717,6 +717,69 @@ mod tests {
         assert!(log.recent(1)[0].message.ends_with('…'));
     }
 
+    /// The journal reads the statuses by their serialised field names: built
+    /// from the real types, so renaming a field breaks this test, not the
+    /// journal silently (docs/architecture/audit.md, A18).
+    #[test]
+    fn summarizes_the_real_status_types() {
+        use crate::audio::CaptureStatus;
+        use crate::speech::{EngineState, SpeechConfig, SpeechStatus};
+        use crate::translation::service::{PairState, PairStatus};
+        use crate::translation::{TranslationConfig, TranslationStatus};
+
+        let speech = SpeechStatus {
+            state: EngineState::Ready,
+            config: SpeechConfig {
+                model: "small".into(),
+                ..SpeechConfig::default()
+            },
+            model_path: None,
+            vad_ready: false,
+            models_dir: "models".into(),
+            error: Some("lent".into()),
+            load_ms: Some(900),
+            backend: "CPU · AVX2".into(),
+            threads: 4,
+        };
+        let line = &summarize("speech://status", &serde_json::to_value(&speech).unwrap())[0];
+        assert_eq!(
+            (line.1, line.3.as_str()),
+            (
+                "INFO",
+                "whisper-small : ready · CPU · AVX2 · 4 thread(s) · VAD absente · chargé en 900 ms · lent"
+            )
+        );
+
+        let translation = TranslationStatus {
+            config: TranslationConfig::default(),
+            pairs: vec![PairStatus {
+                source: "ru".into(),
+                target: "fr".into(),
+                repo: "Helsinki-NLP/opus-mt-ru-fr".into(),
+                state: PairState::Error,
+                error: Some("illisible".into()),
+                load_ms: Some(300),
+            }],
+            models_dir: "models".into(),
+            queued: 0,
+        };
+        let line = &summarize(
+            "translation://status",
+            &serde_json::to_value(&translation).unwrap(),
+        )[0];
+        assert_eq!(
+            (line.0.as_str(), line.1, line.3.as_str()),
+            (
+                "translation://status/ru",
+                "WARN",
+                "ru→fr : error · chargé en 300 ms · illisible"
+            )
+        );
+
+        let idle = serde_json::to_value(CaptureStatus::idle()).unwrap();
+        assert_eq!(summarize("audio://status", &idle)[0].3, "capture à l’arrêt");
+    }
+
     #[test]
     fn summarizes_service_statuses() {
         let cap = json!({"state":"capturing","source":{"kind":"process","pid":42,"processName":"cs2.exe"},"format":{"sampleRate":48000,"channels":2},"fallbackReason":null,"error":null});
