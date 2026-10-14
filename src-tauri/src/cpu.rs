@@ -1,6 +1,7 @@
 //! CPU usage of the Crosstalk core process (WASAPI capture, VAD and Whisper all
-//! run in it; the WebView2 UI has its own processes). Reads this process's own
-//! counters only.
+//! run in it; the WebView2 UI has its own processes), and the priority of the
+//! compute threads (speech, translation). Reads this process's own counters
+//! only. A leaf module: it uses nothing else from the crate.
 
 use std::time::{Duration, Instant};
 

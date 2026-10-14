@@ -491,7 +491,7 @@ fn failure(id: u64, lang: &str, text: &str, why: &str, queue_ms: u32) -> Transla
 type Engines = HashMap<(String, String), Box<dyn Engine>>;
 
 fn worker_loop(inner: &Inner) {
-    crate::speech::cpu::lower_current_thread_priority();
+    crate::cpu::lower_current_thread_priority();
     let mut engines: Engines = HashMap::new();
     while !inner.shutdown.load(Ordering::SeqCst) {
         if inner.reload.swap(false, Ordering::SeqCst) {

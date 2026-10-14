@@ -20,6 +20,7 @@ pub mod audio;
 pub mod chat;
 mod clipboard;
 mod commands;
+pub mod cpu;
 mod dictation;
 mod download_commands;
 pub mod downloads;
@@ -28,8 +29,9 @@ mod gsi;
 mod history;
 mod logs;
 mod overlay;
-mod reply;
+pub mod paths;
 mod recap;
+mod reply;
 mod settings;
 mod shortcuts;
 mod speaker;
@@ -38,6 +40,7 @@ mod stream;
 pub mod translation;
 mod tray;
 mod updater;
+mod version;
 
 use std::sync::Arc;
 
@@ -162,7 +165,7 @@ pub fn run() {
                 &format!(
                     "Crosstalk {} · build {} · commit {} · Windows {}",
                     env!("CARGO_PKG_VERSION"),
-                    updater::current_build(),
+                    version::current_build(),
                     env!("CROSSTALK_COMMIT"),
                     audio::platform::windows_build()
                         .map(|b| b.to_string())
@@ -198,7 +201,7 @@ pub fn run() {
                 chat::user_rules_file(),
             );
             app.manage(chat.clone());
-            let reply = reply::ReplyService::new(speech::models::models_dir());
+            let reply = reply::ReplyService::new(paths::models_dir());
             app.manage(reply.clone());
             app.manage(Arc::new(dictation::Dictation::default()));
             app.manage(stream::StreamService::new());

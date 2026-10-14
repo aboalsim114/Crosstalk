@@ -27,7 +27,6 @@ use std::sync::mpsc::{sync_channel, Receiver, RecvTimeoutError, SyncSender, TryS
 use std::sync::{Arc, Condvar, Mutex};
 use std::time::{Duration, Instant};
 
-use super::cpu::{lower_current_thread_priority, CpuMeter};
 use super::dsp::{Conditioner, SAMPLE_RATE};
 use super::engine::{default_threads, sanitize_threads, RecognizeOptions, Recognizer};
 use super::filter::{judge, prompt_with};
@@ -38,6 +37,7 @@ use super::types::{
 use super::vad::{VoiceDetector, FRAME, FRAME_MS};
 use super::SpeechError;
 use crate::audio::{AudioBlock, BlockSink};
+use crate::cpu::{lower_current_thread_priority, CpuMeter};
 
 /// Segments older than this when Whisper gets to them are dropped: a callout
 /// shown 6 s late is misleading.

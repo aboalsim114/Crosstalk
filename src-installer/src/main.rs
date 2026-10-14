@@ -23,6 +23,8 @@ mod downloads;
 #[allow(dead_code)]
 #[path = "../../src-tauri/src/translation/models.rs"]
 mod opus_models;
+#[path = "../../src-tauri/src/paths.rs"]
+mod paths;
 #[allow(dead_code)]
 #[path = "../../src-tauri/src/speech/models.rs"]
 mod whisper_models;
@@ -49,7 +51,7 @@ const PROGRESS: &str = "setup://progress";
 fn installer() -> Arc<Installer> {
     Installer::new(
         payload::FILES,
-        speech::models::models_dir(),
+        paths::models_dir(),
         VERSION,
         Arc::new(downloads::HttpFetcher),
         Arc::new(system::System),

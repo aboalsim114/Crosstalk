@@ -16,6 +16,7 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
 use crate::downloads::Fetcher;
+use crate::version::current_build;
 
 /// Update feed (overridable with `CROSSTALK_UPDATE_URL`).
 pub const FEED_URL: &str =
@@ -27,11 +28,6 @@ const ALLOWED_HOSTS: &[&str] = &[
     "objects.githubusercontent.com",
 ];
 const MAX_MANIFEST: usize = 64 * 1024;
-
-/// This build's number (commits on the branch, see build.rs).
-pub fn current_build() -> u32 {
-    env!("CROSSTALK_BUILD").parse().unwrap_or(0)
-}
 
 pub fn feed_url() -> String {
     std::env::var("CROSSTALK_UPDATE_URL").unwrap_or_else(|_| FEED_URL.to_string())

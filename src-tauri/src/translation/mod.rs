@@ -36,7 +36,7 @@ pub fn start(app: &AppHandle) -> Arc<TranslationService> {
     TranslationService::start(
         Arc::new(TauriEvents(app.clone())),
         Arc::new(service::OpusLoader),
-        crate::speech::models::models_dir(),
+        crate::paths::models_dir(),
         TranslationConfig::default(),
     )
 }
@@ -72,7 +72,7 @@ pub fn translation_rescan(t: State<'_, Arc<TranslationService>>) -> TranslationS
 #[tauri::command]
 pub fn translation_models(t: State<'_, Arc<TranslationService>>) -> Vec<models::PairInfo> {
     let c = t.status().config;
-    models::list(&crate::speech::models::models_dir(), &c.target, &c.sources)
+    models::list(&crate::paths::models_dir(), &c.target, &c.sources)
 }
 
 /// Manual test from the Audio page: blocks a worker thread, not the UI.

@@ -519,7 +519,7 @@ pub fn report_text(rows: &[DiagRow], lines: &[Line], models_dir: &Path, now: u64
     add(format!(
         "Crosstalk {} · build {} · commit {}",
         env!("CARGO_PKG_VERSION"),
-        crate::updater::current_build(),
+        crate::version::current_build(),
         env!("CROSSTALK_COMMIT")
     ));
     add(format!(
@@ -570,7 +570,7 @@ pub fn issue_url(report: Option<&str>) -> String {
     let body = format!(
         "**Ce qui se passe :**\n\n\n**Ce que j’attendais :**\n\n\n**Étapes pour reproduire :**\n1. \n\n---\nCrosstalk {} · build {} · commit {} · Windows {}\n{}",
         env!("CARGO_PKG_VERSION"),
-        crate::updater::current_build(),
+        crate::version::current_build(),
         env!("CROSSTALK_COMMIT"),
         crate::audio::platform::windows_build().map(|b| b.to_string()).unwrap_or_else(|| "?".into()),
         match report {
@@ -632,7 +632,7 @@ pub fn diag_report(rows: Vec<DiagRow>) -> Result<String, String> {
     let text = report_text(
         &rows,
         &global().recent(200),
-        &crate::speech::models::models_dir(),
+        &crate::paths::models_dir(),
         now,
     );
     let path = crate::history::documents_path("Crosstalk-diagnostic", "txt", now);

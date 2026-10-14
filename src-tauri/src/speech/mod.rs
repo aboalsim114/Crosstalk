@@ -6,7 +6,6 @@
 //! translated into French by the translation service (`translation://result`).
 
 pub mod bench;
-pub mod cpu;
 pub mod dsp;
 pub mod engine;
 pub mod filter;
@@ -224,7 +223,7 @@ pub fn start(app: &AppHandle) -> Arc<SpeechService> {
     SpeechService::start(
         Arc::new(TauriEvents(app.clone())),
         Arc::new(WhisperLoader),
-        models::models_dir(),
+        crate::paths::models_dir(),
         SpeechConfig::default(),
     )
 }
