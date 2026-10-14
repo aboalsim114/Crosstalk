@@ -113,7 +113,7 @@ fn configuration_is_sanitized_and_checked() {
     assert_eq!(ollama.problem(), None);
     assert!(ollama.is_local());
     let bad = LlmConfig {
-        base_url: "ftp://x".into(),
+        base_url: "api.example.com/v1".into(),
         ..openai()
     };
     assert!(bad.problem().is_some());
