@@ -2,7 +2,7 @@
 
 ![Carte de résumé (données de démonstration)](../assets/recap-card-demo.png)
 
-*Image produite par `src/recap/card.ts` dans Chromium, avec des **données de démonstration** : ce n'est pas une vraie partie.*
+*Image produite par `src/features/recap/card.ts` dans Chromium, avec des **données de démonstration** : ce n'est pas une vraie partie.*
 
 ![Panneau dans l'onglet Historique (données de démonstration)](../assets/recap-panel-demo.png)
 

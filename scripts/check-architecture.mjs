@@ -7,7 +7,7 @@
 // 1. Rust: no new cycle between the top-level modules of src-tauri/src.
 // 2. Rust: the files the installer compiles with #[path] only use each other.
 // 3. Frontend: no import cycle (type-only imports excluded), and the IPC layer
-//    (src/backend) never imports the UI.
+//    (src/shared/ipc) never imports the UI.
 // 4. IPC contract: Tauri commands and event names match the committed list,
 //    so a refactoring cannot rename one silently.
 import { existsSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
@@ -151,9 +151,9 @@ for (const f of tsFiles) {
 }
 for (const c of cycles(tsGraph)) errors.push(`Frontend : cycle d'import ${c.join(' ↔ ')}`);
 for (const [f, deps] of tsAllImports) {
-  if (!f.startsWith(join(SRC, 'backend'))) continue;
+  if (!f.startsWith(join(SRC, 'shared', 'ipc'))) continue;
   for (const d of deps)
-    if (!d.startsWith(join(SRC, 'backend'))) errors.push(`Frontend : la couche IPC ${f} importe ${d} (l'IPC ne dépend pas de l'interface)`);
+    if (!d.startsWith(join(SRC, 'shared', 'ipc'))) errors.push(`Frontend : la couche IPC ${f} importe ${d} (l'IPC ne dépend pas de l'interface)`);
 }
 
 // ---------- 4. IPC contract ----------
