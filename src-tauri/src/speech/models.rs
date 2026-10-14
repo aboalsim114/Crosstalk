@@ -129,6 +129,22 @@ pub fn list(dir: &Path) -> Vec<ModelInfo> {
 mod tests {
     use super::*;
 
+    /// scripts/download-models.ps1 copies this catalogue (offline install).
+    #[test]
+    fn the_powershell_download_script_has_the_same_models() {
+        let ps = include_str!("../../../scripts/download-models.ps1");
+        for m in CATALOG {
+            let row = ps
+                .lines()
+                .find(|l| l.contains(&format!("File = '{}'", m.file)))
+                .unwrap_or_else(|| panic!("{} absent du script", m.file));
+            assert!(row.contains(&format!("'{}'", m.id)), "{row}");
+            assert!(row.contains(&format!("Size = {};", m.bytes)), "{row}");
+            assert!(row.contains(&format!("Sha1 = '{}'", m.sha1)), "{row}");
+        }
+        assert!(ps.contains(&format!("File = '{VAD_FILE}'; Size = {VAD_BYTES} ")));
+    }
+
     fn temp_dir(name: &str) -> PathBuf {
         let d =
             std::env::temp_dir().join(format!("crosstalk-models-{name}-{}", std::process::id()));

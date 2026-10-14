@@ -365,6 +365,31 @@ pub fn list(models_dir: &Path, target: &str, sources: &[String]) -> Vec<PairInfo
 mod tests {
     use super::*;
 
+    /// scripts/download-models.ps1 copies this catalogue (offline install):
+    /// every pair with the same five sizes, and nothing else.
+    #[test]
+    fn the_powershell_download_script_has_the_same_pairs() {
+        let ps = include_str!("../../../scripts/download-models.ps1");
+        let rows: Vec<&str> = ps
+            .lines()
+            .filter(|l| l.trim_start().starts_with("'opus-mt-"))
+            .collect();
+        assert_eq!(rows.len(), CATALOG.len());
+        for p in CATALOG {
+            let f = |name: &str| p.files.iter().find(|(n, _)| *n == name).unwrap().1;
+            let row = format!(
+                "  '{}' = @{{ 'config.json' = {}; 'vocab.json' = {}; 'source.spm' = {}; 'target.spm' = {}; 'pytorch_model.bin' = {} }}",
+                p.dir,
+                f("config.json"),
+                f("vocab.json"),
+                f("source.spm"),
+                f("target.spm"),
+                f("pytorch_model.bin")
+            );
+            assert!(rows.contains(&row.as_str()), "{row}");
+        }
+    }
+
     #[test]
     fn a_truncated_file_is_reported_missing() {
         let root = std::env::temp_dir().join(format!("crosstalk-mt-{}", std::process::id()));
