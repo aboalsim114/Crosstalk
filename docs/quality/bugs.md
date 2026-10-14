@@ -12,8 +12,9 @@ Sévérités : P0 inutilisable · P1 fonction principale défaillante · P2 pré
 | CT-004 | P3 | Le coin d'overlay enregistré est ignoré au démarrage (« overlay window missing ») | Corrigé, vérifié dans l'application |
 | CT-005 | P3 | « modèles absents » et un WARN au journal à chaque démarrage, alors que les modèles sont installés | Corrigé, vérifié dans l'application |
 | CT-006 | P3 | Licences tierces inexactes dans À propos (rubato cité ; candle, modèles et CC-BY absents) | Corrigé, vérifié par test |
-| CT-007 | P1 | `crosstalk.exe` (MSVC) dépend de `MSVCP140.dll`, que ni Windows ni l'installateur ne fournissent | Voir fiche |
-| CT-008 | P2 | Dans l'application, Whisper répète une phrase entière (« Save your weapons this round. » ×4) : l'annonce est rejetée | Voir fiche |
+| CT-007 | P1 | `crosstalk.exe` (MSVC) dépend de `MSVCP140.dll`, que ni Windows ni l'installateur ne fournissent | Corrigé (74ace45) ; dépendance supprimée et vérifiée, non essayé sur un PC vierge |
+| CT-008 | P2 | Dans l'application, Whisper répète une phrase entière (« Save your weapons this round. » ×4) : l'annonce est rejetée | Corrigé (7f1ddbb), vérifié dans l'application |
+| CT-009 | P3 | Mode streamer : désactivé, le serveur local reste à l'écoute sur 127.0.0.1:31983 | Ouvert |
 
 ## CT-001 — Une boucle de Whisper fait perdre l'annonce
 
@@ -81,7 +82,9 @@ Sévérités : P0 inutilisable · P1 fonction principale défaillante · P2 pré
 - **Constaté** : `dumpbin /dependents` sur le `crosstalk.exe` officiel (MSVC, 97e6682) liste `MSVCP140.dll`. Les imports sont des fonctions de la bibliothèque standard C++ (flux, `std::regex`, `_Thrd_join`) utilisées par whisper.cpp.
 - **Risque** : sur un Windows sans le redistribuable Visual C++ 2015-2022, l'application ne démarre pas (« MSVCP140.dll introuvable »). L'installateur NSIS/MSI de Tauri ne l'installe pas. Cette machine l'a (14.51.36247), donc le démarrage y fonctionne : le défaut n'a **pas** été reproduit sur un PC vierge, faute de machine ou de VM disponible (Windows Famille, pas de Windows Sandbox).
 - **Correction** : CRT statique pour la cible MSVC (`src-tauri/.cargo/config.toml`, `+crt-static`) ; CMake compile alors whisper.cpp en `/MT`.
-- **Validation** : voir l'état mis à jour ci-dessous.
+- **Validation** : `dumpbin /dependents` sur le nouveau `crosstalk.exe` ne liste plus `MSVCP140.dll` ni `VCRUNTIME140.dll` (seulement l'UCRT `api-ms-win-crt-*`, fournie par Windows 10/11). Ce build a été lancé et a fait une session complète (capture, Whisper, traduction), et les 254 tests Rust passent.
+- **Non vérifié** : un démarrage sur un Windows vierge sans redistribuable.
+- **Statut** : corrigé (74ace45).
 
 ## CT-008 — Whisper répète une phrase entière : l'annonce est rejetée
 
@@ -93,3 +96,14 @@ Sévérités : P0 inutilisable · P1 fonction principale défaillante · P2 pré
   2. La seconde passe (CT-001) n'a lieu que si cette réduction ne suffit pas.
 - **Essai écarté (mesuré)** : une seconde passe sur la fenêtre complète de 30 s récupérait « Je suis presque mort, je recule. », mais coûtait +4,3 s sur le processeur (full_ms 5 162). L'annonce suivante devenait alors périmée (Stale).
 - **Tests** : `keeps_a_sentence_whisper_repeated_after_hearing_it_once`, `rejects_loops`.
+
+- **Validation dans l'application** (même scénario de 10 annonces, build 74ace45) : 12 transcrits, 0 rejeté ; latence p50 1,5 s, p95 2,3 s. Avant : 2 rejets « Repetition », p50 2,4 s, p95 4,0 s.
+- **Statut** : corrigé (7f1ddbb).
+
+## CT-009 — Le serveur du mode streamer reste ouvert après désactivation
+
+- **Reproduction** : `stream_configure` avec `enabled: true` (page 200, SSE OK), puis `enabled: false`.
+- **Constaté** : `listening` reste `true`. Le port 127.0.0.1:31983 continue d'accepter les connexions. Aucune ligne n'est plus envoyée.
+- **Cause** : `StreamService::listen` lance une boucle `accept` bloquante, sans aucun moyen de l'arrêter.
+- **Impact** : faible. Le serveur est local (127.0.0.1), vérifie l'en-tête Host et ne sert plus aucun sous-titre une fois désactivé. Le port reste occupé jusqu'à la fermeture de l'application.
+- **Statut** : ouvert. Corriger demande une boucle d'acceptation qu'on peut interrompre (écoute non bloquante, ou fermeture du socket), à tester avec OBS.
