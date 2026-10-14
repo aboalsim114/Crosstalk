@@ -230,6 +230,6 @@ Par ordre de priorité, et **chacune conditionnée par le WER** (R1/R2) :
 | `cargo fmt --check` | OK |
 | `npm run check:anticheat` | OK : aucune API d'accès aux processus |
 | `asr_bench --compare-fronts … --vad-only --repeat 12` (−6, −3 et 0 dBFS) | Tableaux du §7 |
-| Compilation croisée Windows (`crosstalk-asr-bench.exe` inclus) | Voir la PR |
+| Compilation croisée Windows (MinGW, Vulkan) | OK : `Crosstalk-8cd8ded-setup.exe` et paquet portable avec `crosstalk-asr-bench.exe` (variantes A, B et C incluses) |
 
 Rien n'a été exécuté sur GitHub Actions. La branche n'est pas fusionnée.
