@@ -93,9 +93,24 @@ pub trait ChatEvents: Send + Sync {
     fn message(&self, message: &ChatMessage);
 }
 
-/// `%APPDATA%\Crosstalk\chat-rules.json`.
+/// `chat-rules.json` next to the settings: `%APPDATA%\Crosstalk`, or
+/// `CROSSTALK_CONFIG_DIR` like `settings::dir()`.
 pub fn user_rules_file() -> Option<PathBuf> {
-    std::env::var_os("APPDATA").map(|d| PathBuf::from(d).join("Crosstalk").join("chat-rules.json"))
+    rules_file(
+        std::env::var_os("CROSSTALK_CONFIG_DIR"),
+        std::env::var_os("APPDATA"),
+    )
+}
+
+fn rules_file(
+    config_dir: Option<std::ffi::OsString>,
+    appdata: Option<std::ffi::OsString>,
+) -> Option<PathBuf> {
+    let dir = match config_dir {
+        Some(d) => PathBuf::from(d),
+        None => PathBuf::from(appdata?).join("Crosstalk"),
+    };
+    Some(dir.join("chat-rules.json"))
 }
 
 struct Inner {
@@ -348,6 +363,22 @@ pub fn chat_stop(chat: tauri::State<'_, Arc<ChatService>>) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn user_rules_follow_the_settings_folder() {
+        let os = |s: &str| Some(std::ffi::OsString::from(s));
+        assert_eq!(
+            rules_file(os("D:/cfg"), os("C:/Users/x/AppData/Roaming")),
+            Some(PathBuf::from("D:/cfg/chat-rules.json"))
+        );
+        assert_eq!(
+            rules_file(None, os("C:/Users/x/AppData/Roaming")),
+            Some(PathBuf::from(
+                "C:/Users/x/AppData/Roaming/Crosstalk/chat-rules.json"
+            ))
+        );
+        assert_eq!(rules_file(None, None), None);
+    }
     use std::io::Write;
     use std::sync::mpsc::{channel, Receiver, Sender};
 
