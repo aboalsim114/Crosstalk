@@ -111,7 +111,11 @@ pub fn default_plan(locale: Option<&str>) -> downloads::TranslationPlan {
     let Some(lang) = locale.map(|l| l.split(['-', '_']).next().unwrap_or("").to_lowercase()) else {
         return downloads::TranslationPlan::default();
     };
-    let target = if models::is_target(&lang) { lang } else { "en".to_string() };
+    let target = if models::is_target(&lang) {
+        lang
+    } else {
+        "en".to_string()
+    };
     let sources = models::DEFAULT_SOURCES
         .iter()
         .map(|s| s.to_string())
@@ -490,11 +494,15 @@ mod tests {
             if self.fail {
                 return Err("connexion impossible".into());
             }
-            let size = downloads::missing_all(&PathBuf::from("/nonexistent"), WHISPER_MODELS, Some(&downloads::TranslationPlan::default()))
-                .into_iter()
-                .find(|f| f.url == url)
-                .unwrap()
-                .bytes;
+            let size = downloads::missing_all(
+                &PathBuf::from("/nonexistent"),
+                WHISPER_MODELS,
+                Some(&downloads::TranslationPlan::default()),
+            )
+            .into_iter()
+            .find(|f| f.url == url)
+            .unwrap()
+            .bytes;
             let chunk = vec![0u8; 1 << 20];
             let mut left = size - offset;
             while left > 0 {
@@ -718,14 +726,19 @@ mod tests {
     #[test]
     fn the_installed_translation_models_follow_windows_language() {
         let p = default_plan(Some("ru-RU"));
-        assert_eq!((p.target.as_str(), p.sources.clone()), ("ru", vec!["en".to_string()]));
+        assert_eq!(
+            (p.target.as_str(), p.sources.clone()),
+            ("ru", vec!["en".to_string()])
+        );
         let p = default_plan(Some("de-DE"));
         assert_eq!((p.target.as_str(), p.sources.len()), ("de", 2));
         // Italian: no model into it, English instead.
         let p = default_plan(Some("it-IT"));
-        assert_eq!((p.target.as_str(), p.sources.clone()), ("en", vec!["ru".to_string()]));
+        assert_eq!(
+            (p.target.as_str(), p.sources.clone()),
+            ("en", vec!["ru".to_string()])
+        );
         assert_eq!(default_plan(None), downloads::TranslationPlan::default());
         assert_eq!(default_plan(Some("fr-CA")).target, "fr");
     }
-
 }
