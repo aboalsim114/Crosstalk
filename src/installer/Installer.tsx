@@ -655,7 +655,7 @@ export function Installer({ startScreen = 0 }: { startScreen?: number }) {
                   <span style={{ color: '#F2F1EE' }}>Audio.</span> La reconnaissance vocale et la traduction s'exécutent localement, sur ce PC. Aucune voix ni aucun texte n'est envoyé en ligne, sans clé API ni abonnement.
                 </p>
                 <p style={{ margin: 0 }}>
-                  <span style={{ color: '#F2F1EE' }}>Données.</span> Aucun historique n'est conservé par défaut. Les modèles sont téléchargés une fois depuis Hugging Face (Opus-MT : licence Apache-2.0).
+                  <span style={{ color: '#F2F1EE' }}>Données.</span> Aucun historique n'est conservé par défaut. Les modèles sont téléchargés une fois depuis Hugging Face et vérifiés (TranslateGemma : Gemma Terms of Use, ai.google.dev/gemma/terms ; Opus-MT : licence Apache-2.0).
                 </p>
               </div>
               <div style={css('display:flex;justify-content:flex-end;padding-top:6px')}>

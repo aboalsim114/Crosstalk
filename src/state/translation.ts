@@ -123,6 +123,12 @@ export function translationSummary(st: TranslationStatus | null): PairSummary {
   return { label, value: t('tr.ready', { langs: ready.join(', ') }), color: '#7fe0a8' };
 }
 
+/** Which engine translates the lines the lexicon does not know, right now. */
+export function activeEngine(st: TranslationStatus | null): 'TranslateGemma' | 'Opus-MT' {
+  const l = st?.llm;
+  return l && l.choice !== 'opus' && (l.state === 'ready' || l.state === 'loading' || l.state === 'idle') ? 'TranslateGemma' : 'Opus-MT';
+}
+
 export function percentile(times: number[], q: number): number | null {
   if (!times.length) return null;
   const sorted = [...times].sort((a, b) => a - b);

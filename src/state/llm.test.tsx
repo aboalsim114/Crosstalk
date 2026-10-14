@@ -127,3 +127,14 @@ describe('engine settings', () => {
     expect(useApp.getState().llmBackend).toBe('auto');
   });
 });
+
+describe('active engine', () => {
+  it('names TranslateGemma only when it is the one translating', async () => {
+    const { activeEngine } = await import('./translation');
+    const st = (l: LlmStatus | null) => ({ config: { enabled: true, glossary: [] }, pairs: [], modelsDir: '', queued: 0, llm: l });
+    expect(activeEngine(st(llm()))).toBe('TranslateGemma');
+    expect(activeEngine(st(llm({ state: 'slow' })))).toBe('Opus-MT');
+    expect(activeEngine(st(llm({ choice: 'opus', state: 'off' })))).toBe('Opus-MT');
+    expect(activeEngine(st(null))).toBe('Opus-MT');
+  });
+});

@@ -64,7 +64,7 @@ Un overlay transparent conçu pour afficher les sous-titres sans prendre le cont
 | **Overlay en jeu** | Fenêtre transparente, repositionnable, avec clics traversants par défaut. Fonctionne avec CS2 en mode fenêtré sans bordures. |
 | **Contrôle immédiat** | Affichez ou masquez l'overlay, mettez en pause ou déclenchez l'arrêt d'urgence via des raccourcis globaux. |
 | **Discret par conception** | Crosstalk peut continuer à fonctionner dans la zone de notification lorsque sa fenêtre principale est masquée. |
-| **Reconnaissance et traduction locales** | Pipeline WASAPI → Silero VAD → whisper.cpp → Opus-MT. Whisper tourne sur la **carte graphique** (Vulkan : NVIDIA, AMD, Intel) quand elle est compatible, sinon sur le processeur. Aucun compte, aucune clé API ni abonnement requis pour ce traitement. |
+| **Reconnaissance et traduction locales** | Pipeline WASAPI → Silero VAD → whisper.cpp → TranslateGemma 4B (llama.cpp, Opus-MT en secours). Whisper tourne sur la **carte graphique** (Vulkan : NVIDIA, AMD, Intel) quand elle est compatible, sinon sur le processeur. Aucun compte, aucune clé API ni abonnement requis pour ce traitement. |
 | **Vraie application Windows** | Interface React + TypeScript intégrée dans Tauri v2, cœur natif Rust, rendu via WebView2. Ce n'est pas un site web. |
 
 ### Le respect du jeu fait partie du produit
@@ -114,7 +114,7 @@ Ces raccourcis utilisent `RegisterHotKey`, sans hook clavier. Un éventuel confl
 | --- | --- | --- |
 | Détection de `cs2.exe` et capture audio de processus | **Implémenté · en test** | WASAPI process loopback, Windows compatibles. |
 | Détection de parole et transcription RU / EN | **Implémenté · en test** | Silero VAD et whisper.cpp ; séparation parole / sons du jeu encore imparfaite. |
-| Traduction vocale vers le français | **Implémenté · en test** | Opus-MT local ; qualité et délais à mesurer sur des matchs réels. |
+| Traduction vocale vers le français | **Implémenté · en test** | TranslateGemma 4B local (llama.cpp), Opus-MT en secours ; qualité et délais à mesurer sur des matchs réels ([installation et hors ligne](docs/translategemma.md), [rapport](docs/reports/translategemma-integration.md)). |
 | Overlay Windows et commandes rapides | **Implémenté** | Fenêtre transparente et raccourcis globaux. |
 | Identification fiable du joueur qui parle | **Expérimental / à valider** | Approche HUD et OCR prévue ; ne pas présumer qu'un pseudo est correctement identifié. |
 | Chat écrit de CS2 et traduction | **Implémenté · en test** | Lecture de `console.log` (option de lancement `-condebug`, vérifiée dans Steam) ; format des lignes à confirmer en partie réelle, règles modifiables sans nouvelle version. |
@@ -126,7 +126,7 @@ Le cap produit est simple : **moins de bruit, des traductions utiles, et un mini
 
 <div align="center">
 
-`Counter-Strike 2` → `WASAPI` → `Silero VAD` → `whisper.cpp` → `Opus-MT` → `Overlay`
+`Counter-Strike 2` → `WASAPI` → `Silero VAD` → `whisper.cpp` → `TranslateGemma` (ou `Opus-MT`) → `Overlay`
 
 </div>
 
@@ -140,7 +140,7 @@ La capture ciblée récupère l'audio attribué au processus CS2 — **y compris
 | Interface | **React · TypeScript · Tailwind CSS** |
 | Direction artistique et animation | **Motion · Three.js** |
 | Capture / fonctionnalités Windows | **WASAPI process loopback · WebView2 · APIs Windows** |
-| Intelligence vocale locale | **Silero VAD · whisper.cpp · Opus-MT** |
+| Intelligence vocale locale | **Silero VAD · whisper.cpp · TranslateGemma 4B (llama.cpp) · Opus-MT** |
 | Tests | **Vitest · Cargo tests · scripts de validation Windows** |
 
 ### Structure du dépôt

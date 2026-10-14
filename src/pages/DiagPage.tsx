@@ -4,7 +4,7 @@ import { config } from '../config';
 import { fnt } from '../components/atoms';
 import { useAudio, type AudioState } from '../state/audio';
 import { engineSummary, useSpeech } from '../state/speech';
-import { percentile, translationSummary, useTranslation } from '../state/translation';
+import { percentile, translationSummary, useTranslation, activeEngine } from '../state/translation';
 import { useApp } from '../state/store';
 import { useChat } from '../state/chat';
 import type { ChatStatus } from '../backend';
@@ -90,7 +90,7 @@ export function DiagPage() {
   const trSum = translationSummary(trStatus);
   const p50 = percentile(trTimes, 0.5);
   const trRow: [string, string, DiagState] = sp.native
-    ? ['Traduction locale · Opus-MT', `${trSum.value}${p50 != null ? ` · p50 ${p50} ms` : ''}`, trSum.color === '#7fe0a8' ? 'OK' : trSum.color === '#ff8a7a' ? 'ÉCHEC' : 'AVERT.']
+    ? [`Traduction locale · ${activeEngine(trStatus)}`, `${trSum.value}${p50 != null ? ` · p50 ${p50} ms` : ''}`, trSum.color === '#7fe0a8' ? 'OK' : trSum.color === '#ff8a7a' ? 'ÉCHEC' : 'AVERT.']
     : ['Traduction locale · Opus-MT', down ? 'Délai dépassé (5 s) — repli sur l’original' : 'Réponse en 210 ms', down ? 'ÉCHEC' : 'OK'];
   const chatStatus = useChat((x) => x.status);
   const chatRows: [string, string, DiagState][] = sp.native
