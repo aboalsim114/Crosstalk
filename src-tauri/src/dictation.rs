@@ -129,7 +129,7 @@ fn emit(app: &AppHandle, st: &DictationState) {
 }
 
 /// Starts a dictation, or finishes the running one.
-pub fn toggle(app: &AppHandle, target: &'static str) {
+pub fn toggle(app: &AppHandle, target: String) {
     let Some(d) = app.try_state::<Arc<Dictation>>().map(|d| d.inner().clone()) else {
         return;
     };
@@ -142,7 +142,7 @@ pub fn toggle(app: &AppHandle, target: &'static str) {
     std::thread::Builder::new()
         .name("dictation".into())
         .spawn(move || {
-            let st = run(&app, &d, target);
+            let st = run(&app, &d, &target);
             emit(&app, &st);
             d.running.store(false, Ordering::SeqCst);
         })
@@ -158,7 +158,7 @@ fn fail(target: &str, error: String) -> DictationState {
     }
 }
 
-fn run(app: &AppHandle, d: &Dictation, target: &'static str) -> DictationState {
+fn run(app: &AppHandle, d: &Dictation, target: &str) -> DictationState {
     let listening = |level: f32, seconds: f32| DictationState {
         state: "listening",
         level,
@@ -182,7 +182,11 @@ fn run(app: &AppHandle, d: &Dictation, target: &'static str) -> DictationState {
     let Some(speech) = app.try_state::<Arc<crate::speech::SpeechService>>() else {
         return fail(target, "moteur de transcription indisponible".into());
     };
-    let text = match speech.dictate(&samples) {
+    // The user speaks their own language (Langues › Ma langue).
+    let me = app
+        .try_state::<Arc<crate::reply::ReplyService>>()
+        .map_or_else(|| "fr".to_string(), |r| r.languages().me);
+    let text = match speech.dictate(&samples, &me) {
         Ok(t) if !t.trim().is_empty() => t,
         Ok(_) => {
             return fail(
@@ -292,16 +296,19 @@ pub fn dictation_toggle(
     recent_langs: Vec<String>,
     target: Option<String>,
 ) -> Result<(), String> {
-    let target = match target.as_deref() {
-        Some("ru") => "ru",
-        Some("en") => "en",
-        _ => crate::reply::guess_target(&recent_langs),
+    let targets = app
+        .try_state::<Arc<crate::reply::ReplyService>>()
+        .map(|r| r.targets())
+        .unwrap_or_default();
+    let target = match target {
+        Some(t) if targets.contains(&t) => t,
+        _ => crate::reply::guess_target(&recent_langs, &targets),
     };
     let running = app
         .try_state::<Arc<Dictation>>()
         .is_some_and(|d| d.is_running());
     if !running {
-        crate::reply::open(&app, target)?;
+        crate::reply::open(&app, &target)?;
     }
     toggle(&app, target);
     Ok(())

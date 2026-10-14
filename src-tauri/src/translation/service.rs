@@ -1,6 +1,7 @@
-//! Translation service: every accepted transcript is translated into French on
-//! a dedicated low-priority thread, with a bounded queue, an LRU cache, the
-//! user's glossary and the same purge as the speech pipeline.
+//! Translation service: every accepted transcript is translated into the
+//! user's language (Langues › Ma langue, French by default) on a dedicated
+//! low-priority thread, with a bounded queue, an LRU cache, the user's
+//! glossary and the same purge as the speech pipeline.
 
 use std::collections::{HashMap, VecDeque};
 use std::path::{Path, PathBuf};
@@ -25,6 +26,23 @@ pub struct TranslationConfig {
     pub enabled: bool,
     #[serde(default)]
     pub glossary: Vec<Term>,
+    /// The user's language: everything is translated into it.
+    #[serde(default = "default_target")]
+    pub target: String,
+    /// The players' languages (lines in other languages are shown as is).
+    #[serde(default = "default_sources")]
+    pub sources: Vec<String>,
+}
+
+fn default_target() -> String {
+    models::DEFAULT_TARGET.into()
+}
+
+fn default_sources() -> Vec<String> {
+    models::DEFAULT_SOURCES
+        .iter()
+        .map(|s| s.to_string())
+        .collect()
 }
 
 impl Default for TranslationConfig {
@@ -32,7 +50,35 @@ impl Default for TranslationConfig {
         Self {
             enabled: true,
             glossary: Vec::new(),
+            target: default_target(),
+            sources: default_sources(),
         }
+    }
+}
+
+impl TranslationConfig {
+    /// Unknown languages dropped; an unsupported target falls back to French.
+    pub fn sanitized(mut self) -> Self {
+        if !models::is_target(&self.target) {
+            self.target = default_target();
+        }
+        let mut out: Vec<String> = Vec::new();
+        for l in self.sources {
+            if models::is_language(&l) && !out.contains(&l) {
+                out.push(l);
+            }
+        }
+        self.sources = out;
+        self
+    }
+
+    /// Languages to translate: the players' ones, except the user's own.
+    pub fn translated(&self) -> Vec<String> {
+        self.sources
+            .iter()
+            .filter(|s| **s != self.target && models::route(s, &self.target).is_some())
+            .cloned()
+            .collect()
     }
 }
 
@@ -48,8 +94,10 @@ pub enum PairState {
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PairStatus {
-    pub source: &'static str,
-    pub repo: &'static str,
+    pub source: String,
+    pub target: String,
+    /// Repositories of the route ("A + B" when it goes through English).
+    pub repo: String,
     pub state: PairState,
     pub error: Option<String>,
     pub load_ms: Option<u32>,
@@ -83,6 +131,9 @@ pub struct Translation {
     /// Quick translation of a live (partial) line, replaced by the final one.
     #[serde(default)]
     pub partial: bool,
+    /// Language of `translated` (the user's language when it was sent).
+    #[serde(default)]
+    pub target: String,
 }
 
 pub trait Engine: Send {
@@ -94,8 +145,8 @@ pub trait Engine: Send {
 }
 
 pub trait EngineLoader: Send + Sync {
-    fn installed(&self, dir: &Path, source: &str) -> bool;
-    fn load(&self, dir: &Path, source: &str) -> Result<Box<dyn Engine>, String>;
+    fn installed(&self, dir: &Path, source: &str, target: &str) -> bool;
+    fn load(&self, dir: &Path, source: &str, target: &str) -> Result<Box<dyn Engine>, String>;
 }
 
 pub trait TranslationEvents: Send + Sync {
@@ -152,7 +203,8 @@ struct Inner {
     loader: Arc<dyn EngineLoader>,
     models_dir: PathBuf,
     config: Mutex<TranslationConfig>,
-    pairs: Mutex<HashMap<&'static str, Pair>>,
+    /// Per source language, for the current target.
+    pairs: Mutex<HashMap<String, Pair>>,
     queue: Mutex<VecDeque<Job>>,
     wake: Condvar,
     cache: Mutex<Cache>,
@@ -175,19 +227,7 @@ impl TranslationService {
         models_dir: PathBuf,
         config: TranslationConfig,
     ) -> Arc<Self> {
-        let pairs = models::CATALOG
-            .iter()
-            .map(|p| {
-                (
-                    p.source,
-                    Pair {
-                        state: PairState::Missing,
-                        error: None,
-                        load_ms: None,
-                    },
-                )
-            })
-            .collect();
+        let pairs = pairs_for(&config);
         let inner = Arc::new(Inner {
             events,
             loader,
@@ -215,14 +255,34 @@ impl TranslationService {
     }
 
     pub fn configure(&self, config: TranslationConfig) -> TranslationStatus {
-        let changed_glossary = {
+        let config = config.sanitized();
+        let (changed_glossary, changed_langs) = {
             let mut c = self.inner.config.lock().unwrap();
-            let changed = c.glossary != config.glossary;
-            *c = config;
-            changed
+            let g = c.glossary != config.glossary;
+            let l = c.target != config.target || c.sources != config.sources;
+            *c = config.clone();
+            (g, l)
         };
         if changed_glossary {
             *self.inner.cache.lock().unwrap() = Cache::default();
+        }
+        if changed_langs {
+            // Pairs of the new languages, keeping the state of those that stay.
+            let mut pairs = self.inner.pairs.lock().unwrap();
+            let mut next = pairs_for(&config);
+            for (k, v) in next.iter_mut() {
+                if let Some(old) = pairs.remove(k) {
+                    if old.state == PairState::Ready || old.state == PairState::Loading {
+                        // Ready for the old target only: reloaded for the new one.
+                        continue;
+                    }
+                    *v = old;
+                }
+            }
+            *pairs = next;
+            drop(pairs);
+            // Lines queued for the old target would come back in the wrong language.
+            self.purge();
         }
         self.rescan()
     }
@@ -333,6 +393,23 @@ impl TranslationService {
     }
 }
 
+fn pairs_for(config: &TranslationConfig) -> HashMap<String, Pair> {
+    config
+        .translated()
+        .into_iter()
+        .map(|s| {
+            (
+                s,
+                Pair {
+                    state: PairState::Missing,
+                    error: None,
+                    load_ms: None,
+                },
+            )
+        })
+        .collect()
+}
+
 impl Drop for TranslationService {
     fn drop(&mut self) {
         self.inner.shutdown.store(true, Ordering::SeqCst);
@@ -343,21 +420,30 @@ impl Drop for TranslationService {
 impl Inner {
     fn status(&self) -> TranslationStatus {
         let pairs = self.pairs.lock().unwrap();
+        let config = self.config.lock().unwrap().clone();
         TranslationStatus {
-            config: self.config.lock().unwrap().clone(),
-            pairs: models::CATALOG
-                .iter()
-                .map(|p| {
-                    let s = &pairs[p.source];
-                    PairStatus {
-                        source: p.source,
-                        repo: p.repo,
+            pairs: config
+                .translated()
+                .into_iter()
+                .filter_map(|src| {
+                    let s = pairs.get(&src)?;
+                    let repo = models::route(&src, &config.target)
+                        .unwrap_or_default()
+                        .iter()
+                        .map(|p| p.repo)
+                        .collect::<Vec<_>>()
+                        .join(" + ");
+                    Some(PairStatus {
+                        target: config.target.clone(),
+                        source: src,
+                        repo,
                         state: s.state,
                         error: s.error.clone(),
                         load_ms: s.load_ms,
-                    }
+                    })
                 })
                 .collect(),
+            config,
             models_dir: self.models_dir.display().to_string(),
             queued: self.queue.lock().unwrap().len(),
         }
@@ -365,14 +451,17 @@ impl Inner {
 
     fn set_pair(
         &self,
-        source: &'static str,
+        source: &str,
         state: PairState,
         error: Option<String>,
         load_ms: Option<u32>,
     ) {
         {
             let mut pairs = self.pairs.lock().unwrap();
-            let p = pairs.get_mut(source).expect("catalog pair");
+            // The languages may have changed meanwhile.
+            let Some(p) = pairs.get_mut(source) else {
+                return;
+            };
             p.state = state;
             p.error = error;
             if load_ms.is_some() || state != PairState::Ready {
@@ -395,12 +484,15 @@ fn failure(id: u64, lang: &str, text: &str, why: &str, queue_ms: u32) -> Transla
         cached: false,
         glossary: true,
         partial: false,
+        target: String::new(),
     }
 }
 
+type Engines = HashMap<(String, String), Box<dyn Engine>>;
+
 fn worker_loop(inner: &Inner) {
     crate::speech::cpu::lower_current_thread_priority();
-    let mut engines: HashMap<&'static str, Box<dyn Engine>> = HashMap::new();
+    let mut engines: Engines = HashMap::new();
     while !inner.shutdown.load(Ordering::SeqCst) {
         if inner.reload.swap(false, Ordering::SeqCst) {
             load_installed(inner, &mut engines);
@@ -438,45 +530,60 @@ fn worker_loop(inner: &Inner) {
     }
 }
 
-fn load_installed(inner: &Inner, engines: &mut HashMap<&'static str, Box<dyn Engine>>) {
-    for p in models::CATALOG {
-        if engines.contains_key(p.source) {
+fn load_installed(inner: &Inner, engines: &mut Engines) {
+    let config = inner.config.lock().unwrap().clone();
+    let wanted: Vec<(String, String)> = config
+        .translated()
+        .into_iter()
+        .map(|s| (s, config.target.clone()))
+        .collect();
+    // Models of languages no longer chosen free their memory.
+    engines.retain(|k, _| wanted.contains(k));
+    for (src, tgt) in wanted {
+        if engines.contains_key(&(src.clone(), tgt.clone())) {
+            inner.set_pair(&src, PairState::Ready, None, None);
             continue;
         }
-        if !inner.loader.installed(&inner.models_dir, p.source) {
-            inner.set_pair(p.source, PairState::Missing, None, None);
+        if !inner.loader.installed(&inner.models_dir, &src, &tgt) {
+            inner.set_pair(&src, PairState::Missing, None, None);
             continue;
         }
-        inner.set_pair(p.source, PairState::Loading, None, None);
+        inner.set_pair(&src, PairState::Loading, None, None);
         let t = Instant::now();
-        match inner.loader.load(&inner.models_dir, p.source) {
+        match inner.loader.load(&inner.models_dir, &src, &tgt) {
             Ok(e) => {
-                engines.insert(p.source, e);
                 inner.set_pair(
-                    p.source,
+                    &src,
                     PairState::Ready,
                     None,
                     Some(t.elapsed().as_millis() as u32),
                 );
+                engines.insert((src, tgt), e);
             }
-            Err(e) => inner.set_pair(p.source, PairState::Error, Some(e), None),
+            Err(e) => inner.set_pair(&src, PairState::Error, Some(e), None),
         }
     }
 }
 
 /// Translates one job; `None` when it was purged (nothing is published).
-fn run(
-    inner: &Inner,
-    engines: &mut HashMap<&'static str, Box<dyn Engine>>,
-    job: &Job,
-) -> Option<Translation> {
+fn run(inner: &Inner, engines: &mut Engines, job: &Job) -> Option<Translation> {
     let manual = job.reply.is_some();
     if !manual && job.generation != inner.generation.load(Ordering::SeqCst) {
         return None;
     }
     let queue_ms = job.queued.elapsed().as_millis() as u32;
-    let fail = |why: &str| Some(failure(job.id, &job.lang, &job.text, why, queue_ms));
     let mut config = inner.config.lock().unwrap().clone();
+    let target = config.target.clone();
+    let base = || Translation {
+        target: target.clone(),
+        ..failure(job.id, &job.lang, &job.text, "", queue_ms)
+    };
+    let fail = |why: &str| {
+        Some(Translation {
+            error: Some(why.into()),
+            ..base()
+        })
+    };
     for t in inner.map_terms.lock().unwrap().iter() {
         if !config
             .glossary
@@ -489,26 +596,32 @@ fn run(
     if !config.enabled && !manual {
         return fail("traduction désactivée");
     }
-    if job.lang == "fr" {
-        // F-32: already French, shown as is.
+    if job.lang == target {
+        // F-32: already in the user's language, shown as is.
         return Some(Translation {
             translated: Some(job.text.clone()),
-            error: None,
-            ..failure(job.id, &job.lang, &job.text, "", queue_ms)
+            ..base()
         });
     }
     // Known Counter-Strike callouts: exact, instant, no model needed (F-36).
-    if let Some(text) = callouts::translate(&job.lang, &job.text) {
-        return Some(Translation {
-            translated: Some(text),
-            error: None,
-            partial: job.partial,
-            ..failure(job.id, &job.lang, &job.text, "", queue_ms)
-        });
+    // Their renderings are French: only when translating into French.
+    if target == "fr" {
+        if let Some(text) = callouts::translate(&job.lang, &job.text) {
+            return Some(Translation {
+                translated: Some(text),
+                partial: job.partial,
+                ..base()
+            });
+        }
     }
-    let Some(spec) = models::pair(&job.lang) else {
+    if models::route(&job.lang, &target).is_none() {
         return fail("langue non gérée");
-    };
+    }
+    // A language the user did not choose (Langues) is shown as is.
+    if !manual && !config.sources.contains(&job.lang) {
+        return fail("langue non choisie (Langues)");
+    }
+    let route_key = (job.lang.clone(), target.clone());
     // A live line older than 2 s has been replaced on screen: skip it.
     if job.partial && job.queued.elapsed() > Duration::from_secs(2) {
         return None;
@@ -516,7 +629,7 @@ fn run(
     if !manual && job.queued.elapsed() > MAX_WAIT {
         return fail("moteur indisponible (délai dépassé)");
     }
-    let Some(engine) = engines.get_mut(spec.source) else {
+    let Some(engine) = engines.get_mut(&route_key) else {
         if job.partial {
             return None; // the final line will say why
         }
@@ -525,14 +638,14 @@ fn run(
             .pairs
             .lock()
             .unwrap()
-            .get(spec.source)
+            .get(&job.lang)
             .is_some_and(|p| p.state == PairState::Error);
         if broken {
             return fail("modèle de traduction illisible (voir Audio & IA)");
         }
         return fail("modèle de traduction absent");
     };
-    let key = (job.lang.clone(), cache_key(&job.text));
+    let key = (format!("{}>{target}", job.lang), cache_key(&job.text));
     let started = Instant::now();
     if job.partial {
         let out = glossary::translate(&job.text, &config.glossary, |t| engine.translate_fast(t));
@@ -547,7 +660,7 @@ fn run(
                     ms: started.elapsed().as_millis() as u32,
                     glossary: protected,
                     partial: true,
-                    ..failure(job.id, &job.lang, &job.text, "", queue_ms)
+                    ..base()
                 })
             }
             _ => None,
@@ -559,7 +672,7 @@ fn run(
             error: None,
             cached: true,
             ms: started.elapsed().as_millis() as u32,
-            ..failure(job.id, &job.lang, &job.text, "", queue_ms)
+            ..base()
         });
     }
     let outcome = glossary::translate(&job.text, &config.glossary, |t| engine.translate(t));
@@ -581,6 +694,7 @@ fn run(
                 cached: false,
                 glossary: protected,
                 partial: false,
+                target: target.clone(),
             })
         }
         Ok(_) => fail("traduction vide"),
@@ -595,18 +709,45 @@ fn cache_key(text: &str) -> String {
     words.join(" ")
 }
 
-/// Real models from `<models dir>/opus-mt-<src>-fr`.
+/// Real models from `<models dir>/opus-mt-<src>-<tgt>/`, one or two in a
+/// row (through English when there is no direct model).
 pub struct OpusLoader;
 
 impl EngineLoader for OpusLoader {
-    fn installed(&self, dir: &Path, source: &str) -> bool {
-        models::pair(source).is_some_and(|p| models::missing_file(dir, p).is_none())
+    fn installed(&self, dir: &Path, source: &str, target: &str) -> bool {
+        models::route_installed(dir, source, target)
     }
 
-    fn load(&self, dir: &Path, source: &str) -> Result<Box<dyn Engine>, String> {
-        let p = models::pair(source).ok_or("langue non gérée")?;
-        let m = super::marian::Marian::load(&models::pair_dir(dir, p), super::marian::Mode::Fast)?;
-        Ok(Box::new(m))
+    fn load(&self, dir: &Path, source: &str, target: &str) -> Result<Box<dyn Engine>, String> {
+        let route = models::route(source, target).ok_or("langue non gérée")?;
+        let mut steps: Vec<Box<dyn Engine>> = Vec::new();
+        for p in route {
+            let m =
+                super::marian::Marian::load(&models::pair_dir(dir, p), super::marian::Mode::Fast)
+                    .map_err(|e| format!("{} : {e}", p.dir))?;
+            steps.push(Box::new(m));
+        }
+        Ok(if steps.len() == 1 {
+            steps.pop().expect("one")
+        } else {
+            Box::new(Chain(steps))
+        })
+    }
+}
+
+/// Models applied one after the other (source → English → target).
+pub struct Chain(pub Vec<Box<dyn Engine>>);
+
+impl Engine for Chain {
+    fn translate(&mut self, text: &str) -> Result<String, String> {
+        self.0
+            .iter_mut()
+            .try_fold(text.to_string(), |t, e| e.translate(&t))
+    }
+    fn translate_fast(&mut self, text: &str) -> Result<String, String> {
+        self.0
+            .iter_mut()
+            .try_fold(text.to_string(), |t, e| e.translate_fast(&t))
     }
 }
 
@@ -639,10 +780,10 @@ mod tests {
         delay: Duration,
     }
     impl EngineLoader for Loader {
-        fn installed(&self, _: &Path, source: &str) -> bool {
+        fn installed(&self, _: &Path, source: &str, _: &str) -> bool {
             self.installed.contains(&source)
         }
-        fn load(&self, _: &Path, _: &str) -> Result<Box<dyn Engine>, String> {
+        fn load(&self, _: &Path, _: &str, _: &str) -> Result<Box<dyn Engine>, String> {
             Ok(Box::new(Upper(self.calls.clone(), self.delay)))
         }
     }
@@ -711,8 +852,8 @@ mod tests {
                 Ok("- Deux vont sur B.".into())
             }
         }
-        let mut engines: HashMap<&'static str, Box<dyn Engine>> = HashMap::new();
-        engines.insert("en", Box::new(Dash));
+        let mut engines: Engines = HashMap::new();
+        engines.insert(("en".into(), "fr".into()), Box::new(Dash));
         let (svc, _rx, _) = service(vec![], 0);
         let job = Job {
             id: 1,
@@ -790,6 +931,7 @@ mod tests {
         svc.configure(TranslationConfig {
             enabled: false,
             glossary: vec![],
+            ..TranslationConfig::default()
         });
         svc.submit(2, "ru", "Двое");
         assert_eq!(next(&rx).error.as_deref(), Some("traduction désactivée"));
@@ -839,6 +981,7 @@ mod tests {
                 source: "smoke".into(),
                 target: None,
             }],
+            ..TranslationConfig::default()
         });
         let t = svc.translate_blocking("en", "throw Smoke");
         assert_eq!(t.translated.as_deref(), Some("FR:throw Smoke"));
@@ -854,6 +997,7 @@ mod tests {
                 source: "palace".into(),
                 target: Some("palais".into()),
             }],
+            ..TranslationConfig::default()
         });
         svc.translate_blocking("en", "go jungle");
         svc.translate_blocking("en", "go jungle");
@@ -869,5 +1013,95 @@ mod tests {
         svc.set_map_terms(vec!["Jungle".into(), "Palace".into()]);
         svc.translate_blocking("en", "go jungle");
         assert_eq!(calls.load(Ordering::SeqCst), before + 2);
+    }
+    fn settle(svc: &TranslationService) {
+        let end = Instant::now() + Duration::from_secs(5);
+        while svc
+            .status()
+            .pairs
+            .iter()
+            .any(|p| p.state == PairState::Loading)
+            || svc.inner.reload.load(Ordering::SeqCst)
+        {
+            assert!(Instant::now() < end);
+            std::thread::sleep(Duration::from_millis(5));
+        }
+    }
+
+    #[test]
+    fn a_russian_user_gets_the_other_languages_in_russian() {
+        let (svc, rx, calls) = service(vec!["en", "fr"], 0);
+        let st = svc.configure(TranslationConfig {
+            target: "ru".into(),
+            sources: vec!["en".into(), "fr".into(), "ru".into(), "xx".into()],
+            ..TranslationConfig::default()
+        });
+        assert_eq!(
+            st.config.sources,
+            ["en", "fr", "ru"],
+            "unknown language dropped"
+        );
+        settle(&svc);
+        let st = svc.status();
+        let pairs: Vec<_> = st
+            .pairs
+            .iter()
+            .map(|p| (p.source.as_str(), p.target.as_str(), p.state))
+            .collect();
+        assert_eq!(
+            pairs,
+            [
+                ("en", "ru", PairState::Ready),
+                ("fr", "ru", PairState::Ready)
+            ]
+        );
+        // Their own language: shown as is.
+        svc.submit(1, "ru", "Двое на B");
+        let t = next(&rx);
+        assert_eq!(
+            (t.translated.as_deref(), t.target.as_str()),
+            (Some("Двое на B"), "ru")
+        );
+        // The French callout lexicon does not answer into Russian: the model does.
+        svc.submit(2, "en", "rush B");
+        let t = next(&rx);
+        assert_eq!(
+            (t.translated.as_deref(), t.target.as_str()),
+            (Some("FR:rush B"), "ru")
+        );
+        assert_eq!(calls.load(Ordering::SeqCst), 1);
+        // A language not chosen stays as is.
+        svc.submit(3, "de", "zwei auf B");
+        assert_eq!(
+            next(&rx).error.as_deref(),
+            Some("langue non choisie (Langues)")
+        );
+    }
+
+    #[test]
+    fn changing_the_target_reloads_and_never_mixes_cached_lines() {
+        let (svc, rx, calls) = service(vec!["en", "ru", "fr"], 0);
+        svc.submit(1, "en", "they rotate to B with the AWP");
+        assert!(next(&rx).translated.is_some());
+        svc.configure(TranslationConfig {
+            target: "de".into(),
+            sources: vec!["en".into()],
+            ..TranslationConfig::default()
+        });
+        settle(&svc);
+        svc.submit(2, "en", "they rotate to B with the AWP");
+        let t = next(&rx);
+        assert!(
+            !t.cached,
+            "a cached French line must not come back in German"
+        );
+        assert_eq!(t.target, "de");
+        assert_eq!(calls.load(Ordering::SeqCst), 2);
+        // An unsupported target falls back to French.
+        let st = svc.configure(TranslationConfig {
+            target: "pl".into(),
+            ..TranslationConfig::default()
+        });
+        assert_eq!(st.config.target, "fr");
     }
 }

@@ -428,9 +428,9 @@ impl SpeechService {
         &self.inner.models_dir
     }
 
-    /// The user's dictated reply (16 kHz mono) in French, with the model that
-    /// transcribes the game: waits for a callout in progress, then runs.
-    pub fn dictate(&self, samples: &[f32]) -> Result<String, String> {
+    /// The user's dictated reply (16 kHz mono) in their language, with the
+    /// model that transcribes the game: waits for a callout in progress, then runs.
+    pub fn dictate(&self, samples: &[f32], lang: &str) -> Result<String, String> {
         let prompt = {
             let config = self.inner.config.lock().unwrap();
             prompt_with(&config.glossary, &self.inner.map_prompt.lock().unwrap())
@@ -440,7 +440,7 @@ impl SpeechService {
             .as_mut()
             .ok_or("modèle Whisper pas encore chargé (Audio & IA)")?;
         recognizer
-            .transcribe_in(samples, "fr", &prompt, self.inner.threads)
+            .transcribe_in(samples, lang, &prompt, self.inner.threads)
             .map_err(|e| e.to_string())
     }
 
@@ -1286,12 +1286,12 @@ mod tests {
             std::thread::sleep(Duration::from_millis(5));
         }
         assert!(svc
-            .dictate(&[0.0; 16])
+            .dictate(&[0.0; 16], "fr")
             .unwrap_err()
             .contains("pas encore chargé"));
         let (svc, _rx, _) = service("unused", 0, true);
         wait_ready(&svc);
-        assert_eq!(svc.dictate(&[0.0; 16_000]).unwrap(), "fr:16000");
+        assert_eq!(svc.dictate(&[0.0; 16_000], "fr").unwrap(), "fr:16000");
     }
 
     fn wait_ready(svc: &SpeechService) {

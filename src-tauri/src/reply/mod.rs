@@ -1,10 +1,12 @@
-//! "Réponds dans leur langue": the user types in French, Crosstalk translates
-//! to the teammates' language (English or Russian) on the CPU and the window
-//! copies it to the clipboard, ready to paste in CS2's chat (Y / U, Ctrl+V).
-//! Nothing is typed into the game: the user pastes and sends it themselves.
+//! "Réponds dans leur langue": the user types in their own language (Langues ›
+//! Ma langue), Crosstalk translates into the teammates' language on the CPU
+//! and the window copies it to the clipboard, ready to paste in CS2's chat
+//! (Y / U, Ctrl+V). Nothing is typed into the game: the user pastes and sends
+//! it themselves.
 //!
-//! Usual calls come from a hand-written phrasebook (`phrases.rs`, exact and
-//! instant); free text goes to Opus-MT fr→en / fr→ru (Apache-2.0), loaded the
+//! Usual calls come from a hand-written phrasebook (`phrases.rs`, French into
+//! English or Russian, exact and instant); free text goes to Opus-MT
+//! (Apache-2.0, through English when there is no direct model), loaded the
 //! first time it is needed. CS terms and the current map's callouts are kept.
 
 pub mod phrases;
@@ -25,7 +27,6 @@ use crate::translation::service::Engine;
 
 pub const LABEL: &str = "reply";
 pub const OPEN_EVENT: &str = "reply://open";
-pub const TARGETS: [&str; 2] = ["en", "ru"];
 const MAX_CHARS: usize = 300;
 const WIDTH: f64 = 560.0;
 const HEIGHT: f64 = 340.0;
@@ -49,20 +50,44 @@ pub struct ReplyResult {
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ReplyModel {
-    pub target: &'static str,
-    pub repo: &'static str,
+    /// The user's language.
+    pub source: String,
+    pub target: String,
+    /// Repositories of the route ("A + B" through English).
+    pub repo: String,
     pub size_mb: u32,
     pub installed: bool,
     pub loaded: bool,
 }
 
-pub type Loader = Box<dyn Fn(&str) -> Result<Box<dyn Engine>, String> + Send + Sync>;
+/// Loads the engine `from` → `to`.
+pub type Loader = Box<dyn Fn(&str, &str) -> Result<Box<dyn Engine>, String> + Send + Sync>;
+
+/// The user's language and the players' (from the translation settings).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Languages {
+    pub me: String,
+    pub players: Vec<String>,
+}
+
+impl Default for Languages {
+    fn default() -> Self {
+        Self {
+            me: models::DEFAULT_TARGET.into(),
+            players: models::DEFAULT_SOURCES
+                .iter()
+                .map(|s| s.to_string())
+                .collect(),
+        }
+    }
+}
 
 pub struct ReplyService {
     models_dir: PathBuf,
     loader: Loader,
     engines: Mutex<HashMap<String, Box<dyn Engine>>>,
     map_terms: Mutex<Vec<String>>,
+    langs: Mutex<Languages>,
 }
 
 impl ReplyService {
@@ -70,19 +95,16 @@ impl ReplyService {
         let dir = models_dir.clone();
         Self::with_loader(
             models_dir,
-            Box::new(move |target| {
-                let p = models::reply_pair(target).ok_or("langue non gérée")?;
-                if let Some(f) = models::missing_file(&dir, p) {
-                    return Err(format!(
-                        "modèle français → {} absent ({f}) : téléchargez-le",
-                        target.to_uppercase()
-                    ));
+            Box::new(move |from, to| {
+                use crate::translation::service::{EngineLoader, OpusLoader};
+                let route = models::route(from, to).ok_or("langue non gérée")?;
+                if let Some((p, f)) = route
+                    .iter()
+                    .find_map(|p| models::missing_file(&dir, p).map(|f| (p, f)))
+                {
+                    return Err(format!("modèle {} absent ({f}) : téléchargez-le", p.dir));
                 }
-                let m = crate::translation::marian::Marian::load(
-                    &models::pair_dir(&dir, p),
-                    crate::translation::marian::Mode::Fast,
-                )?;
-                Ok(Box::new(m) as Box<dyn Engine>)
+                OpusLoader.load(&dir, from, to)
             }),
         )
     }
@@ -93,19 +115,49 @@ impl ReplyService {
             loader,
             engines: Mutex::new(HashMap::new()),
             map_terms: Mutex::new(Vec::new()),
+            langs: Mutex::new(Languages::default()),
         })
     }
 
+    /// Follows Langues › Ma langue and the players' languages.
+    pub fn set_languages(&self, me: &str, players: &[String]) {
+        let next = Languages {
+            me: me.to_string(),
+            players: players.to_vec(),
+        };
+        let mut l = self.langs.lock().unwrap();
+        if *l != next {
+            *l = next;
+            // Engines from the old language are no use any more.
+            self.engines.lock().unwrap().clear();
+        }
+    }
+
+    pub fn languages(&self) -> Languages {
+        self.langs.lock().unwrap().clone()
+    }
+
+    /// Languages the reply can be written in.
+    pub fn targets(&self) -> Vec<String> {
+        let l = self.languages();
+        models::reply_targets(&l.me, &l.players)
+    }
+
     pub fn models(&self) -> Vec<ReplyModel> {
+        let me = self.languages().me;
         let engines = self.engines.lock().unwrap();
-        models::REPLY
-            .iter()
-            .map(|p| ReplyModel {
-                target: p.target,
-                repo: p.repo,
-                size_mb: (p.files.iter().map(|f| f.1).sum::<u64>() / 1_000_000) as u32,
-                installed: models::missing_file(&self.models_dir, p).is_none(),
-                loaded: engines.contains_key(p.target),
+        self.targets()
+            .into_iter()
+            .filter_map(|t| {
+                let r = models::route(&me, &t)?;
+                Some(ReplyModel {
+                    source: me.clone(),
+                    repo: r.iter().map(|p| p.repo).collect::<Vec<_>>().join(" + "),
+                    size_mb: models::size_mb(&r),
+                    installed: models::route_installed(&self.models_dir, &me, &t),
+                    loaded: engines.contains_key(&t),
+                    target: t,
+                })
             })
             .collect()
     }
@@ -117,7 +169,8 @@ impl ReplyService {
 
     pub fn translate(&self, text: &str, target: &str) -> Result<ReplyResult, String> {
         let started = Instant::now();
-        if !TARGETS.contains(&target) {
+        let me = self.languages().me;
+        if !self.targets().iter().any(|t| t == target) {
             return Err(format!("langue non gérée : {target}"));
         }
         let text = text.trim();
@@ -135,12 +188,15 @@ impl ReplyService {
             via,
             ms: started.elapsed().as_millis() as u32,
         };
-        if let Some(t) = phrases::lookup(text, target) {
-            return Ok(done(t, "phrasebook"));
+        // Hand-written phrases: French into English or Russian.
+        if me == "fr" && (target == "en" || target == "ru") {
+            if let Some(t) = phrases::lookup(text, target) {
+                return Ok(done(t, "phrasebook"));
+            }
         }
         let mut engines = self.engines.lock().unwrap();
         if !engines.contains_key(target) {
-            let e = (self.loader)(target)?;
+            let e = (self.loader)(&me, target)?;
             engines.insert(target.to_string(), e);
         }
         let engine = engines.get_mut(target).expect("loaded");
@@ -162,15 +218,20 @@ impl ReplyService {
     }
 }
 
-/// Teammates' language: the most frequent of en / ru among recent lines.
-pub fn guess_target(recent_langs: &[String]) -> &'static str {
-    let ru = recent_langs.iter().filter(|l| l.as_str() == "ru").count();
-    let en = recent_langs.iter().filter(|l| l.as_str() == "en").count();
-    if ru > en {
-        "ru"
-    } else {
-        "en"
+/// Teammates' language: the most frequent reply language among recent
+/// lines (the first one in a tie, English when nothing tells).
+pub fn guess_target(recent_langs: &[String], targets: &[String]) -> String {
+    let mut best: Option<(&String, usize)> = None;
+    for t in targets {
+        let n = recent_langs.iter().filter(|l| *l == t).count();
+        if n > 0 && best.map_or(true, |b| n > b.1) {
+            best = Some((t, n));
+        }
     }
+    best.map(|b| b.0.clone())
+        .or_else(|| targets.iter().find(|t| *t == "en").cloned())
+        .or_else(|| targets.first().cloned())
+        .unwrap_or_else(|| "en".into())
 }
 
 /// The (hidden) reply window, created at start-up.
@@ -246,8 +307,12 @@ pub fn reply_models(reply: tauri::State<'_, Arc<ReplyService>>) -> Vec<ReplyMode
 
 /// Opens the reply window (from the main window: button or Ctrl+Alt+F7).
 #[tauri::command]
-pub fn reply_open(app: AppHandle, recent_langs: Vec<String>) -> Result<(), String> {
-    open(&app, guess_target(&recent_langs))
+pub fn reply_open(
+    app: AppHandle,
+    reply: tauri::State<'_, Arc<ReplyService>>,
+    recent_langs: Vec<String>,
+) -> Result<(), String> {
+    open(&app, &guess_target(&recent_langs, &reply.targets()))
 }
 
 #[tauri::command]
@@ -273,9 +338,13 @@ mod tests {
     fn service(loads: Arc<AtomicUsize>) -> Arc<ReplyService> {
         ReplyService::with_loader(
             PathBuf::from("nowhere"),
-            Box::new(move |target| {
+            Box::new(move |_from, target| {
                 loads.fetch_add(1, Ordering::SeqCst);
-                Ok(Box::new(Echo(if target == "ru" { "RU" } else { "EN" })) as Box<dyn Engine>)
+                Ok(Box::new(Echo(match target {
+                    "ru" => "RU",
+                    "de" => "DE",
+                    _ => "EN",
+                })) as Box<dyn Engine>)
             }),
         )
     }
@@ -326,10 +395,38 @@ mod tests {
     }
 
     #[test]
+    fn a_russian_user_replies_from_russian() {
+        let loads = Arc::new(AtomicUsize::new(0));
+        let svc = service(loads.clone());
+        let l = |v: &[&str]| v.iter().map(|s| s.to_string()).collect::<Vec<_>>();
+        svc.set_languages("ru", &l(&["en", "de", "pl"]));
+        // Polish: no model writes into it; their own language: nothing to do.
+        assert_eq!(svc.targets(), ["en", "de"]);
+        // The French phrasebook does not apply to Russian input.
+        let r = svc.translate("gg", "en").unwrap();
+        assert_eq!((r.via, r.text.as_str()), ("model", "EN:gg"));
+        assert_eq!(svc.translate("иду на Б", "de").unwrap().text, "DE:иду на Б");
+        assert!(svc.translate("да", "ru").is_err());
+        assert!(svc.translate("да", "pl").is_err());
+        let m = svc.models();
+        assert_eq!(m.len(), 2);
+        assert_eq!(
+            m[1].repo,
+            "Helsinki-NLP/opus-mt-ru-en + Helsinki-NLP/opus-mt-en-de"
+        );
+    }
+
+    #[test]
     fn guesses_the_teammates_language() {
         let l = |v: &[&str]| v.iter().map(|s| s.to_string()).collect::<Vec<_>>();
-        assert_eq!(guess_target(&l(&["ru", "ru", "en", "fr"])), "ru");
-        assert_eq!(guess_target(&l(&["en", "ru"])), "en");
-        assert_eq!(guess_target(&[]), "en");
+        let t = l(&["ru", "en"]);
+        assert_eq!(guess_target(&l(&["ru", "ru", "en", "fr"]), &t), "ru");
+        assert_eq!(guess_target(&l(&["en", "ru"]), &t), "ru");
+        assert_eq!(guess_target(&[], &t), "en");
+        assert_eq!(
+            guess_target(&l(&["de", "de", "en"]), &l(&["en", "de"])),
+            "de"
+        );
+        assert_eq!(guess_target(&[], &l(&["de"])), "de");
     }
 }

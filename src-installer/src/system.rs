@@ -99,6 +99,15 @@ mod win {
         hkcu().open_subkey(APP_KEY).ok()?.get_value("Version").ok()
     }
 
+    /// Windows' regional language ("fr-FR", "ru-RU"…).
+    pub fn user_locale() -> Option<String> {
+        hkcu()
+            .open_subkey("Control Panel\\International")
+            .ok()?
+            .get_value("LocaleName")
+            .ok()
+    }
+
     pub fn installed_dir() -> Option<PathBuf> {
         let d: String = hkcu()
             .open_subkey(APP_KEY)
@@ -201,6 +210,14 @@ impl Platform for System {
             Ok(())
         }
     }
+}
+
+/// Windows' language ("fr-FR"…), to guess the user's language.
+pub fn user_locale() -> Option<String> {
+    #[cfg(windows)]
+    return win::user_locale();
+    #[cfg(not(windows))]
+    None
 }
 
 /// Version recorded by a previous installation, if any.

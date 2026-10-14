@@ -4,7 +4,7 @@
 
 use std::sync::Arc;
 
-use crate::downloads::{DownloadEvents, DownloadStatus, Downloader};
+use crate::downloads::{DownloadEvents, DownloadStatus, Downloader, TranslationPlan};
 use crate::speech::models as whisper;
 
 pub const EVENT: &str = "models://download";
@@ -36,8 +36,10 @@ pub fn models_download_status(
     d: tauri::State<'_, Arc<Downloader>>,
     model: String,
     translation: bool,
+    plan: Option<TranslationPlan>,
 ) -> DownloadStatus {
-    d.status(&whisper::models_dir(), &model, translation)
+    let plan = translation.then(|| plan.unwrap_or_default());
+    d.status(&whisper::models_dir(), &model, plan.as_ref())
 }
 
 /// Starts fetching the missing models (no-op if complete or already running).
@@ -46,10 +48,12 @@ pub fn models_download_start(
     d: tauri::State<'_, Arc<Downloader>>,
     model: String,
     translation: bool,
+    plan: Option<TranslationPlan>,
 ) -> DownloadStatus {
     let dir = whisper::models_dir();
-    d.start(dir.clone(), &model, translation);
-    d.status(&dir, &model, translation)
+    let plan = translation.then(|| plan.unwrap_or_default());
+    d.start(dir.clone(), &model, plan.as_ref());
+    d.status(&dir, &model, plan.as_ref())
 }
 
 #[tauri::command]
