@@ -13,9 +13,17 @@
 //! crosstalk-asr-bench --live 120 --model base
 //! ```
 //!
+//! `--gpu-info` prints the Vulkan GPU Whisper would use (or none) and exits.
+//! `--accel cpu|gpu|auto` (default cpu): where Whisper runs (Vulkan builds;
+//! `auto` measures both and keeps the GPU if clearly faster).
+//! `--full-encoder` encodes Whisper's full 30 s window instead of the segment
+//! duration (the app's default), to compare speed and accuracy.
 //! `--vad-only` runs the VAD and segmenter without Whisper (no model needed).
 //! Options: `--models-dir DIR` (default: the app's folder), `--threads N`,
 //! `--lang ru,en`, `--vad-threshold 0.55`, `--combat-peak-db -3`, `--markdown out.md`.
+//! `--verbose` prints raw offline results, rejection reasons, language/full timings.
+//! Live diagnostics: set CROSSTALK_SPEECH_DIAGNOSTICS=1 (stderr; raw text included).
+//! `--live` requires CS2 process capture; there is no output-device fallback.
 //! Nothing is uploaded; audio is never written unless `--export-mix DIR` is given.
 
 use std::io::Write as _;
@@ -23,15 +31,15 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
+use crosstalk_lib::cpu::process_cpu_time;
 use crosstalk_lib::speech::bench::{
     char_errors, combat_track, parse_langs, peak_db, read_wav, run_pipeline, word_errors,
     write_wav_i16, SegmentResult,
 };
-use crosstalk_lib::speech::cpu::process_cpu_time;
-use crosstalk_lib::speech::engine::{default_threads, Recognizer};
+use crosstalk_lib::speech::engine::{default_threads, logical_threads, Recognizer};
 use crosstalk_lib::speech::vad::VoiceDetector;
 use crosstalk_lib::speech::{
-    models, EngineLoader, Lang, RejectReason, SpeechConfig, WhisperLoader,
+    models, Accel, EngineLoader, Lang, RejectReason, SpeechConfig, WhisperLoader,
 };
 
 fn arg(args: &[String], name: &str) -> Option<String> {
@@ -71,10 +79,10 @@ fn fail(msg: &str) -> ! {
 
 #[derive(Default)]
 struct Totals {
-    word_err: [usize; 2],
-    words: [usize; 2],
-    char_err: [usize; 2],
-    chars: [usize; 2],
+    word_err: [usize; Lang::ALL.len()],
+    words: [usize; Lang::ALL.len()],
+    char_err: [usize; Lang::ALL.len()],
+    chars: [usize; Lang::ALL.len()],
     audio_s: f64,
     asr_ms: Vec<u32>,
     latency_ms: Vec<u32>,
@@ -96,11 +104,9 @@ fn pct(v: &[u32], q: f32) -> u32 {
     s[((q * s.len() as f32) as usize).min(s.len() - 1)]
 }
 
+/// Index in `Lang::ALL` (Russian 0, English 1: the report's two columns).
 fn lang_idx(l: Lang) -> usize {
-    match l {
-        Lang::Ru => 0,
-        Lang::En => 1,
-    }
+    Lang::ALL.iter().position(|&x| x == l).unwrap_or(0)
 }
 
 /// Post-roll (13 frames) + worst VAD hop (192 ms) before Whisper starts.
@@ -181,11 +187,10 @@ fn run_corpus(
                 "  [{scenario}] {} → « {hyp} »",
                 clip.path.file_name().unwrap_or_default().to_string_lossy()
             );
-            for r in results.iter().filter(|r| r.outcome.is_err()) {
+            for r in &results {
                 println!(
-                    "      rejeté {:?} ({} ms)",
-                    r.outcome.as_ref().unwrap_err(),
-                    r.audio_ms
+                    "      audio_ms={} inference_ms={} timing={:?} outcome={:?} recognition={:?}",
+                    r.audio_ms, r.asr_ms, r.timing, r.outcome, r.recognition
                 );
             }
         }
@@ -245,12 +250,20 @@ const HEADER: &str = "| Modèle | Scénario | WER ru | CER ru | WER en | CER en 
 
 fn main() {
     let args: Vec<String> = std::env::args().collect();
+    #[cfg(feature = "whisper")]
+    if args.iter().any(|a| a == "--gpu-info") {
+        match crosstalk_lib::speech::engine::vulkan_gpu() {
+            Some(name) => println!("GPU Vulkan : {name}"),
+            None => println!("GPU Vulkan : aucun (Whisper sur le processeur)"),
+        }
+        return;
+    }
     if args.iter().any(|a| a == "--help" || a == "-h") {
         println!(
             "{}",
             include_str!("asr_bench.rs")
                 .lines()
-                .take(18)
+                .take_while(|line| line.starts_with("//!"))
                 .collect::<Vec<_>>()
                 .join("\n")
         );
@@ -258,14 +271,31 @@ fn main() {
     }
     let dir = arg(&args, "--models-dir")
         .map(PathBuf::from)
-        .unwrap_or_else(models::models_dir);
+        .unwrap_or_else(crosstalk_lib::paths::models_dir);
     let threads = arg(&args, "--threads")
-        .and_then(|t| t.parse().ok())
+        .map(|t| {
+            let n = t
+                .parse::<usize>()
+                .unwrap_or_else(|_| fail("--threads exige un entier positif"));
+            if n == 0 || n > logical_threads() {
+                fail(&format!(
+                    "--threads doit être entre 1 et {}",
+                    logical_threads()
+                ));
+            }
+            n
+        })
         .unwrap_or_else(default_threads);
     let mut config = SpeechConfig::default();
     if let Some(l) = arg(&args, "--lang") {
         config.languages = parse_langs(&l);
     }
+    config.fast_encoder = !args.iter().any(|a| a == "--full-encoder");
+    config.accel = match arg(&args, "--accel").as_deref() {
+        Some("gpu") => Accel::Gpu,
+        Some("auto") => Accel::Auto,
+        _ => Accel::Cpu,
+    };
     if let Some(v) = arg(&args, "--vad-threshold").and_then(|v| v.parse().ok()) {
         config.vad_threshold = v;
     }
@@ -288,7 +318,7 @@ fn main() {
         .unwrap_or_else(|e| fail(&format!("VAD : {e}")));
 
     if let Some(secs) = arg(&args, "--live").and_then(|s| s.parse::<u64>().ok()) {
-        return live(secs, &dir, &model_list, config);
+        return live(secs, &dir, &model_list, config, threads);
     }
 
     if args.iter().any(|a| a == "--vad-only") {
@@ -297,8 +327,9 @@ fn main() {
 
     let mut md = String::new();
     md.push_str(&format!(
-        "### Banc d'essai ASR\n\nMachine : {} threads logiques, Whisper sur {threads} threads, CPU (AVX2), sans GPU. Bruit de combat **synthétique** (crête {peak_db} dBFS, voix à −6 dBFS).\n\n",
+        "### Banc d'essai ASR\n\nMachine : {} threads logiques, Whisper sur {threads} threads, CPU (AVX2), sans GPU, encodeur {}. Bruit de combat **synthétique** (crête {peak_db} dBFS, voix à −6 dBFS).\n\n",
         std::thread::available_parallelism().map(|n| n.get()).unwrap_or(0),
+        if config.fast_encoder { "réduit à la durée du segment" } else { "fenêtre complète de 30 s" },
     ));
 
     for model in model_list
@@ -307,15 +338,13 @@ fn main() {
         .filter(|m| !m.is_empty())
     {
         let t0 = Instant::now();
-        let mut recognizer = match loader.load_recognizer(&dir, model) {
+        let mut recognizer = match loader.load_recognizer(&dir, model, config.accel) {
             Ok(r) => r,
-            Err(e) => {
-                eprintln!("modèle {model} ignoré : {e}");
-                continue;
-            }
+            Err(e) => fail(&format!("modèle {model} : {e}")),
         };
         let load_ms = t0.elapsed().as_millis();
-        println!("\n== whisper {model} (chargé en {load_ms} ms)");
+        let backend = recognizer.backend().unwrap_or_else(|| "CPU".into());
+        println!("\n== whisper {model} · {backend} (chargé en {load_ms} ms)");
         let config = SpeechConfig {
             model: model.into(),
             ..config.clone()
@@ -377,13 +406,22 @@ fn main() {
                     export.as_deref(),
                     verbose,
                 );
-                let r = row(model, scenario, &t);
+                let label = if config.fast_encoder {
+                    model.to_string()
+                } else {
+                    format!("{model} (fenêtre 30 s)")
+                };
+                let r = row(&label, scenario, &t);
                 println!(
                     "{HEADER}\n{r}\n  ({:.0} s d'audio traités en {:.0} s)",
                     t.audio_s, t.wall_s
                 );
                 md.push_str(&r);
                 md.push('\n');
+                // Written after every row: a time limit keeps what was measured.
+                if let Some(out) = arg(&args, "--markdown") {
+                    let _ = std::fs::write(&out, &md);
+                }
             }
         }
     }
@@ -405,27 +443,30 @@ fn vad_only(args: &[String], detector: &mut dyn VoiceDetector, config: &SpeechCo
                 *rej.entry(e).or_insert(0) += 1;
             }
         }
-        println!(
-            "{name} : {:.1} s d'audio → {} segments envoyés à Whisper ({:.1} s), rejetés avant Whisper : {:?}",
+        let mut out = format!(
+            "{name} : {:.1} s d'audio → {} segments envoyés à Whisper ({:.1} s), rejetés avant Whisper : {:?}\n",
             audio_s,
             sent.len(),
             speech_ms as f64 / 1000.0,
             rej
         );
         for r in &sent {
-            println!(
-                "    segment à {:.2} s, durée {:.2} s",
+            out.push_str(&format!(
+                "    segment à {:.2} s, durée {:.2} s\n",
                 r.start_ms as f64 / 1000.0,
                 r.audio_ms as f64 / 1000.0
-            );
+            ));
         }
+        print!("{out}");
+        out
     };
+    let mut report = String::from("### VAD seule (sans Whisper)\n\n```\n");
     if let Some(secs) = arg(args, "--noise-only").and_then(|s| s.parse::<u64>().ok()) {
         let rate = 48_000;
         let noise = combat_track((secs * rate as u64) as usize, rate, peak, 42);
         let res = run_pipeline(&noise, rate, detector, None, config, 1)
             .unwrap_or_else(|e| fail(&e.to_string()));
-        summarize("Bruit seul (synthétique)", &res, secs as f64);
+        report.push_str(&summarize("Bruit seul (synthétique)", &res, secs as f64));
     }
     if let Some(manifest) = arg(args, "--manifest") {
         let scenarios = arg(args, "--scenario").unwrap_or_else(|| "clean,combat".into());
@@ -443,14 +484,19 @@ fn vad_only(args: &[String], detector: &mut dyn VoiceDetector, config: &SpeechCo
                 let res = run_pipeline(&mono, wav.rate, detector, None, config, 1)
                     .unwrap_or_else(|e| fail(&e.to_string()));
                 let name = format!("{} [{scenario}]", clip.path.display());
-                summarize(&name, &res, mono.len() as f64 / wav.rate as f64);
+                report.push_str(&summarize(&name, &res, mono.len() as f64 / wav.rate as f64));
             }
         }
+    }
+    report.push_str("```\n");
+    if let Some(out) = arg(args, "--markdown") {
+        std::fs::write(&out, &report).unwrap_or_else(|e| fail(&format!("{out}: {e}")));
+        println!("\nRapport écrit dans {out}");
     }
 }
 
 /// Real capture of CS2 (or the output device) through the app's services.
-fn live(secs: u64, dir: &Path, model: &str, config: SpeechConfig) {
+fn live(secs: u64, dir: &Path, model: &str, config: SpeechConfig, threads: usize) {
     use crosstalk_lib::audio::{self, AudioService, CaptureMode, StopReason};
     use crosstalk_lib::game::Cs2Watcher;
     use crosstalk_lib::speech::{
@@ -470,6 +516,10 @@ fn live(secs: u64, dir: &Path, model: &str, config: SpeechConfig) {
             );
         }
         fn transcript(&self, t: &Transcript) {
+            if t.partial {
+                println!("  … [{}] {}", t.lang.code().to_uppercase(), t.text);
+                return;
+            }
             println!(
                 "[{}] « {} »  (audio {} ms · Whisper {} ms · latence {} ms · logprob {:.2})",
                 t.lang.code().to_uppercase(),
@@ -479,6 +529,9 @@ fn live(secs: u64, dir: &Path, model: &str, config: SpeechConfig) {
                 t.latency_ms,
                 t.avg_logprob
             );
+        }
+        fn retract(&self, _id: u64) {
+            println!("  (transcription partielle retirée)");
         }
         fn activity(&self, a: VoiceActivity) {
             if a.speaking {
@@ -499,7 +552,7 @@ fn live(secs: u64, dir: &Path, model: &str, config: SpeechConfig) {
     }
 
     let console = Arc::new(Console(Mutex::new(None)));
-    let speech = SpeechService::start(
+    let speech = SpeechService::start_with_threads(
         console.clone(),
         Arc::new(WhisperLoader),
         dir.to_path_buf(),
@@ -507,6 +560,7 @@ fn live(secs: u64, dir: &Path, model: &str, config: SpeechConfig) {
             model: model.split(',').next().unwrap_or("base").into(),
             ..config
         },
+        threads,
     );
     let end = Instant::now() + Duration::from_secs(60);
     while speech.status().state == crosstalk_lib::speech::EngineState::Loading
@@ -514,11 +568,18 @@ fn live(secs: u64, dir: &Path, model: &str, config: SpeechConfig) {
     {
         std::thread::sleep(Duration::from_millis(50));
     }
+    if speech.status().state != crosstalk_lib::speech::EngineState::Ready {
+        fail(&format!("moteur indisponible : {:?}", speech.status()));
+    }
     let watcher = Cs2Watcher::default();
     watcher.poll();
     let audio = AudioService::new(audio::default_backend(), Arc::new(Quiet));
     audio.set_sink(Some(Box::new(speech.sink())));
-    let st = audio.start(CaptureMode::Auto, None, watcher.status().pid);
+    let pid = watcher
+        .status()
+        .pid
+        .unwrap_or_else(|| fail("CS2 absent : --live exige cs2.exe"));
+    let st = audio.start(CaptureMode::Process, None, Some(pid));
     if st.state != audio::CaptureState::Capturing {
         fail(&format!("capture impossible : {:?}", st.error));
     }
@@ -530,7 +591,8 @@ fn live(secs: u64, dir: &Path, model: &str, config: SpeechConfig) {
         _ => f64::NAN,
     };
     audio.stop(StopReason::User);
-    std::thread::sleep(Duration::from_millis(300));
+    speech.purge();
+    println!("Arrêt : les segments en attente et résultats encore en calcul sont purgés ; bilan des résultats terminés avant arrêt.");
     let s = speech.stats();
     println!(
         "\nRésultat : {} segments, {} transcrits, rejets {:?}, latence p50 {:?} ms / p95 {:?} ms, blocs perdus {}, CPU moyen {:.0} % d'un cœur ({:.1} % de la machine)",

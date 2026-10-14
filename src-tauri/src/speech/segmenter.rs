@@ -25,7 +25,8 @@ pub struct SegmenterConfig {
     pub start_frames: usize,
     /// Voiced audio needed for a segment to be transcribed (256 ms).
     pub min_voiced_frames: usize,
-    /// Hard cap (250 frames = 8 s).
+    /// Hard cap (156 frames = 5 s): with game noise keeping a segment open,
+    /// a longer cap only delays the final line.
     pub max_frames: usize,
 }
 
@@ -37,7 +38,7 @@ impl SegmenterConfig {
             hang_frames: 13,
             start_frames: 2,
             min_voiced_frames: 8,
-            max_frames: 250,
+            max_frames: 156,
         }
     }
 
@@ -111,6 +112,35 @@ impl Segmenter {
 
     pub fn is_speaking(&self) -> bool {
         self.active
+    }
+
+    /// Frames of the segment being recorded (0 when nobody speaks).
+    pub fn open_frames(&self) -> usize {
+        if self.active {
+            self.frames.len()
+        } else {
+            0
+        }
+    }
+
+    /// The segment being recorded so far, for a live partial transcript.
+    pub fn open_segment(&self) -> Option<Segment> {
+        if !self.active || self.frames.is_empty() {
+            return None;
+        }
+        let release = self.cfg.release();
+        let voiced: Vec<&Frame> = self.frames.iter().filter(|f| f.prob >= release).collect();
+        let mut samples = Vec::with_capacity(self.frames.len() * FRAME);
+        for f in &self.frames {
+            samples.extend_from_slice(&f.samples);
+        }
+        Some(Segment {
+            samples,
+            start_frame: self.frames[0].index,
+            last_voiced_frame: voiced.last().map_or(self.frames[0].index, |f| f.index),
+            voiced_frames: voiced.len(),
+            forced: false,
+        })
     }
 
     /// Index of the next frame, i.e. frames seen since the stream started.
@@ -372,8 +402,8 @@ mod tests {
     #[test]
     fn cuts_long_monologues_at_the_quietest_frame() {
         let mut s = Segmenter::new(SegmenterConfig::new(0.5));
-        let mut input = speech_like(240);
-        input[235] = (0.05, 0.36); // breath, still voiced (release 0.35)
+        let mut input = speech_like(150);
+        input[145] = (0.05, 0.36); // breath, still voiced (release 0.35)
         input.extend(speech_like(40));
         input.extend(repeat(15, 0.0, 0.0));
         let out = run(&mut s, &input);
@@ -382,12 +412,31 @@ mod tests {
             panic!()
         };
         assert!(first.forced);
-        assert_eq!(first.samples.len(), 236 * FRAME);
+        assert_eq!(first.samples.len(), 146 * FRAME);
         let Outcome::Segment(second) = &out[1] else {
             panic!()
         };
         assert!(!second.forced);
-        assert_eq!(second.start_frame, 236);
+        assert_eq!(second.start_frame, 146);
+    }
+
+    #[test]
+    fn exposes_the_open_segment_while_speaking() {
+        let mut seg = Segmenter::new(SegmenterConfig::new(0.5));
+        assert!(seg.open_segment().is_none());
+        run(&mut seg, &speech_like(40));
+        assert!(seg.is_speaking());
+        let open = seg.open_segment().unwrap();
+        assert_eq!(seg.open_frames() * FRAME, open.samples.len());
+        assert!(open.voiced_frames >= 30 && open.samples.len() >= 40 * FRAME);
+        // The final segment starts like the partial view of it.
+        let out = run(&mut seg, &repeat(20, 0.0, 0.0));
+        let Some(Outcome::Segment(fin)) = out.last() else {
+            panic!("{out:?}")
+        };
+        assert_eq!(fin.start_frame, open.start_frame);
+        assert_eq!(&fin.samples[..open.samples.len()], &open.samples[..]);
+        assert_eq!(seg.open_frames(), 0);
     }
 
     #[test]

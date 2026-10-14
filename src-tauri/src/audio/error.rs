@@ -10,6 +10,8 @@ pub enum AudioError {
     Unsupported,
     #[error("Aucun périphérique de sortie audio actif.")]
     NoDevice,
+    #[error("Aucun micro actif : branchez-en un ou choisissez-le dans les paramètres de son de Windows.")]
+    NoMicrophone,
     #[error("Périphérique audio introuvable : {0}")]
     DeviceNotFound(String),
     #[error("Capture par processus indisponible sur ce système ({0}).")]
@@ -32,6 +34,7 @@ impl AudioError {
             AudioError::Cs2NotRunning => "cs2_not_running",
             AudioError::Unsupported => "unsupported",
             AudioError::NoDevice => "no_device",
+            AudioError::NoMicrophone => "no_microphone",
             AudioError::DeviceNotFound(_) => "device_not_found",
             AudioError::ProcessLoopbackUnavailable(_) => "process_loopback_unavailable",
             AudioError::FormatUnsupported(_) => "format_unsupported",

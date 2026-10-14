@@ -9,7 +9,7 @@
 use std::time::Instant;
 
 use super::dsp::Conditioner;
-use super::engine::{RecognizeOptions, Recognizer};
+use super::engine::{InferenceTiming, RecognizeOptions, Recognizer};
 use super::filter::{judge, prompt_from, Recognition};
 use super::segmenter::{Outcome, Segmenter, SegmenterConfig};
 use super::service::VAD_HOP_FRAMES;
@@ -26,6 +26,7 @@ pub struct SegmentResult {
     /// Accepted text, or why the segment was dropped.
     pub outcome: Result<String, RejectReason>,
     pub recognition: Option<Recognition>,
+    pub timing: Option<InferenceTiming>,
 }
 
 /// Runs `mono` (any rate) through conditioning, VAD, segmentation, Whisper
@@ -67,6 +68,7 @@ pub fn run_pipeline(
                 asr_ms: 0,
                 outcome: Err(r),
                 recognition: None,
+                timing: None,
             }),
             Outcome::Segment(s) => {
                 let audio_ms = s.duration_ms();
@@ -78,6 +80,7 @@ pub fn run_pipeline(
                         asr_ms: 0,
                         outcome: Ok(String::new()),
                         recognition: None,
+                        timing: None,
                     });
                     continue;
                 };
@@ -88,6 +91,7 @@ pub fn run_pipeline(
                         languages: &config.languages,
                         prompt: &prompt,
                         threads,
+                        fast_encoder: config.fast_encoder,
                     },
                 )?;
                 out.push(SegmentResult {
@@ -96,6 +100,7 @@ pub fn run_pipeline(
                     asr_ms: t0.elapsed().as_millis() as u32,
                     outcome: judge(&r, audio_ms),
                     recognition: Some(r),
+                    timing: rec.timing(),
                 });
             }
         }

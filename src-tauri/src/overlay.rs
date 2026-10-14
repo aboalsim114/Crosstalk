@@ -3,11 +3,16 @@
 //! the game (CS2 must run in borderless windowed mode; exclusive fullscreen is not
 //! supported without injection, which Crosstalk never does).
 
+use std::sync::Mutex;
+
 use serde::Deserialize;
 use tauri::{
-    AppHandle, LogicalSize, Manager, PhysicalPosition, WebviewUrl, WebviewWindow,
+    AppHandle, LogicalSize, Manager, Monitor, PhysicalPosition, WebviewUrl, WebviewWindow,
     WebviewWindowBuilder,
 };
+
+/// Corner the overlay was last anchored to (it follows CS2 to its screen).
+static CORNER: Mutex<Corner> = Mutex::new(Corner::Tr);
 
 pub const LABEL: &str = "overlay";
 /// Logical size of the overlay window; the subtitle stack is 380 px wide.
@@ -68,8 +73,73 @@ pub fn create(app: &AppHandle) -> tauri::Result<WebviewWindow> {
     Ok(win)
 }
 
+/// Top-left corner of the screen showing CS2's window (found by its title;
+/// `FindWindowW` + `MonitorFromWindow` only read the window's position, the
+/// game's process is never opened).
+#[cfg(windows)]
+pub fn cs2_screen_origin() -> Option<(i32, i32)> {
+    use windows::core::w;
+    use windows::Win32::Graphics::Gdi::{
+        GetMonitorInfoW, MonitorFromWindow, MONITORINFO, MONITOR_DEFAULTTONULL,
+    };
+    use windows::Win32::UI::WindowsAndMessaging::FindWindowW;
+    // SAFETY: plain Win32 queries with valid, initialized arguments.
+    unsafe {
+        let hwnd = FindWindowW(None, w!("Counter-Strike 2")).ok()?;
+        let mon = MonitorFromWindow(hwnd, MONITOR_DEFAULTTONULL);
+        if mon.is_invalid() {
+            return None;
+        }
+        let mut info = MONITORINFO {
+            cbSize: std::mem::size_of::<MONITORINFO>() as u32,
+            ..Default::default()
+        };
+        GetMonitorInfoW(mon, &mut info).ok().ok()?;
+        Some((info.rcMonitor.left, info.rcMonitor.top))
+    }
+}
+
+#[cfg(not(windows))]
+pub fn cs2_screen_origin() -> Option<(i32, i32)> {
+    None
+}
+
+/// The screen CS2 is on, else the main screen.
+fn target_monitor(win: &WebviewWindow) -> tauri::Result<Option<Monitor>> {
+    if let Some(origin) = cs2_screen_origin() {
+        let found = win
+            .available_monitors()?
+            .into_iter()
+            .find(|m| (m.position().x, m.position().y) == origin);
+        if found.is_some() {
+            return Ok(found);
+        }
+    }
+    win.primary_monitor()
+}
+
+/// Keeps the visible overlay on CS2's screen (two-screen set-ups, or CS2 moved
+/// to another screen). A position dragged on the same screen is kept.
+pub fn follow_cs2(app: &AppHandle) {
+    let Some(win) = app.get_webview_window(LABEL) else {
+        return;
+    };
+    if !win.is_visible().unwrap_or(false) || cs2_screen_origin().is_none() {
+        return;
+    }
+    let (Ok(Some(target)), Ok(Some(current))) = (target_monitor(&win), win.current_monitor())
+    else {
+        return;
+    };
+    if target.position() != current.position() {
+        let corner = *CORNER.lock().unwrap();
+        let _ = place(&win, corner);
+    }
+}
+
 fn place(win: &WebviewWindow, corner: Corner) -> tauri::Result<()> {
-    let Some(monitor) = win.primary_monitor()? else {
+    *CORNER.lock().unwrap() = corner;
+    let Some(monitor) = target_monitor(win)? else {
         return Ok(());
     };
     let area = monitor.work_area();

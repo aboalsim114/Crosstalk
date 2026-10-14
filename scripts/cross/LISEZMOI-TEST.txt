@@ -1,0 +1,128 @@
+CROSSTALK - VERSION DE TEST (commit @COMMIT@, branche develop)
+==============================================================
+
+Ce que contient ce dossier
+--------------------------
+- crosstalk.exe              l'application (version portable, sans installateur)
+- crosstalk-asr-bench.exe    banc d'essai : test en direct sur CS2, mesures
+- crosstalk-audio-probe.exe  diagnostic de la capture audio (déjà validé)
+- crosstalk-translate.exe    test de la traduction locale en ligne de commande
+- download-models.ps1        installe Whisper, la VAD Silero et (option
+                             -Translation) les modèles de traduction Opus-MT
+- fetch-asr-corpus.py        corpus de référence FLEURS (facultatif)
+- WebView2Loader.dll, libstdc++-6.dll, libgcc_s_seh-1.dll, libwinpthread-1.dll
+                             DLL nécessaires : gardez-les à côté des .exe
+- SHA256SUMS.txt             empreintes des exécutables et des DLL
+
+IMPORTANT, à lire avant de tester
+---------------------------------
+1. Compilé avec gcc (MinGW), et non avec MSVC comme la version officielle, via
+   scripts/cross-build-windows-gnu.sh. Le code est exactement celui du
+   commit @COMMIT@ ; seule la chaîne de compilation diffère. Pour une
+   comparaison équitable, voir la section 6.
+2. Non signé : Windows SmartScreen affichera un avertissement
+   (« Informations complémentaires » > « Exécuter quand même »).
+3. Fermez la version installée de Crosstalk (icône de la zone de
+   notification > Quitter). Sinon, l'instance unique ouvre l'ancienne.
+4. Rien n'est enregistré ni envoyé : audio en mémoire, transcription et
+   traduction locales. Aucune clé API, aucun abonnement.
+
+1. Installer les modèles (Whisper base + VAD + traduction : environ 770 Mo)
+--------------------------------------------------------------------------
+PowerShell, dans ce dossier :
+
+    powershell -ExecutionPolicy Bypass -File .\download-models.ps1 -Models base -Translation
+
+Test rapide de la traduction (CS2 fermé) :
+
+    .\crosstalk-translate.exe --lang ru "Двое идут на B, у них AWP."
+
+Les fichiers vont dans %LOCALAPPDATA%\Crosstalk\models. Le script vérifie la
+taille exacte et le SHA-1 officiel, puis affiche le SHA-256 : notez celui de
+ggml-silero-v5.1.2.bin.
+(Facultatif, plus précis mais plus lent : -Models base,small)
+
+2. Test de fumée, CS2 fermé (1 minute)
+--------------------------------------
+    .\crosstalk-asr-bench.exe --vad-only --noise-only 60
+    .\crosstalk-asr-bench.exe --noise-only 60 --model base
+
+Attendu : « 0 fausses transcriptions affichées ».
+
+3. Test réel dans CS2 : un joueur parle russe
+---------------------------------------------
+Préparation dans CS2 : mode fenêtré sans bordures, chat vocal audible.
+Source de voix russe, au choix :
+  a) une partie avec des joueurs russophones (le cas réel) ;
+  b) un ami russophone en partie privée ;
+  c) voice_loopback 1 avec un enregistrement russe passé dans un micro
+     virtuel (protocole audio §3).
+
+3a. Mesure en ligne de commande, la plus précise
+    Pendant la partie, dans un terminal :
+
+        .\crosstalk-asr-bench.exe --live 300 --model base
+
+    Chaque phrase s'affiche : [RU] « ... » (audio, Whisper, latence).
+    Au bout de 300 s, un bilan donne : segments, transcrits, rejets,
+    latence p50 / p95, CPU moyen.
+    Copiez TOUTE la sortie dans un fichier texte.
+    Variante si c'est lent : ajoutez --threads 6 (sans dépasser le nombre
+    de cœurs physiques) et comparez.
+
+3b. Dans l'application
+    Lancez crosstalk.exe :
+    - Audio & IA : carte « Modèle local » = Whisper base (vert).
+    - Accueil > Démarrer.
+    Quand un joueur parle russe :
+    - « ● PAROLE DÉTECTÉE » apparaît en haut à droite ;
+    - la phrase s'affiche dans le Script, statut TRANSCRIT, texte en russe ;
+    - l'overlay en jeu indique « TRANSCRIPTION (NON TRADUITE) ».
+    Les métriques (latence, CPU) sont sur Audio & IA, sous la liste des
+    modèles.
+    Si crosstalk.exe ne s'ouvre pas, dites-le-moi : cette interface n'a pas
+    pu être lancée avant la livraison (le test 3a suffit pour l'objectif).
+
+4. Ce qu'il faut mesurer
+------------------------
+A) Latence p50 / p95      : bilan de 3a (et Audio & IA).
+B) CPU                    : bilan de 3a (« CPU moyen ... % de la machine »)
+                            + Gestionnaire des tâches (crosstalk.exe ou
+                            crosstalk-asr-bench.exe).
+C) Transcriptions correctes : pour chaque ligne [RU]/[EN] du test 3a,
+                            notez C (correcte ou presque), P (partielle),
+                            F (fausse). Comptez aussi les phrases dites mais
+                            jamais transcrites (manquées).
+D) Faux positifs          : 2 minutes de fusillade et de grenades SANS
+                            parole, avec --live 120 : chaque ligne affichée
+                            est un faux positif. Notez le texte inventé.
+E) Impact FPS             : même scène (carte d'atelier « CS2 FPS
+                            Benchmark », ou cl_showfps 1 au même endroit),
+                            60 s SANS Crosstalk, puis 60 s AVEC --live
+                            pendant que quelqu'un parle. Notez les FPS
+                            moyens (et le 1 % low si possible).
+
+5. Résultats à me renvoyer
+--------------------------
+    Windows 11 build 26200 · CPU : ... · RAM : ... · GPU : ...
+    SHA-256 Silero : ...
+    Test 2 : ... fausses transcriptions
+    Test 3a (sortie complète collée) - latence p50 ... / p95 ..., CPU ... %
+    C / P / F / manquées : ... / ... / ... / ...
+    Faux positifs (2 min de combat sans parole) : ...
+    FPS sans / avec : ... / ...  (1 % low : ... / ...)
+    Application (3b) : ✅ / ❌ + remarques
+
+6. Comparaison gcc / MSVC (pour décider du compilateur)
+-------------------------------------------------------
+Construisez la version officielle MSVC du même commit sur votre PC
+(scripts\validate.ps1, voir CONTRIBUTING.md). Lancez exactement la même
+commande avec les deux crosstalk-asr-bench.exe, sur le même fichier, CS2
+fermé :
+
+    .\crosstalk-asr-bench.exe --manifest mes-wav.tsv --scenario clean --model base
+
+(mes-wav.tsv : voir docs/testing/speech-recognition.md §1.4 ; un WAV
+enregistré avec crosstalk-audio-probe.exe --seconds 30 --wav partie.wav
+convient). Comparez la colonne « Whisper p50 / p95 ». Je ne changerai le
+compilateur de la version officielle qu'au vu de cette comparaison.

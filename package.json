@@ -1,19 +1,24 @@
 {
   "name": "crosstalk",
   "private": true,
-  "version": "0.2.0",
+  "version": "0.3.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
+    "dev:installer": "vite --config vite.installer.config.ts",
+    "build:installer": "tsc --noEmit && vite build --config vite.installer.config.ts",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
     "tauri": "tauri",
     "app:dev": "tauri dev",
-    "app:build": "tauri build"
+    "app:build": "tauri build",
+    "check:anticheat": "node scripts/check-anticheat.mjs",
+    "check:architecture": "node scripts/check-architecture.mjs"
   },
   "dependencies": {
+    "@fontsource-variable/archivo": "^5.3.0",
     "@fontsource/geist-sans": "^5.3.0",
     "@fontsource/instrument-serif": "^5.3.0",
     "@fontsource/jetbrains-mono": "^5.3.0",

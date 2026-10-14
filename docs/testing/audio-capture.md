@@ -1,13 +1,13 @@
 # Protocole de test — capture audio (feat/audio-capture)
 
-À exécuter sur un PC **Windows 10/11 x64** avec Counter-Strike 2 installé. Les tests automatisés de la CI couvrent la logique, la compilation Windows et quelques appels réels (énumération des processus et des périphériques). En revanche, **ils ne peuvent pas tester la capture du son de CS2** : ces étapes sont manuelles.
+À exécuter sur un PC **Windows 10/11 x64** avec Counter-Strike 2 installé. Les tests automatisés (`scripts\validate.ps1`, en local) couvrent la logique, la compilation Windows et quelques appels réels (énumération des processus et des périphériques). En revanche, **ils ne testent pas la capture du son de CS2** : ces étapes sont manuelles.
 
 Notez le résultat de chaque étape (✅ / ❌ + remarque) dans le tableau final, puis collez-le en commentaire de la PR.
 
 ## 0. Préparation
 
-1. Ouvrez la PR, onglet **Checks**, puis le run **CI**. Téléchargez l'artefact `crosstalk-windows-x64`.
-2. Il contient :
+1. Sur le commit de la PR, construisez le paquet de test : `powershell -ExecutionPolicy Bypass -File scripts\validate.ps1` (voir CONTRIBUTING.md, « Validation locale »).
+2. Le dossier `dist-local\<commit>\` contient :
    - `crosstalk-audio-probe.exe`, l'outil de diagnostic en ligne de commande ;
    - `crosstalk.exe` et les installateurs (`*-setup.exe`, `*.msi`).
 3. Installez Crosstalk avec `*-setup.exe`. Si une version précédente est installée, elle est mise à jour.
@@ -16,7 +16,7 @@ Notez le résultat de chaque étape (✅ / ❌ + remarque) dans le tableau final
 
 ## 1. Outil de diagnostic (sans interface)
 
-Ouvrez un terminal (PowerShell) dans le dossier de l'artefact.
+Ouvrez un terminal (PowerShell) dans le dossier `dist-local\<commit>\`.
 
 | # | Commande | Résultat attendu |
 | --- | --- | --- |

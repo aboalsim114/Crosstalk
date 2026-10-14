@@ -1,6 +1,7 @@
 # Node / Vite
 node_modules/
 dist/
+dist-installer/
 *.local
 .vite/
 coverage/
@@ -8,6 +9,7 @@ coverage/
 # Rust / Tauri
 target/
 src-tauri/gen/schemas/
+src-installer/gen/schemas/
 
 # OS / editors
 .DS_Store
@@ -16,3 +18,7 @@ Thumbs.db
 .vscode/*
 !.vscode/extensions.json
 *.log
+dist-test/
+
+# Local validation packages (scripts/validate.ps1)
+dist-local/

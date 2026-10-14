@@ -1,0 +1,61 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="440" viewBox="0 0 1200 440" role="img" aria-labelledby="title desc">
+  <title id="title">Crosstalk — Communication without borders</title>
+  <desc id="desc">Bannière éditoriale sombre avec typographie ivoire, lueur ambre, formes d'ondes audio et traduction des callouts.</desc>
+  <defs>
+    <linearGradient id="base" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#121012"/><stop offset=".52" stop-color="#07080b"/><stop offset="1" stop-color="#0b1016"/></linearGradient>
+    <radialGradient id="ember" cx=".74" cy=".45" r=".48"><stop stop-color="#ffa24a" stop-opacity=".20"/><stop offset=".48" stop-color="#ffa24a" stop-opacity=".06"/><stop offset="1" stop-color="#ffa24a" stop-opacity="0"/></radialGradient>
+    <radialGradient id="ice" cx=".96" cy=".83" r=".52"><stop stop-color="#7fd4ff" stop-opacity=".16"/><stop offset="1" stop-color="#7fd4ff" stop-opacity="0"/></radialGradient>
+    <linearGradient id="underline" x1="0" x2="1"><stop stop-color="#ffa24a"/><stop offset="1" stop-color="#ffa24a" stop-opacity="0"/></linearGradient>
+    <linearGradient id="wave" x1="0" x2="1"><stop stop-color="#ffa24a"/><stop offset=".48" stop-color="#ffc68a"/><stop offset="1" stop-color="#7fd4ff"/></linearGradient>
+    <pattern id="grid" width="38" height="38" patternUnits="userSpaceOnUse"><path d="M38 0H0V38" fill="none" stroke="#f3ede3" stroke-opacity=".055" stroke-width=".7"/></pattern>
+  </defs>
+  <rect width="1200" height="440" rx="22" fill="url(#base)"/>
+  <rect width="1200" height="440" rx="22" fill="url(#ember)"/>
+  <rect width="1200" height="440" rx="22" fill="url(#ice)"/>
+  <rect x="646" y="22" width="528" height="396" fill="url(#grid)" opacity=".82"/>
+  <rect x=".6" y=".6" width="1198.8" height="438.8" rx="21.4" fill="none" stroke="#ece6dc" stroke-opacity=".12"/>
+  <path d="M38 36H1162" stroke="#ece6dc" stroke-opacity=".10"/>
+  <circle cx="70" cy="75" r="4.5" fill="#ffa24a"/>
+  <text x="88" y="80" font-family="Arial, Helvetica, sans-serif" font-size="12" font-weight="700" letter-spacing="3" fill="#c6bcb0">DESKTOP TRANSLATION SYSTEM</text>
+  <text x="70" y="201" font-family="Arial, Helvetica, sans-serif" font-size="86" letter-spacing="-4" font-weight="800" fill="#f3ede3">CROSSTALK</text>
+  <text x="73" y="253" font-family="Georgia, Times New Roman, serif" font-size="29" font-style="italic" fill="#ffbe85">Comprenez le call. Restez dans le jeu.</text>
+  <path d="M73 280H610" stroke="url(#underline)" stroke-width="2"/>
+  <text x="73" y="318" font-family="Arial, Helvetica, sans-serif" font-size="12" letter-spacing="2" fill="#bdb6ab">RU / EN</text>
+  <path d="M154 313H183M177 307L184 313L177 319" fill="none" stroke="#ffa24a" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="198" y="318" font-family="Arial, Helvetica, sans-serif" font-size="12" letter-spacing="2" fill="#f3ede3">FR</text>
+  <circle cx="243" cy="314" r="2.5" fill="#685d55"/>
+  <text x="258" y="318" font-family="Arial, Helvetica, sans-serif" font-size="12" letter-spacing="2" fill="#bdb6ab">WINDOWS 10 / 11</text>
+  <circle cx="439" cy="314" r="2.5" fill="#685d55"/>
+  <text x="454" y="318" font-family="Arial, Helvetica, sans-serif" font-size="12" letter-spacing="2" fill="#bdb6ab">LOCAL FIRST</text>
+  <text x="73" y="396" font-family="Arial, Helvetica, sans-serif" font-size="10" letter-spacing="2.7" fill="#8f8a83">MORE SIGNAL. LESS FRICTION.</text>
+  <path d="M674 394H1118" stroke="#ece6dc" stroke-opacity=".10"/>
+  <text x="1117" y="415" text-anchor="end" font-family="Arial, Helvetica, sans-serif" font-size="10" letter-spacing="2" fill="#6f777d">CROSSTALK / EXPERIENCE 01</text>
+  <g transform="translate(712 88)">
+    <rect width="422" height="276" rx="20" fill="#131519" stroke="#ece6dc" stroke-opacity=".18"/>
+    <rect x="1" y="1" width="420" height="274" rx="19" fill="none" stroke="#ffffff" stroke-opacity=".035"/>
+    <circle cx="23" cy="25" r="4" fill="#ffa24a"/>
+    <text x="37" y="29" font-family="Arial, Helvetica, sans-serif" font-size="10" font-weight="700" letter-spacing="2" fill="#ece6dc">LIVE VOICE</text>
+    <text x="396" y="29" text-anchor="end" font-family="Arial, Helvetica, sans-serif" font-size="10" letter-spacing="1" fill="#8f8a83">CS2 / AUDIO</text>
+    <path d="M20 49H402" stroke="#ece6dc" stroke-opacity=".10"/>
+    <path d="M24 121H398" stroke="#7fd4ff" stroke-opacity=".13" stroke-width="1" stroke-dasharray="3 6"/>
+    <g fill="url(#wave)" opacity=".94">
+      <rect x="33" y="114" width="5" height="14" rx="2.5"/><rect x="48" y="105" width="5" height="32" rx="2.5"/>
+      <rect x="63" y="112" width="5" height="18" rx="2.5"/><rect x="78" y="95" width="5" height="52" rx="2.5"/>
+      <rect x="93" y="82" width="5" height="78" rx="2.5"/><rect x="108" y="103" width="5" height="36" rx="2.5"/>
+      <rect x="123" y="112" width="5" height="18" rx="2.5"/><rect x="138" y="92" width="5" height="58" rx="2.5"/>
+      <rect x="153" y="73" width="5" height="96" rx="2.5"/><rect x="168" y="86" width="5" height="70" rx="2.5"/>
+      <rect x="183" y="107" width="5" height="28" rx="2.5"/><rect x="198" y="99" width="5" height="44" rx="2.5"/>
+      <rect x="213" y="78" width="5" height="86" rx="2.5"/><rect x="228" y="87" width="5" height="68" rx="2.5"/>
+      <rect x="243" y="108" width="5" height="26" rx="2.5"/><rect x="258" y="113" width="5" height="16" rx="2.5"/>
+      <rect x="273" y="101" width="5" height="40" rx="2.5"/><rect x="288" y="88" width="5" height="66" rx="2.5"/>
+      <rect x="303" y="100" width="5" height="42" rx="2.5"/><rect x="318" y="111" width="5" height="20" rx="2.5"/>
+      <rect x="333" y="105" width="5" height="32" rx="2.5"/><rect x="348" y="114" width="5" height="14" rx="2.5"/>
+      <rect x="363" y="117" width="5" height="8" rx="2.5"/>
+    </g>
+    <rect x="21" y="183" width="380" height="69" rx="10" fill="#242326" fill-opacity=".86" stroke="#e8d4c0" stroke-opacity=".13"/>
+    <rect x="33" y="196" width="50" height="18" rx="4" fill="#ffa24a" fill-opacity=".12"/>
+    <text x="58" y="208.5" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-weight="700" font-size="9.5" fill="#ffc68a">RU → FR</text>
+    <text x="95" y="208" font-family="Arial, Helvetica, sans-serif" font-size="10" letter-spacing=".6" fill="#9b9691">SOUS-TITRE · EXEMPLE</text>
+    <text x="34" y="236" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="600" fill="#f3ede3">Deux joueurs sur B.</text>
+  </g>
+</svg>

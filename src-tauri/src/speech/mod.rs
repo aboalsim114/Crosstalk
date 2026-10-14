@@ -1,15 +1,16 @@
-//! Speech recognition of the captured CS2 audio (Russian, English).
+//! Speech recognition of the captured CS2 audio, in the players' languages.
 //!
 //! 16 kHz conditioning → Silero VAD → segmentation with shot/explosion guards
 //! → whisper.cpp → hallucination filter → `speech://transcript` events. All
-//! local, on the CPU, below normal priority. Transcripts are in the speaker's
-//! language: translation into French is a later feature.
+//! local, on the CPU, below normal priority. `crate::wiring` then hands each
+//! accepted transcript to the translation service (`translation://result`).
 
 pub mod bench;
-pub mod cpu;
 pub mod dsp;
 pub mod engine;
 pub mod filter;
+pub mod focus;
+pub mod gpu_guard;
 pub mod models;
 pub mod segmenter;
 pub mod service;
@@ -19,7 +20,7 @@ pub mod vad;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-use tauri::{AppHandle, Emitter, State};
+use tauri::State;
 
 pub use service::{EngineLoader, SpeechEvents, SpeechService};
 pub use types::*;
@@ -28,6 +29,7 @@ pub const STATUS_EVENT: &str = "speech://status";
 pub const TRANSCRIPT_EVENT: &str = "speech://transcript";
 pub const ACTIVITY_EVENT: &str = "speech://activity";
 pub const STATS_EVENT: &str = "speech://stats";
+pub const RETRACT_EVENT: &str = "speech://retract";
 
 #[derive(Debug, Clone, PartialEq, thiserror::Error)]
 pub enum SpeechError {
@@ -39,11 +41,85 @@ pub enum SpeechError {
     Inference(String),
 }
 
+#[cfg(feature = "whisper")]
+fn auto_note(use_gpu: bool, speedup: f32) -> String {
+    let label = engine::speedup_label(speedup);
+    if use_gpu {
+        format!("auto : {label} plus rapide que le processeur")
+    } else {
+        format!("auto : carte graphique pas assez rapide ({label})")
+    }
+}
+
+/// Loads Whisper where asked; in Auto mode, measures the GPU against the CPU
+/// on 3 s of test audio and keeps the GPU only if clearly faster.
+#[cfg(feature = "whisper")]
+fn load_with(path: &Path, accel: Accel) -> Result<engine::WhisperRecognizer, SpeechError> {
+    use engine::{pick_accel, vulkan_gpu, WhisperRecognizer};
+    let refused = gpu_guard::decision().filter(|d| !d.allowed).map(|d| {
+        d.reason
+            .clone()
+            .unwrap_or_else(|| "carte graphique désactivée".into())
+    });
+    if let (Some(reason), Accel::Gpu | Accel::Auto) = (refused, accel) {
+        let mut r = WhisperRecognizer::load(path, false)?;
+        let mode = if accel == Accel::Auto { "auto" } else { "GPU" };
+        r.set_backend(format!("CPU · AVX2 · {mode} ({reason})"));
+        return Ok(r);
+    }
+    match accel {
+        Accel::Cpu => WhisperRecognizer::load(path, false),
+        Accel::Gpu => WhisperRecognizer::load(path, true),
+        Accel::Auto => {
+            if vulkan_gpu().is_none() {
+                let mut r = WhisperRecognizer::load(path, false)?;
+                r.set_backend("CPU · AVX2 · auto (aucune carte graphique Vulkan)".into());
+                return Ok(r);
+            }
+            // The start-up probe already measured this model: load it once.
+            if let Some((gpu_ms, cpu_ms)) = gpu_guard::measured(path) {
+                let (use_gpu, speedup) = pick_accel(gpu_ms, cpu_ms);
+                let mut chosen = WhisperRecognizer::load(path, use_gpu)?;
+                let note = auto_note(use_gpu, speedup);
+                let backend = format!("{} · {note}", chosen.backend_name());
+                chosen.set_backend(backend);
+                crate::logs::info(
+                    "asr",
+                    &format!(
+                        "mode auto (mesure du démarrage) : GPU {gpu_ms} ms, CPU {cpu_ms} ms → {}",
+                        if use_gpu { "GPU" } else { "CPU" }
+                    ),
+                );
+                return Ok(chosen);
+            }
+            let mut gpu = WhisperRecognizer::load(path, true)?;
+            let gpu_ms = gpu.bench_ms()?;
+            let mut cpu = WhisperRecognizer::load(path, false)?;
+            let cpu_ms = cpu.bench_ms()?;
+            let (use_gpu, speedup) = pick_accel(gpu_ms, cpu_ms);
+            let mut chosen = if use_gpu { gpu } else { cpu };
+            let note = auto_note(use_gpu, speedup);
+            let backend = format!("{} · {note}", chosen.backend_name());
+            chosen.set_backend(backend);
+            crate::logs::info(
+                "asr",
+                &format!(
+                    "mode auto : GPU {gpu_ms} ms, CPU {cpu_ms} ms sur 3 s de test → {}",
+                    if use_gpu { "GPU" } else { "CPU" }
+                ),
+            );
+            Ok(chosen)
+        }
+    }
+}
+
 /// Loads the whisper.cpp models from the models directory.
 pub struct WhisperLoader;
 
 impl EngineLoader for WhisperLoader {
     fn load_detector(&self, dir: &Path) -> Result<Box<dyn vad::VoiceDetector>, SpeechError> {
+        // Before any ggml call: may turn Vulkan off for this run.
+        gpu_guard::ensure(dir);
         let path = models::vad_path(dir)
             .ok_or_else(|| SpeechError::NotInstalled(models::VAD_FILE.into()))?;
         #[cfg(feature = "whisper")]
@@ -61,16 +137,18 @@ impl EngineLoader for WhisperLoader {
         &self,
         dir: &Path,
         model: &str,
+        accel: Accel,
     ) -> Result<Box<dyn engine::Recognizer>, SpeechError> {
+        gpu_guard::ensure(dir);
         let path = models::model_path(dir, model)
             .ok_or_else(|| SpeechError::NotInstalled(model.into()))?;
         #[cfg(feature = "whisper")]
         {
-            Ok(Box::new(engine::WhisperRecognizer::load(&path)?))
+            Ok(Box::new(load_with(&path, accel)?))
         }
         #[cfg(not(feature = "whisper"))]
         {
-            let _ = path;
+            let _ = (path, accel);
             Err(SpeechError::Model("build sans whisper.cpp".into()))
         }
     }
@@ -82,34 +160,6 @@ impl EngineLoader for WhisperLoader {
     fn backend(&self) -> String {
         "CPU · AVX2".into()
     }
-}
-
-/// Forwards speech events to every window.
-pub struct TauriEvents(pub AppHandle);
-
-impl SpeechEvents for TauriEvents {
-    fn status(&self, status: &SpeechStatus) {
-        let _ = self.0.emit(STATUS_EVENT, status);
-    }
-    fn transcript(&self, transcript: &Transcript) {
-        let _ = self.0.emit(TRANSCRIPT_EVENT, transcript);
-    }
-    fn activity(&self, activity: VoiceActivity) {
-        let _ = self.0.emit(ACTIVITY_EVENT, activity);
-    }
-    fn stats(&self, stats: &SpeechStats) {
-        let _ = self.0.emit(STATS_EVENT, stats);
-    }
-}
-
-/// Starts the speech service with the whisper.cpp models.
-pub fn start(app: &AppHandle) -> Arc<SpeechService> {
-    SpeechService::start(
-        Arc::new(TauriEvents(app.clone())),
-        Arc::new(WhisperLoader),
-        models::models_dir(),
-        SpeechConfig::default(),
-    )
 }
 
 // ---------- commands ----------
@@ -155,7 +205,7 @@ mod tests {
             Err(SpeechError::NotInstalled(_))
         ));
         assert!(matches!(
-            WhisperLoader.load_recognizer(&dir, "base"),
+            WhisperLoader.load_recognizer(&dir, "base", Accel::Cpu),
             Err(SpeechError::NotInstalled(_))
         ));
     }

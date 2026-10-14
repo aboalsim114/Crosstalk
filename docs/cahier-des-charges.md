@@ -51,7 +51,7 @@ Ces cibles sont des **objectifs**, pas des performances démontrées. Elles sero
 | Leur choix | Ce que l'on retient |
 | --- | --- |
 | Capture audio au niveau du système, sans intégration au jeu | Même principe externe. Option « tout le son du PC » (F-21), capture ciblée sur `cs2.exe` par défaut. |
-| Reconnaissance vocale sur l'appareil, audio non envoyé sans opt-in | Confirme le choix de Whisper en local, avec le cloud en option (F-24, F-28). |
+| Reconnaissance vocale sur l'appareil, audio non envoyé sans opt-in | Confirme le choix de Whisper en local. Crosstalk va plus loin : tout reste local, transcription et traduction (F-24, F-30). |
 | Overlay en fenêtré sans bordures, widget Game Bar en plein écran exclusif | MVP en fenêtré sans bordures. Widget Game Bar en P2 (F-47). |
 | Modèles adaptés au vocabulaire de CS | Glossaire étendu aux callouts de cartes et normalisation des annonces (F-36). |
 | Latence annoncée d'environ 1 s | Cible initiale p50 ≤ 2 s, à resserrer après mesures. |
@@ -106,35 +106,35 @@ Statut : ✅ réalisé dans le dépôt (interface et données simulées comprise
 
 | ID | Exigence | Prio. | Statut |
 | --- | --- | --- | --- |
-| F-01 | Localiser les bibliothèques Steam (registre + `libraryfolders.vdf`) et le dossier d'installation de CS2. | P0 | — |
-| F-02 | Détecter le lancement et la fermeture de `cs2.exe` (énumération des processus toutes les 2 s) et connaître son PID. | P0 | — |
-| F-03 | Vérifier la présence de `-condebug` dans les options de lancement (`localconfig.vdf`) et guider l'utilisateur pour l'ajouter. Aucune modification automatique. | P0 | — |
-| F-04 | Chemin de CS2 saisissable manuellement si la détection échoue. | P1 | — |
+| F-01 | Localiser les bibliothèques Steam (registre + `libraryfolders.vdf`) et le dossier d'installation de CS2. | P0 | ✅ (à valider sous Windows) |
+| F-02 | Détecter le lancement et la fermeture de `cs2.exe` (énumération des processus toutes les 2 s) et connaître son PID. | P0 | ✅ |
+| F-03 | Vérifier la présence de `-condebug` dans les options de lancement (`localconfig.vdf`) et guider l'utilisateur pour l'ajouter. Aucune modification automatique. | P0 | ✅ (à valider sous Windows) |
+| F-04 | Chemin de CS2 saisissable manuellement si la détection échoue. | P1 | ✅ |
 
 ### 4.2 Chat écrit
 
 | ID | Exigence | Prio. | Statut |
 | --- | --- | --- | --- |
-| F-10 | Suivre `console.log` en continu (« tail ») à partir de la fin du fichier, en gérant la troncature et la recréation du fichier. | P0 | — |
-| F-11 | Extraire le canal (Tous, CT, T), l'expéditeur et le message. Parseur versionné, défini par des expressions régulières dans un fichier de règles mis à jour sans recompiler. | P0 | — |
-| F-12 | Ignorer les lignes système, les messages vides et les doublons (fenêtre de 2 s). | P0 | — |
-| F-13 | Option : ignorer ses propres messages (pseudo Steam configurable). | P1 | — |
-| F-14 | Alimenter la liste des pseudos connus de la session avec les expéditeurs du chat (utilisée par §4.8). | P1 | — |
+| F-10 | Suivre `console.log` en continu (« tail ») à partir de la fin du fichier, en gérant la troncature et la recréation du fichier. | P0 | ✅ |
+| F-11 | Extraire le canal (Tous, CT, T), l'expéditeur et le message. Parseur versionné, défini par des expressions régulières dans un fichier de règles mis à jour sans recompiler. | P0 | ✅ (format à confirmer sur une vraie partie) |
+| F-12 | Ignorer les lignes système, les messages vides et les doublons (fenêtre de 2 s). | P0 | ✅ |
+| F-13 | Option : ignorer ses propres messages (pseudo Steam configurable). | P1 | ✅ |
+| F-14 | Alimenter la liste des pseudos connus de la session avec les expéditeurs du chat (utilisée par §4.8). | P1 | ✅ (en mémoire, quand « Qui parle ? » est activé) |
 
 ### 4.3 Chat vocal
 
 | ID | Exigence | Prio. | Statut |
 | --- | --- | --- | --- |
-| F-20 | Capturer uniquement l'audio de `cs2.exe` par process loopback WASAPI (`ActivateAudioInterfaceAsync`, documenté à partir du build 20348). Son fonctionnement sous Windows 10 22H2 (19045) est à vérifier en L0. | P0 | — |
-| F-21 | Mode « tout le son du PC » (loopback du périphérique de sortie) : repli quand le process loopback est indisponible, et mode volontaire pour traduire aussi Discord ou TeamSpeak. Avertissement explicite : capte aussi le navigateur et les autres applications. | P0 | — |
-| F-22 | Ne jamais capturer le microphone de l'utilisateur sans activation explicite (voir F-50). | P0 | — |
-| F-23 | Rééchantillonner en 16 kHz mono. Détection de voix (VAD Silero via ONNX Runtime) avec seuil réglable, pré-roll 250 ms, post-roll 400 ms, segment maximal de 8 s. | P0 | — |
-| F-24 | Transcription locale avec whisper.cpp (crate `whisper-rs`), modèles tiny à large-v3-turbo, accélération CUDA ou Vulkan si disponible, sinon CPU. Whisper est le choix de départ, confirmé ou remplacé après le banc d'essai (A-11). | P0 | — |
-| F-25 | Transcription provisoire pendant la parole (fenêtre glissante), remplacée par la version finale. Adoptée seulement si son coût GPU/CPU reste compatible avec la cible FPS. | P1 | — |
-| F-26 | Détection de langue restreinte aux langues sources préférées (ru, en par défaut). | P0 | — |
-| F-27 | Abandonner les segments périmés (plus de 6 s d'attente) pour éviter l'accumulation de retard. | P0 | — |
-| F-28 | Transcription cloud en option (opt-in), avec le coût estimé affiché, pour les machines insuffisantes. | P2 | — |
-| F-29 | Chaîne de nettoyage audio avant la VAD (détails §4.3 bis) : traitements légers en P0, traitements coûteux en Exp. | P0 | — |
+| F-20 | Capturer uniquement l'audio de `cs2.exe` par process loopback WASAPI (`ActivateAudioInterfaceAsync`, documenté à partir du build 20348). Son fonctionnement sous Windows 10 22H2 (19045) est à vérifier en L0. | P0 | ✅ (fonctionnement sous Windows 10 22H2 à vérifier) |
+| F-21 | Mode « tout le son du PC » (loopback du périphérique de sortie) : repli quand le process loopback est indisponible, et mode volontaire pour traduire aussi Discord ou TeamSpeak. Avertissement explicite : capte aussi le navigateur et les autres applications. | P0 | ✅ |
+| F-22 | Ne jamais capturer le microphone de l'utilisateur sans activation explicite (voir F-50). | P0 | ✅ (aucune capture micro) |
+| F-23 | Rééchantillonner en 16 kHz mono. Détection de voix (VAD Silero via ONNX Runtime) avec seuil réglable, pré-roll 250 ms, post-roll 400 ms, segment maximal de 5 s (8 s initialement : trop long avec le bruit du jeu, mesuré en partie le 12/10/2026). | P0 | ✅ (VAD Silero portée en ggml par whisper.cpp, sans ONNX Runtime) |
+| F-24 | Transcription locale avec whisper.cpp (crate `whisper-rs`), modèles tiny à large-v3-turbo, accélération CUDA ou Vulkan si disponible, sinon CPU. Whisper est le choix de départ, confirmé ou remplacé après le banc d'essai (A-11). | P0 | ✅ (Vulkan : toute carte NVIDIA, AMD ou Intel récente ; repli automatique sur le CPU sans pilote Vulkan ; choix CPU / GPU dans Audio & IA) |
+| F-25 | Transcription provisoire pendant la parole (fenêtre glissante), remplacée par la version finale. Adoptée seulement si son coût GPU/CPU reste compatible avec la cible FPS. | P1 | ✅ (transcription et traduction provisoires ; coût CPU à mesurer en partie) |
+| F-26 | Détection de langue restreinte aux langues sources préférées (ru, en par défaut). | P0 | ✅ |
+| F-27 | Abandonner les segments périmés (plus de 6 s d'attente) pour éviter l'accumulation de retard. | P0 | ✅ |
+| F-28 | ~~Transcription cloud en option~~ : abandonnée (décision du 12/10/2026, aucun service payant ni clé API pour l'utilisateur). | — | abandonnée |
+| F-29 | Chaîne de nettoyage audio avant la VAD (détails §4.3 bis) : traitements légers en P0, traitements coûteux en Exp. | P0 | ◐ (rééchantillonnage + passe-haut ; traitements Exp. non faits) |
 
 ### 4.3 bis Séparation de la voix et des bruits de jeu
 
@@ -155,12 +155,12 @@ Chaque étape est désactivable et mesurable dans l'écran Diagnostic.
 
 | ID | Exigence | Prio. |
 | --- | --- | --- |
-| A-01 | **Mid/side.** Hypothèse : le chat vocal de CS2 n'est pas spatialisé, contrairement aux sons de jeu. Le canal side sert de référence de bruit pour une soustraction adaptative (NLMS) sur le canal mid. Désactivé si la source est mono. | Exp. |
+| A-01 | **Mid/side.** Hypothèse : le chat vocal de CS2 n'est pas spatialisé, contrairement aux sons de jeu. Le canal side sert de référence de bruit pour une soustraction adaptative (NLMS) sur le canal mid. Désactivé si la source est mono. | Exp. · ◐ livré comme « Focus voix » (désactivé par défaut) : masque fréquentiel gauche/droite, plus efficace que le NLMS au banc (+3,9 à +7,7 dB de RSB sur bruit synthétique, 0,8 % d'un cœur). WER sur vrais sons de CS2 à mesurer ([mesures](testing/voice-focus.md)) |
 | A-02 | **Passe-bande** 200–4 000 Hz (biquads Butterworth d'ordre 4). | P0 |
 | A-03 | **Réduction de bruit neuronale** DeepFilterNet 3 (crate `deep_filter`). Adoptée seulement si le gain de WER est mesuré et que le budget (≤ 10 ms par trame de 10 ms sur un cœur) est tenu. | Exp. |
 | A-04 | Repli **RNNoise** (crate `nnnoiseless`) sur les machines trop faibles pour DeepFilterNet. | Exp. |
 | A-05 | **Validation des segments** (garde anti-transitoires) : un pic d'énergie bref (< 150 ms, montée > 20 dB) ne peut pas ouvrir un segment de parole à lui seul. Les segments trop courts ou sans parole confirmée par la VAD sont rejetés avant Whisper. | P0 |
-| A-06 | **Prompt glossaire** : les termes CS et les callouts de la carte en cours (carte fournie par Game State Integration) sont passés à Whisper comme texte initial. | P0 |
+| A-06 | **Prompt glossaire** : les termes CS et les callouts de la carte en cours (carte fournie par Game State Integration) sont passés à Whisper comme texte initial. | P0 · ✅ carte reçue par Game State Integration (activation par l’utilisateur), callouts de 9 cartes ajoutés au prompt |
 | A-07 | **Filtre anti-hallucinations** : rejet des sorties à faible confiance (`avg_logprob` < −1,0 ou `no_speech_prob` > 0,6), des répétitions et des phrases typiques d'hallucination (« Merci d'avoir regardé », « Sous-titres réalisés par… »). | P0 |
 | A-08 | **Capture Discord dédiée** : process loopback sur `discord.exe` en parallèle de `cs2.exe`. | P1 |
 | A-09 | **Assistant de réglage du jeu** : recommander de baisser le volume principal du jeu et de monter celui du chat vocal, avec un test avant/après. | P1 |
@@ -187,13 +187,13 @@ Chaque étape est désactivable et mesurable dans l'écran Diagnostic.
 
 | ID | Exigence | Prio. | Statut |
 | --- | --- | --- | --- |
-| F-30 | Moteurs interchangeables derrière un trait `Translator` : DeepL (par défaut), Azure Translator, moteur local (bêta, par ex. Opus-MT ou NLLB via CTranslate2/ONNX). | P0 | ◐ trait défini |
-| F-31 | Détection de langue restreinte aux langues sources préférées pour les messages courts. | P0 | — |
-| F-32 | Ne pas traduire les messages déjà en français : l'original est affiché et aucun appel n'est fait. | P0 | ◐ règle et test |
-| F-33 | Glossaire CS : termes conservés (smoke, flash, eco, rush B…) protégés par balises avant traduction, et termes traduits avec un rendu imposé. Modifiable par l'utilisateur. | P0 | ◐ interface |
-| F-34 | Délai maximal de 5 s, 1 nouvelle tentative, puis affichage de l'original avec la mention « moteur indisponible ». | P0 | — |
-| F-35 | Cache LRU des traductions (1 000 entrées) pour les messages répétés (« gg », « nt »…). | P1 | — |
-| F-36 | Normalisation des annonces : callouts de cartes, économie et utilitaires traduits comme des annonces courtes. **Aucune information absente de l'original ne doit être ajoutée.** Glossaire par carte. | P1 | — |
+| F-30 | **Traduction locale uniquement**, sur le CPU du joueur : Helsinki-NLP Opus-MT ru→fr et en→fr (Apache-2.0, utilisable dans un produit vendu), exécuté par candle (Rust). **Aucune clé API, aucun abonnement, aucun envoi en ligne** (décision du 12/10/2026 : l'utilisateur paie l'application et rien d'autre). NLLB est exclu (licence non commerciale). | P0 | ✅ |
+| F-31 | Détection de langue restreinte aux langues sources préférées pour les messages courts. | P0 | ◐ (ru, en, fr ; sinon original affiché) |
+| F-32 | Ne pas traduire les messages déjà en français : l'original est affiché et aucun appel n'est fait. | P0 | ✅ |
+| F-33 | Glossaire CS : termes conservés (smoke, flash, eco, rush B…) remplacés par des repères avant traduction puis restaurés (insensible à la casse, mots entiers), et termes traduits avec un rendu imposé. Si le modèle perd un repère, la phrase est retraduite sans protection. Modifiable par l'utilisateur. | P0 | ✅ (fiabilité à mesurer sur les vrais modèles) |
+| F-34 | Une ligne qui attend plus de 5 s, ou une file pleine, est affichée en original avec la mention « moteur indisponible ». | P0 | ✅ |
+| F-35 | Cache LRU des traductions (1 000 entrées) pour les messages répétés (« gg », « nt »…). | P1 | ✅ |
+| F-36 | Normalisation des annonces : callouts de cartes, économie et utilitaires traduits comme des annonces courtes. **Aucune information absente de l'original ne doit être ajoutée.** Glossaire par carte. | P1 | ✅ (lexique des annonces en/ru → fr ; glossaire par carte : callouts de la carte en cours conservés tels quels dans la traduction) |
 
 ### 4.5 Overlay en jeu
 
@@ -203,12 +203,14 @@ Chaque étape est désactivable et mesurable dans l'écran Diagnostic.
 | F-41 | Clics transmis au jeu et aucun vol de focus clavier, en permanence. | P0 | ✅ à valider sous Windows |
 | F-42 | Fonctionne en mode « fenêtré sans bordures ». Le plein écran exclusif n'est pas garanti au MVP. | P0 | ✅ à valider sous Windows |
 | F-43 | Trois formats : Minimal, Bilingue, Accessible. | P1 | ✅ |
-| F-44 | Réglages : coin d'ancrage, opacité du fond (0–100 %), taille du texte (14–28 px), durée d'affichage (4–8 s), 2 ou 3 blocs visibles. | P0 | ✅ (non persistés) |
+| F-44 | Réglages : coin d'ancrage, opacité du fond (0–100 %), taille du texte (14–28 px), durée d'affichage (4–8 s), 2 ou 3 blocs visibles. | P0 | ✅ (réglages conservés dans %APPDATA%\Crosstalk\config.json) |
 | F-45 | Mode de repositionnement temporaire (clics capturés), position libre enregistrée par écran. | P1 | ◐ |
 | F-46 | Prise en charge du multi-écran et des mises à l'échelle DPI de 100 à 200 %. | P1 | ◐ |
 | F-47 | Widget Xbox Game Bar (UWP) qui affiche les mêmes sous-titres en plein écran exclusif. | **P2** | — |
-| F-48 | Afficher le pseudo devant la traduction vocale dès qu'il est résolu (§4.8), sans retarder l'affichage de la traduction. | P1 | — |
-| F-50 | Traduction de ses propres annonces (micro) vers la langue des coéquipiers, affichée en texte. Opt-in, désactivé par défaut. | P2 | — |
+| F-48 | Afficher le pseudo devant la traduction vocale dès qu'il est résolu (§4.8), sans retarder l'affichage de la traduction. | P1 | ◐ expérimental, à valider en partie réelle |
+| F-49 | **Mode streamer** : page locale (127.0.0.1:31983, source navigateur OBS) affichant les sous-titres finaux pour les viewers ; pseudos et phrases originales retirés côté Rust sauf choix contraire ; désactivé par défaut. | P1 | ✅ |
+| F-50 | Traduction de ses propres annonces (micro) vers la langue des coéquipiers, affichée en texte. Opt-in, désactivé par défaut. | P2 | ◐ version texte livrée : « Répondre dans leur langue » (Ctrl+Alt+F7), saisie en français → anglais/russe en local (Opus-MT fr→en, fr→ru et phrases CS écrites à la main), copié dans le presse-papiers ; rien n'est envoyé au jeu. Micro ✅ : « Dicter » (Ctrl+Alt+F6) enregistre le micro par défaut seulement le temps de la phrase (fin automatique après 1,1 s de silence, 12 s max), Whisper transcrit le français, la traduction est copiée ; audio gardé en mémoire puis effacé |
+| F-51 | Résumé de fin de partie à partager : une image (carte, mode, durée, score GSI, annonces traduites par langue, latence médiane), copiable dans le presse-papiers ou enregistrée dans Documents. Sans pseudo ; phrases traduites seulement sur demande. Rien n'est envoyé par Crosstalk. | P1 | ✅ ([protocole](testing/recap.md)) |
 
 ### 4.6 Fenêtre principale
 
@@ -218,10 +220,10 @@ Sept écrans, conformes à la maquette *v2 Cinematic*. **Réalisés en React ave
 | --- | --- |
 | Accueil | État de la session, dernier sous-titre, progression du pipeline vocal, statut CS2, capture, moteurs et latence, flux « Script » filtrable (Texte, Voix, Mixte). |
 | Overlay | Aperçu à l'échelle et réglages F-43 à F-45. |
-| Audio & IA | Source de capture, test audio de 10 s, seuil VAD, choix et téléchargement des modèles Whisper, CPU/GPU, moteur de traduction, clé API. Option d'identification expérimentale du locuteur. |
+| Audio & IA | Source de capture, test audio de 10 s, seuil VAD, choix et téléchargement des modèles Whisper, CPU/GPU, modèles de traduction locaux et test de traduction. Option d'identification expérimentale du locuteur. |
 | Langues & glossaire | Langue cible, langues sources préférées, option « ignorer le français », édition du glossaire. |
-| Historique | Désactivé par défaut ; recherche, export TXT/JSON, effacement. |
-| Diagnostic | Tests intégrés (journal, -condebug, parseur, capture, modèle, traduction, raccourcis, indicateur vocal), journal expurgé, export d'un rapport. |
+| Historique | Désactivé par défaut ; texte seulement, fichier local `history.jsonl` ; recherche, export TXT/JSON dans Documents, effacement ; purge à 7 jours (20 000 lignes max). |
+| Diagnostic | Tests intégrés (journal, -condebug, parseur, capture, modèle, traduction, raccourcis, indicateur vocal), journal expurgé, export d'un rapport. ✅ Journal réel (états des services, erreurs, plantages), export du rapport dans Documents, « Signaler un problème » (GitHub), dossier des journaux. Indicateur vocal : avec §4.8. |
 | À propos | Ce que l'application ne fait jamais, licences tierces, version, lancement avec Windows. |
 
 ### 4.7 Session et raccourcis
@@ -233,6 +235,8 @@ Sept écrans, conformes à la maquette *v2 Cinematic*. **Réalisés en React ave
 | --- | --- | --- |
 | Ctrl+Alt+F8 | Afficher / masquer l'overlay | ✅ |
 | Ctrl+Alt+F9 | Pause / reprise de la session | ✅ |
+| Ctrl+Alt+F6 | Dicter une réponse (micro, le temps d'une phrase) : transcrite, traduite et copiée | ✅ |
+| Ctrl+Alt+F7 | Répondre dans leur langue (fenêtre au-dessus du jeu, message copié) | ✅ |
 | Ctrl+Alt+F10 | Arrêt d'urgence : toutes les captures sont arrêtées et les tampons audio purgés en moins de 200 ms | ✅ (simulé) |
 
 Raccourcis via `RegisterHotKey` (pas de hook clavier bas niveau), avec détection des conflits ✅. Reconfiguration des raccourcis en P1.
@@ -263,6 +267,14 @@ La solution retenue est donc l'**analyse du HUD par capture d'image et OCR**.
 | S-09 | Discord : identification via l'API locale de Discord si la permission voix est obtenue. | P2 |
 | S-10 | Regroupement des voix par session (empreinte vocale en mémoire uniquement, jamais enregistrée, opt-in). Donnée biométrique au sens du RGPD. | P2 |
 
+**Implémentation (octobre 2026, `src-tauri/src/speaker`, à valider sous Windows : [protocole](testing/speaker.md)) :**
+- **Capture** : copie GDI d'une zone de l'écran du bureau (comme la capture d'écran d'OBS) plutôt que Windows Graphics Capture : pas de bordure jaune sous Windows 10, rien à autoriser. La zone, définie en fractions de la fenêtre CS2, est réglable, avec un test et un aperçu. Les fenêtres de Crosstalk sont masquées avant la lecture.
+- **Fréquence** : 4 lectures par seconde, seulement pendant que l'audio du jeu contient de la voix (VAD) et que CS2 est au premier plan. Cela remplace la détection d'indicateur par motif (S-03).
+- **Rapprochement** : lectures OCR regroupées par distance d'édition (chiffres identiques exigés). Un pseudo n'est retenu qu'après deux lectures ou s'il est connu du chat (S-04). Le pseudo de l'utilisateur est ignoré.
+- **Corrélation** : la fin d'une ligne est calculée à partir de sa latence et sa durée à partir de l'audio, sur la même horloge monotone (`Instant`, QPC sous Windows). Le pseudo doit représenter au moins 60 % des lectures, sans égalité (S-05, S-06).
+- **Moment de l'attribution** : le pseudo est attribué au moment où la transcription est émise, sans délai (S-01). Ce moment arrive déjà après la fin de la phrase, donc toutes les lectures utiles sont là : `speaker.resolved` (S-07) n'est pas nécessaire.
+- **Ligne sans pseudo** : rien n'est affiché, plutôt que « Joueur inconnu » sur chaque ligne.
+
 **Préalable à toute implémentation (lot L4) :** valider sur des captures réelles, à plusieurs résolutions et échelles, que le HUD de CS2 affiche un indicateur vocal **associé à un pseudo lisible**. S'il n'affiche qu'un avatar, la faisabilité sera réévaluée. Limites connues :
 - bordure jaune de capture sous Windows 10 ;
 - aucune image quand le jeu est minimisé ;
@@ -278,11 +290,11 @@ La solution retenue est donc l'**analyse du HUD par capture d'image et OCR**.
 | Ressources | RAM ≤ 300 Mo hors modèle ; CPU au repos ≤ 1 % ; VRAM ≤ 1,2 Go avec whisper-small. |
 | Configuration minimale | CPU 6 cœurs (2018+), 16 Go de RAM. Recommandée : GPU NVIDIA 6 Go+ (CUDA) ou AMD/Intel (Vulkan). |
 | Fiabilité | Une panne de capture, de transcription, de traduction ou d'identification ne fait jamais planter l'application. Reconnexion automatique quand CS2 redémarre. |
-| Sécurité | Clés API dans le Gestionnaire d'identification Windows (crate `keyring`), jamais dans les fichiers ni les journaux. HTTPS uniquement. Exécutable et installateurs signés (Authenticode). CSP stricte sur le WebView. |
+| Sécurité | Aucune clé API ni secret : transcription et traduction sont locales. Les seuls téléchargements (modèles) passent en HTTPS avec contrôle de taille et d'empreinte. Exécutable et installateurs signés (Authenticode). CSP stricte sur le WebView. |
 | Confidentialité | Aucun audio ni image écrit sur disque ou envoyé sans opt-in. Historique désactivé par défaut et purgé après 7 jours. Pseudos expurgés des journaux. Aucune télémétrie par défaut. |
 | Accessibilité | Contraste 4,5:1 minimum, navigation complète au clavier, format d'overlay Accessible, respect du réglage Windows « réduire les animations ». |
 | Localisation | Interface en français ; chaînes externalisées pour ajouter d'autres langues. |
-| Maintenabilité | `clippy` sans avertissement, `rustfmt`, TypeScript strict, couverture de tests ≥ 70 % hors interface, CI Windows obligatoire sur chaque PR. |
+| Maintenabilité | `clippy` sans avertissement, `rustfmt`, TypeScript strict, couverture de tests ≥ 70 % hors interface, validation locale Windows (`scripts/validate.ps1`) avec rapport sur chaque PR. |
 
 ## 6. Architecture technique
 
@@ -309,9 +321,9 @@ fenêtre CS2 ─► capture HUD ─► indicateur ─► OCR ─► corrélation
 | Audio | `rubato` (rééchantillonnage), `ort` (VAD Silero ONNX), `biquad`. Expérimental : `deep_filter`, `nnnoiseless` |
 | Reconnaissance vocale | `whisper-rs` (whisper.cpp, CUDA / Vulkan), à confirmer par le banc d'essai |
 | Locuteur (exp.) | Windows Graphics Capture, Windows.Media.Ocr via `windows-rs` |
-| Données | `serde` + JSON (config), `rusqlite` (historique), `keyring` (secrets) |
+| Données | `serde` + JSON (config), `rusqlite` (historique) |
 | Journaux | `tracing`, rotation quotidienne, expurgation des clés et pseudos |
-| Distribution | Bundler Tauri (NSIS par utilisateur + MSI), WebView2 embarqué, mises à jour signées (`tauri-plugin-updater`), workflow de release sur tag |
+| Distribution | Bundler Tauri (NSIS par utilisateur + MSI), WebView2 embarqué, mises à jour signées (`tauri-plugin-updater`), release sur tag avec installateurs construits en local |
 
 ### 6.3 Données et fichiers
 
@@ -319,9 +331,10 @@ fenêtre CS2 ─► capture HUD ─► indicateur ─► OCR ─► corrélation
 | --- | --- |
 | `%APPDATA%\Crosstalk\config.json` | Réglages, versionnés avec migration automatique |
 | `%APPDATA%\Crosstalk\glossary.json` | Glossaire utilisateur |
-| `%LOCALAPPDATA%\Crosstalk\models\` | Modèles, avec vérification SHA-256 après téléchargement |
-| `%LOCALAPPDATA%\Crosstalk\history.db` | Historique texte, si activé |
-| `%LOCALAPPDATA%\Crosstalk\logs\` | Journaux expurgés, conservés 7 jours |
+| `%LOCALAPPDATA%\Crosstalk\models\` | Modèles, avec vérification SHA-256 après téléchargement (dont `opus-mt-fr-en` et `opus-mt-fr-ru` pour les réponses) |
+| `%LOCALAPPDATA%\Crosstalk\history.jsonl` | Historique texte (une ligne JSON par phrase), si activé ; purgé après 7 jours |
+| `<CS2>\game\csgo\cfg\gamestate_integration_crosstalk.cfg` | Demande à CS2 le nom de la carte (Game State Integration, 127.0.0.1:31982, jeton) ; écrit seulement sur « Activer », supprimé par « Retirer » |
+| `%LOCALAPPDATA%\Crosstalk\logs\` | Journaux expurgés (`crosstalk-<date>.log`, un fichier par jour, conservés 7 jours) : états des services et erreurs, jamais de texte de partie ni de pseudo ; nom d'utilisateur Windows masqué |
 
 ## 7. Direction artistique
 
@@ -341,7 +354,7 @@ Le casque 3D réactif (Three.js) et le verre dépoli sont livrés. Ils doivent r
 - **Corpus HUD** : captures de l'indicateur vocal à plusieurs résolutions et échelles, avec les pseudos attendus.
 - **Mesure des FPS** : PresentMon, avec et sans Crosstalk, en CPU et en GPU.
 - **Tests manuels** : 20 h de parties réelles sur 3 configurations (GPU NVIDIA, GPU AMD, CPU seul), sous Windows 10 et 11.
-- **Intégration continue** : GitHub Actions sur runner Windows, sur chaque PR vers `develop` et `main` : typecheck, tests, clippy, rustfmt, installateurs ✅.
+- **Validation locale** : pas de GitHub Actions (décision du 12/10/2026). Sur chaque PR vers `develop` et `main`, `scripts/validate.ps1` sur un PC Windows : garde anti-triche, typecheck, tests, clippy, rustfmt, build MSVC, installateurs, avec rapport joint à la PR.
 
 **Critères d'acceptation de la version 1.0**
 - Toutes les exigences P0 et P1 sont implémentées et testées.
@@ -354,7 +367,7 @@ Le casque 3D réactif (Three.js) et le verre dépoli sont livrés. Ils doivent r
 ## 9. Planning et lots
 
 **Déjà réalisé :**
-- socle Tauri v2, CI Windows et installateurs ;
+- socle Tauri v2, build Windows et installateurs (validation locale, sans CI hébergée) ;
 - les sept écrans, l'intro et la scène 3D ;
 - zone de notification, raccourcis globaux, fenêtre d'overlay, démarrage avec Windows, instance unique ;
 - workflow Git `develop` / `main`.
@@ -364,10 +377,10 @@ Le casque 3D réactif (Three.js) et le verre dépoli sont livrés. Ils doivent r
 | **L0 · Preuve de concept voix** | Chaîne réelle CS2 → WASAPI → VAD → Whisper → traduction → overlay. Validation du process loopback (19045 et Windows 11), premier corpus, banc d'essai, premières mesures de latence et de FPS. | 2 à 3 semaines |
 | L1 · Session Rust et chat | Machine à états en Rust, événements typés, détection CS2, `-condebug`, chat-ingest, glossaire, cache, persistance des réglages | 2 semaines |
 | L2 · Voix 1.0 | Nettoyage P0, VAD, segmentation, filtre anti-hallucinations, choix du modèle, résultats provisoires si viables, évaluation des traitements Exp. | 4 semaines |
-| L3 · Interface branchée | Écrans reliés aux données réelles, diagnostic réel, historique SQLite, téléchargement des modèles | 2 semaines |
+| L3 · Interface branchée | Écrans reliés aux données réelles, diagnostic réel, historique local, téléchargement des modèles | 2 semaines |
 | L4 · Locuteur expérimental | Préalable (corpus HUD), puis capture, indicateur, OCR, corrélation, « Joueur inconnu » | 3 semaines, après validation du préalable |
 | L5 · Industrialisation | Signature, mises à jour, tests 20 h, bêta fermée | 3 semaines |
-| P2 | Widget Xbox Game Bar, transcription cloud, traduction de ses annonces, Discord, regroupement des voix | — |
+| P2 | Widget Xbox Game Bar, traduction de ses annonces, Discord, regroupement des voix | — |
 | V2 · Modèle CS2 | Corpus bruité, fine-tuning Whisper (A-10), évaluation | 6 à 8 semaines |
 
 **Total indicatif :** version 1.0 sans locuteur à la fin de L3 + L5, environ 13 à 14 semaines. Avec le locuteur expérimental, environ 16 à 17 semaines.
@@ -376,7 +389,7 @@ Le casque 3D réactif (Three.js) et le verre dépoli sont livrés. Ils doivent r
 
 | Risque | Niveau | Parade |
 | --- | --- | --- |
-| Transcription médiocre (voix compressée, bruit de jeu, argot) | Élevé | Nettoyage P0, corpus réel dès L0, prompt glossaire, banc d'essai, Whisper affiné en V2, option cloud |
+| Transcription médiocre (voix compressée, bruit de jeu, argot) | Élevé | Nettoyage P0, corpus réel dès L0, prompt glossaire, banc d'essai, Whisper affiné en V2 |
 | Process loopback indisponible sous Windows 10 22H2 | Moyen | Repli loopback du périphérique avec avertissement (F-21), vérifié en L0 |
 | HUD sans pseudo lisible ou modifié par une mise à jour | Élevé (pour §4.8) | Préalable de faisabilité, « Joueur inconnu » par défaut, détection dans Diagnostic, fonctionnalité expérimentale |
 | Pseudo erroné affiché | Moyen | Seuil de confiance, rapprochement avec les pseudos connus, jamais d'invention |
@@ -385,7 +398,7 @@ Le casque 3D réactif (Three.js) et le verre dépoli sont livrés. Ils doivent r
 | Faux positif VAC ou des antivirus | Faible à moyen | Aucune interaction interdite (§3), exécutable signé, soumission aux éditeurs d'antivirus |
 | Impact sur les FPS (GPU partagé avec le jeu) | Moyen | Mesure CPU vs GPU, priorité basse, modèle adapté au matériel, mode performance |
 | Concurrent déjà installé (Unitra AI) | Moyen | Se différencier : gratuit, open source, local, sans compte, spécialisé CS2 → français |
-| Coût des API de traduction | Faible | Cache, offre gratuite DeepL, moteur local |
+| Charge CPU de la traduction locale | Moyen | Un seul thread, priorité basse, couche de sortie quantifiée (q8_0) limitée au vocabulaire français, cache LRU |
 
 ## 11. Hors périmètre
 

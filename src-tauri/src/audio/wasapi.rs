@@ -15,11 +15,12 @@ use windows::Win32::Foundation::{
     CloseHandle, E_INVALIDARG, HANDLE, RPC_E_CHANGED_MODE, WAIT_OBJECT_0,
 };
 use windows::Win32::Media::Audio::{
-    eConsole, eRender, ActivateAudioInterfaceAsync, IActivateAudioInterfaceAsyncOperation,
-    IActivateAudioInterfaceCompletionHandler, IActivateAudioInterfaceCompletionHandler_Impl,
-    IAudioCaptureClient, IAudioClient, IMMDevice, IMMDeviceEnumerator, MMDeviceEnumerator,
-    AUDCLNT_BUFFERFLAGS_SILENT, AUDCLNT_E_DEVICE_INVALIDATED, AUDCLNT_E_SERVICE_NOT_RUNNING,
-    AUDCLNT_E_UNSUPPORTED_FORMAT, AUDCLNT_SHAREMODE_SHARED, AUDCLNT_STREAMFLAGS_AUTOCONVERTPCM,
+    eCapture, eCommunications, eConsole, eRender, ActivateAudioInterfaceAsync,
+    IActivateAudioInterfaceAsyncOperation, IActivateAudioInterfaceCompletionHandler,
+    IActivateAudioInterfaceCompletionHandler_Impl, IAudioCaptureClient, IAudioClient, IMMDevice,
+    IMMDeviceEnumerator, MMDeviceEnumerator, AUDCLNT_BUFFERFLAGS_SILENT,
+    AUDCLNT_E_DEVICE_INVALIDATED, AUDCLNT_E_SERVICE_NOT_RUNNING, AUDCLNT_E_UNSUPPORTED_FORMAT,
+    AUDCLNT_SHAREMODE_SHARED, AUDCLNT_STREAMFLAGS_AUTOCONVERTPCM,
     AUDCLNT_STREAMFLAGS_EVENTCALLBACK, AUDCLNT_STREAMFLAGS_LOOPBACK,
     AUDCLNT_STREAMFLAGS_SRC_DEFAULT_QUALITY, AUDIOCLIENT_ACTIVATION_PARAMS,
     AUDIOCLIENT_ACTIVATION_PARAMS_0, AUDIOCLIENT_ACTIVATION_TYPE_PROCESS_LOOPBACK,
@@ -277,6 +278,47 @@ fn open_device(id: Option<&str>) -> Result<WasapiStream, AudioError> {
     }
 }
 
+/// The default communications microphone, in shared event-driven mode (no
+/// loopback). Only opened while the user dictates a reply.
+pub fn open_microphone() -> Result<Box<dyn CaptureStream>, AudioError> {
+    let com = Com::init()?;
+    let en = enumerator()?;
+    // SAFETY: COM calls on live interfaces; the mix format is freed after use.
+    unsafe {
+        let device = en
+            .GetDefaultAudioEndpoint(eCapture, eCommunications)
+            .map_err(|e| {
+                if e.code() == E_NOTFOUND {
+                    AudioError::NoMicrophone
+                } else {
+                    os(e)
+                }
+            })?;
+        let (dev_id, name) = describe(&device)?;
+        let client: IAudioClient = device.Activate(CLSCTX_ALL, None).map_err(os)?;
+        let mix = client.GetMixFormat().map_err(os)?;
+        let parsed = parse_format(mix);
+        let init = parsed.as_ref().ok().map(|_| {
+            client.Initialize(
+                AUDCLNT_SHAREMODE_SHARED,
+                AUDCLNT_STREAMFLAGS_EVENTCALLBACK,
+                BUFFER_100NS,
+                0,
+                mix,
+                None,
+            )
+        });
+        CoTaskMemFree(Some(mix as *const _));
+        let format = parsed?;
+        if let Some(r) = init {
+            r.map_err(os)?;
+        }
+        let stream =
+            WasapiStream::start(com, client, format, SourceInfo::Device { id: dev_id, name })?;
+        Ok(Box::new(stream))
+    }
+}
+
 /// Activation parameters wrapped in a PROPVARIANT of type VT_BLOB. Declared
 /// with the exact x64 PROPVARIANT layout (vt, 3 reserved words, then BLOB) so
 /// no PROPVARIANT ever owns the borrowed parameters or tries to free them.
@@ -299,7 +341,8 @@ impl IActivateAudioInterfaceCompletionHandler_Impl for ActivationDone_Impl {
         &self,
         _operation: Ref<'_, IActivateAudioInterfaceAsyncOperation>,
     ) -> windows::core::Result<()> {
-        // SAFETY: the event outlives the activation (closed after the wait).
+        // SAFETY: the event outlives the activation: closed after a completed
+        // wait, never closed (leaked) when the wait timed out.
         unsafe { SetEvent(HANDLE(self.event as *mut _)) }
     }
 }
@@ -307,7 +350,9 @@ impl IActivateAudioInterfaceCompletionHandler_Impl for ActivationDone_Impl {
 fn open_process(pid: u32) -> Result<WasapiStream, AudioError> {
     let com = Com::init()?;
     let unavailable = |what: String| AudioError::ProcessLoopbackUnavailable(what);
-    let params = AUDIOCLIENT_ACTIVATION_PARAMS {
+    // On the heap: if the activation times out, Windows may still read them
+    // and signal the event later, so they are then leaked instead of freed.
+    let params = Box::new(AUDIOCLIENT_ACTIVATION_PARAMS {
         ActivationType: AUDIOCLIENT_ACTIVATION_TYPE_PROCESS_LOOPBACK,
         Anonymous: AUDIOCLIENT_ACTIVATION_PARAMS_0 {
             ProcessLoopbackParams: AUDIOCLIENT_PROCESS_LOOPBACK_PARAMS {
@@ -315,16 +360,16 @@ fn open_process(pid: u32) -> Result<WasapiStream, AudioError> {
                 ProcessLoopbackMode: PROCESS_LOOPBACK_MODE_INCLUDE_TARGET_PROCESS_TREE,
             },
         },
-    };
-    let blob = BlobPropVariant {
+    });
+    let blob = Box::new(BlobPropVariant {
         vt: VT_BLOB.0,
         reserved: [0; 3],
         cb_size: std::mem::size_of::<AUDIOCLIENT_ACTIVATION_PARAMS>() as u32,
-        p_blob_data: &params as *const _ as *const u8,
-    };
+        p_blob_data: &*params as *const _ as *const u8,
+    });
 
-    // SAFETY: the event, `params` and `blob` all outlive the asynchronous
-    // activation, which is awaited (or timed out) before they are dropped.
+    // SAFETY: the event, `params` and `blob` outlive the asynchronous
+    // activation: freed after a completed wait, leaked after a timeout.
     unsafe {
         let done = CreateEventW(None, true, false, None).map_err(os)?;
         let handler: IActivateAudioInterfaceCompletionHandler = ActivationDone {
@@ -334,7 +379,7 @@ fn open_process(pid: u32) -> Result<WasapiStream, AudioError> {
         let op = ActivateAudioInterfaceAsync(
             VIRTUAL_AUDIO_DEVICE_PROCESS_LOOPBACK,
             &IAudioClient::IID,
-            Some(&blob as *const BlobPropVariant as *const PROPVARIANT),
+            Some(&*blob as *const BlobPropVariant as *const PROPVARIANT),
             &handler,
         );
         let op = match op {
@@ -345,12 +390,18 @@ fn open_process(pid: u32) -> Result<WasapiStream, AudioError> {
             }
         };
         let waited = WaitForSingleObject(done, ACTIVATION_TIMEOUT_MS);
-        let _ = CloseHandle(done);
         if waited != WAIT_OBJECT_0 {
+            // The activation may still complete: its handler signals `done`
+            // and Windows may read the parameters. Keep all three alive
+            // (a few bytes and one handle, only when this rare timeout happens).
+            std::mem::forget(handler);
+            Box::leak(params);
+            Box::leak(blob);
             return Err(AudioError::Timeout(
                 "activation de la capture par processus",
             ));
         }
+        let _ = CloseHandle(done);
         let mut hr = HRESULT(0);
         let mut unknown: Option<IUnknown> = None;
         op.GetActivateResult(&mut hr, &mut unknown)

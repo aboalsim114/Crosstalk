@@ -1,6 +1,6 @@
 # Architecture — Crosstalk
 
-Complète le [cahier des charges](cahier-des-charges.md) (§6). Ce document décrit l'architecture **cible**. La section 7 indique ce qui existe déjà dans le dépôt et le chemin pour y arriver.
+Complète le [cahier des charges](cahier-des-charges.md) (§6). Ce document décrit l'architecture **cible du produit** (session pilotée par Rust, contrat d'événements). L'organisation du code telle qu'elle est aujourd'hui, ses règles de dépendance et ses décisions sont dans [`docs/architecture/`](architecture/overview.md). La section 7 indique l'écart entre les deux.
 
 ## 1. Principes
 
@@ -48,13 +48,26 @@ Le découpage se fait d'abord en **modules** de la crate existante (`src-tauri/s
 | `audio::dsp` | Passe-bande, rééchantillonnage 16 kHz, (exp.) mid/side, DeepFilterNet | thread DSP |
 | `audio::vad` | VAD Silero (ONNX), validation des segments, pré-roll et post-roll, segments ≤ 8 s | thread DSP |
 | `asr` | Trait `Transcriber`, whisper.cpp, filtre anti-hallucinations | **thread dédié**, priorité basse |
-| `translation` | Trait `Translator`, DeepL / Azure / local, glossaire balisé, cache LRU, délai et repli | tâches tokio |
+| `translation` | Opus-MT local (candle, Rust pur) : tokenizer SentencePiece, Marian, glossaire protégé, cache LRU, délai et repli | thread `translate`, priorité basse |
 | `speaker` (exp.) | Windows Graphics Capture, détection de l'indicateur, OCR, corrélation, confiance | thread dédié, ~10 Hz, désactivé par défaut |
 | `gsi` | Serveur HTTP local Game State Integration : carte, phase de round | tâche tokio |
 | `overlay`, `tray`, `shortcuts`, `actions` | Intégration Windows (existants) | thread principal Tauri |
-| `storage` | Réglages, glossaire, historique SQLite, modèles | tâche tokio |
+| `storage` | Réglages, glossaire, historique local (`history.jsonl`), modèles | tâche tokio |
 
-Les traits `AudioCapture`, `Transcriber`, `Translator` et `ChatSource` existent déjà dans `pipeline/`. Ils permettent de tester chaque module avec des implémentations factices et d'alimenter le banc d'essai hors ligne avec des fichiers WAV.
+Chaque module se teste avec des implémentations factices de ses traits (`CaptureBackend`, `VoiceDetector`, `Recognizer`, `translation::Engine`, `Fetcher` ; voir [modules.md](architecture/modules.md#contrats-des-moteurs-dia)), et le banc d'essai hors ligne rejoue des fichiers WAV.
+
+### Installateur (`src-installer/`)
+
+Application Tauri séparée, à l'interface tirée de la maquette « Crosstalk Installer » (`src/installer/`, page `installer.html`, bundle `dist-installer/`). Elle embarque les fichiers de l'application, compressés en deflate par `build.rs` à partir de `CROSSTALK_PAYLOAD_DIR`, et compile tels quels `downloads.rs` et les catalogues de modèles de l'application. Le code Tauri des téléchargements est séparé dans `download_commands.rs`.
+
+| Phase (UI) | Travail réel |
+| --- | --- |
+| Préparation 0–12 % | Espace libre (application et modèles), Crosstalk fermé |
+| Extraction 12–62 % | Fichiers copiés dans un dossier temporaire, puis téléchargement des modèles manquants, avec une progression pondérée par la taille |
+| Configuration 62–88 % | Fichiers mis en place, `HKCU\Software\Crosstalk` (`InstallDir`, `Version`) |
+| Finalisation 88–100 % | Raccourcis du menu Démarrer et du bureau |
+
+Annuler pendant les deux premières phases supprime le dossier temporaire : une version déjà installée reste intacte et les modèles partiels reprendront. `Crosstalk-setup.exe` est une enveloppe NSIS sans fenêtre (`scripts/cross/setup-wrapper.nsi`). Elle installe WebView2 s'il manque, lance l'installateur puis, si celui-ci renvoie 0, écrit `uninstall.exe` et l'entrée « Applications ». `/S` installe sans interface (`--silent`).
 
 ## 4. Files et concurrence
 
@@ -81,7 +94,7 @@ Les traits `AudioCapture`, `Transcriber`, `Translator` et `ChatSource` existent 
 
 ## 6. Contrat d'événements (Rust → interface)
 
-Événements typés (`serde`, `camelCase`), versionnés par un champ `v`. Ils reprennent les notions déjà présentes dans l'interface (`FeedEntry` : statuts provisoire, final, original, erreur ; latence) et dans `pipeline::Utterance`.
+Événements typés (`serde`, `camelCase`), versionnés par un champ `v`. Ils reprennent les notions déjà présentes dans l'interface (`FeedEntry` : statuts provisoire, final, original, erreur ; latence) et dans `speech::Transcript`.
 
 | Événement | Contenu principal | Usage |
 | --- | --- | --- |
@@ -92,6 +105,8 @@ Les traits `AudioCapture`, `Transcriber`, `Translator` et `ChatSource` existent 
 | `pipeline.stage` | étape active (capture, vad, asr, traduction, overlay) | barre de progression de l'Accueil |
 | `audio.level` | niveau RMS, `speaking` (≤ 15 Hz) | anneau d'onde 3D, indicateur VAD |
 | `diagnostic` | composant, niveau, message expurgé | écran Diagnostic |
+
+Événements déjà en place pour la voix : `speech://transcript` (`id` d'énoncé, `partial`, texte, langue, latences). Pendant la parole, des transcriptions **partielles** (`partial: true`, environ une par seconde dès 1,5 s, quand Whisper est libre) partagent l'`id` de la transcription finale, qui les remplace. Seule la finale est traduite. Si le segment est finalement rejeté, `speech://retract` (`id`) retire la ligne en direct.
 
 Commandes (interface → Rust) : `session_start`, `session_stop`, `session_pause`, `emergency_stop`, `settings_get` / `settings_set`, `glossary_*`, `model_download`, `audio_test`, `diagnostics_run`, plus `overlay_configure` (existante).
 
@@ -111,10 +126,10 @@ Dans cet exemple, la confiance est insuffisante : l'interface affiche « Joueur 
 
 | Élément | Aujourd'hui | Cible |
 | --- | --- | --- |
-| État de session, flux, simulation | Store Zustand dans la fenêtre principale React (`src/state/store.ts`) | Module Rust `session`. Le store React devient un miroir alimenté par les événements |
-| Overlay | Reçoit son état de la fenêtre principale (`src/native.ts`) | Reçoit les événements directement de Rust |
+| État de session, flux, simulation | Store Zustand dans la fenêtre principale React (`src/app/state/store.ts`) | Module Rust `session`. Le store React devient un miroir alimenté par les événements |
+| Overlay | Reçoit son état de la fenêtre principale (`src/app/native.ts`) | Reçoit les événements directement de Rust |
 | Raccourcis, tray, overlay, autostart | Rust ✅ | Inchangé ; les actions appellent directement `session` |
-| Pipeline réel | Traits seulement (`src-tauri/src/pipeline/`) | Implémentations lot par lot (L0 → L4) |
+| Pipeline réel | Capture, parole, traduction, chat, GSI et locuteur en Rust ✅ ; câblage dans `wiring.rs` | Module `session` qui porte l'état |
 | Fenêtre masquée | Le WebView peut ralentir ses minuteries en arrière-plan | Sans effet sur le pipeline (Rust). Option Tauri `backgroundThrottling` à évaluer pour l'overlay |
 
 **Migration en trois étapes :**
@@ -132,3 +147,14 @@ Elle est volontairement isolée (cahier des charges §4.8) :
 - un pseudo n'est retenu que s'il figure dans la liste des pseudos connus de la session, si un seul indicateur chevauche le segment, et si le score dépasse le seuil réglable. Sinon : `name: null`, donc « Joueur inconnu ».
 
 Aucune image n'est conservée. Les pseudos sont expurgés des journaux.
+
+**Implémenté dans `src-tauri/src/speaker`** (expérimental, désactivé par défaut) :
+
+| Fichier | Rôle |
+| --- | --- |
+| `screen.rs` | Rectangle client de la fenêtre « Counter-Strike 2 » (`FindWindowW`, sans ouvrir le processus) et copie GDI de la zone choisie. Les fenêtres Crosstalk sont masquées, l'écran noir (plein écran exclusif) est détecté, l'image agrandie ×2 pour l'OCR. |
+| `ocr.rs` | `Windows.Media.Ocr` (langues de l'utilisateur), dans un thread dédié. |
+| `track.rs` | Nettoyage des lignes OCR, regroupement des variantes d'un même pseudo, fenêtre de 30 s de lectures, pseudo dominant d'un intervalle. |
+| `mod.rs` | Thread de lecture (activé par la VAD), statut `speaker://status`, commandes `speaker_configure`, `speaker_status` et `speaker_test`. |
+
+`wiring::SpeechBridge` appelle `SpeakerService::speaker_for(latence, durée)` et remplit `Transcript.speaker`. L'interface en fait le `sender` de la ligne vocale (Script, overlay, historique, mode streamer).

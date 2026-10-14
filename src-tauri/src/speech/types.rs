@@ -4,24 +4,53 @@ use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
 
-/// Languages the recogniser may output. Restricting Whisper to these avoids
-/// mis-detections (Ukrainian, Bulgarian…) on short or noisy CS2 callouts.
+/// Languages the recogniser may output: the players' languages and the
+/// user's own (chosen in Langues). Restricting Whisper to these avoids
+/// mis-detections (Bulgarian for Russian…) on short or noisy CS2 callouts.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Lang {
     Ru,
     En,
+    Fr,
+    De,
+    Es,
+    Uk,
+    Pl,
+    Tr,
 }
 
 impl Lang {
-    pub const ALL: [Lang; 2] = [Lang::Ru, Lang::En];
+    pub const ALL: [Lang; 8] = [
+        Lang::Ru,
+        Lang::En,
+        Lang::Fr,
+        Lang::De,
+        Lang::Es,
+        Lang::Uk,
+        Lang::Pl,
+        Lang::Tr,
+    ];
+    /// Before the user chooses: the usual languages of CS2 voice chat.
+    pub const DEFAULT: [Lang; 2] = [Lang::Ru, Lang::En];
 
     /// Whisper language code.
     pub fn code(self) -> &'static str {
         match self {
             Lang::Ru => "ru",
             Lang::En => "en",
+            Lang::Fr => "fr",
+            Lang::De => "de",
+            Lang::Es => "es",
+            Lang::Uk => "uk",
+            Lang::Pl => "pl",
+            Lang::Tr => "tr",
         }
+    }
+
+    /// Written in the Cyrillic alphabet.
+    pub fn cyrillic(self) -> bool {
+        matches!(self, Lang::Ru | Lang::Uk)
     }
 
     pub fn from_code(code: &str) -> Option<Lang> {
@@ -41,18 +70,46 @@ pub struct SpeechConfig {
     pub vad_threshold: f32,
     /// CS2 vocabulary given to Whisper as initial prompt.
     pub glossary: Vec<String>,
+    /// Encode only the segment's duration instead of Whisper's fixed 30 s
+    /// window. On by default: the full window costs ~1.8 s for `tiny` on two
+    /// CPU threads whatever the segment length, which rules out a 2 s latency.
+    /// Not exposed in the UI; the bench compares both (`--full-encoder`).
+    #[serde(default = "default_true")]
+    pub fast_encoder: bool,
+    /// Where Whisper runs: CPU, graphics card (Vulkan), or the faster of
+    /// both measured when the model loads (default).
+    #[serde(default)]
+    pub accel: Accel,
+    /// "Focus voix": keep what is in the centre of the stereo game audio
+    /// (the voice chat), turn down sounds coming from the sides (focus.rs).
+    #[serde(default)]
+    pub voice_focus: bool,
+}
+
+/// Where Whisper runs.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Accel {
+    Cpu,
+    Gpu,
+    /// GPU only if measured clearly faster than the CPU on this PC.
+    #[default]
+    Auto,
 }
 
 impl Default for SpeechConfig {
     fn default() -> Self {
         Self {
             model: super::models::DEFAULT_MODEL.into(),
-            languages: Lang::ALL.to_vec(),
+            languages: Lang::DEFAULT.to_vec(),
             vad_threshold: 0.55,
             glossary: super::filter::DEFAULT_GLOSSARY
                 .iter()
                 .map(|s| s.to_string())
                 .collect(),
+            fast_encoder: true,
+            accel: Accel::Auto,
+            voice_focus: false,
         }
     }
 }
@@ -68,7 +125,7 @@ impl SpeechConfig {
             }
         }
         self.languages = if langs.is_empty() {
-            Lang::ALL.to_vec()
+            Lang::DEFAULT.to_vec()
         } else {
             langs
         };
@@ -83,12 +140,19 @@ impl SpeechConfig {
     }
 }
 
+fn default_true() -> bool {
+    true
+}
+
 /// One recognised utterance. This is a transcription in the speaker's
 /// language: translation into French is a later feature.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Transcript {
+    /// Utterance id: a partial transcript and the final one share it.
     pub id: u64,
+    /// Live words of a segment still being spoken, replaced by the final one.
+    pub partial: bool,
     pub text: String,
     pub lang: Lang,
     /// Probability of `lang` among the allowed languages (1 when only one is allowed).
@@ -102,6 +166,9 @@ pub struct Transcript {
     pub avg_logprob: f32,
     pub no_speech_prob: f32,
     pub model: String,
+    /// Name shown on CS2's voice indicator while it was spoken (src/speaker).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub speaker: Option<String>,
 }
 
 /// Why a segment did not produce a transcript.
@@ -151,7 +218,8 @@ pub struct SpeechStatus {
     pub models_dir: String,
     pub error: Option<String>,
     pub load_ms: Option<u32>,
-    /// Inference backend, e.g. "CPU · AVX2". No GPU in this build.
+    /// Inference backend of the loaded model, e.g. "CPU · AVX2" or
+    /// "GPU · NVIDIA GeForce RTX 3060 (Vulkan)".
     pub backend: String,
     pub threads: u32,
 }
@@ -171,6 +239,9 @@ pub struct SpeechStats {
     pub last_rtf: Option<f32>,
     /// CPU used by the Crosstalk core process, in % of the whole machine.
     pub cpu_percent: Option<f32>,
+    /// "Focus voix": game sound removed over the last second, in dB
+    /// (`None`: off, or a mono source).
+    pub focus_db: Option<f32>,
 }
 
 /// Live voice activity, emitted when it changes.
@@ -193,6 +264,9 @@ mod tests {
             languages: vec![Lang::En, Lang::En],
             vad_threshold: 2.0,
             glossary: vec!["  rush B ".into(), "".into(), "a\0wp".into()],
+            fast_encoder: false,
+            accel: Accel::Cpu,
+            voice_focus: false,
         }
         .sanitized();
         assert_eq!(c.vad_threshold, 0.9);
@@ -210,6 +284,7 @@ mod tests {
     fn transcript_serialises_for_the_ui() {
         let t = Transcript {
             id: 1,
+            partial: false,
             text: "Двое на B".into(),
             lang: Lang::Ru,
             lang_prob: 0.9,
@@ -219,6 +294,7 @@ mod tests {
             avg_logprob: -0.3,
             no_speech_prob: 0.01,
             model: "base".into(),
+            speaker: None,
         };
         let v = serde_json::to_value(&t).unwrap();
         assert_eq!(v["lang"], "ru");

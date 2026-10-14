@@ -8,7 +8,7 @@ use tauri::{AppHandle, Emitter, Manager};
 
 use crate::audio::{AudioService, StopReason};
 
-/// Event name the UI listens to (see `src/backend/index.ts`).
+/// Event name the UI listens to (see `src/shared/ipc/actions.ts`).
 pub const ACTION_EVENT: &str = "crosstalk://action";
 pub const MAIN_WINDOW: &str = "main";
 
@@ -23,6 +23,10 @@ pub enum Action {
     Emergency,
     /// Start or stop the session (tray menu).
     Session,
+    /// Ctrl+Alt+F7: reply in the teammates' language (pop-up over the game).
+    Reply,
+    /// Ctrl+Alt+F6: dictate the reply (microphone), press again to finish.
+    Dictate,
 }
 
 pub fn dispatch(app: &AppHandle, action: Action) {
@@ -34,7 +38,7 @@ pub fn dispatch(app: &AppHandle, action: Action) {
         }
     }
     if let Err(e) = app.emit_to(MAIN_WINDOW, ACTION_EVENT, action) {
-        eprintln!("crosstalk: failed to forward {action:?}: {e}");
+        crate::logs::warn("actions", &format!("{action:?} non transmis : {e}"));
     }
 }
 

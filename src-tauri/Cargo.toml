@@ -1,6 +1,6 @@
 [package]
 name = "crosstalk"
-version = "0.2.0"
+version = "0.3.0"
 description = "Traduction en temps réel des voix et du chat de Counter-Strike 2"
 authors = ["Crosstalk contributors"]
 license = "MIT"
@@ -10,7 +10,9 @@ rust-version = "1.80"
 [lib]
 # The `_lib` suffix avoids a name clash with the binary on Windows (cargo#8519).
 name = "crosstalk_lib"
-crate-type = ["staticlib", "cdylib", "rlib"]
+# Desktop only: the binary links the rlib. The template's staticlib/cdylib are
+# for Tauri mobile, and a cdylib exceeds the 65,535 DLL exports limit with candle.
+crate-type = ["rlib"]
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
@@ -27,10 +29,27 @@ thiserror = "2"
 # run locally on the CPU. Optional so the Windows target can be type-checked
 # from Linux (`--no-default-features`), where whisper.cpp cannot be cross-built.
 whisper-rs = { version = "0.16.0", optional = true }
+# Local translation (Opus-MT / Marian, Apache-2.0) with candle, pure Rust on the
+# CPU: no API key, no network, nothing to pay for the user.
+candle-core = "0.11"
+candle-nn = "0.11"
+candle-transformers = "0.11"
+# First-run download of the models (Hugging Face, HTTPS with rustls, no
+# OpenSSL), checked by exact size and published SHA-1.
+ureq = "2.12"
+sha1_smol = "1"
+# Fingerprint of the update installer (in-app update).
+sha2 = "0.10"
+# Chat lines of console.log, matched by the rules file (src/chat/rules.json).
+regex = "1"
 
 [features]
 default = ["whisper"]
 whisper = ["dep:whisper-rs"]
+# Whisper on the graphics card (Vulkan, any recent NVIDIA / AMD / Intel GPU).
+# Enabled by the Windows build (scripts/cross-build-windows-gnu.sh); without a
+# Vulkan driver, ggml falls back to the CPU (scripts/cross/vulkan_shim.c).
+gpu = ["whisper", "whisper-rs/vulkan"]
 
 # Native Windows APIs used by the audio capture (WASAPI) and the CS2 process
 # watcher (Toolhelp snapshots: enumerates names and PIDs, never opens cs2.exe).
@@ -42,14 +61,35 @@ windows = { version = "0.62", features = [
   "Win32_Security",
   "Win32_System_Com_StructuredStorage",
   "Win32_System_Diagnostics_ToolHelp",
+  "Win32_System_Registry",
   "Win32_System_SystemInformation",
   "Win32_System_Threading",
   "Win32_System_Variant",
   "Win32_UI_Shell_PropertiesSystem",
   "Win32_Devices_FunctionDiscovery",
   "Wdk_System_SystemServices",
+  "Win32_Graphics_Gdi",
+  "Win32_System_DataExchange",
+  "Win32_System_Memory",
+  "Win32_UI_WindowsAndMessaging",
+  # "Qui parle ?": Windows' built-in OCR (src/speaker).
+  "Foundation",
+  "Foundation_Collections",
+  "Globalization",
+  "Graphics_Imaging",
+  "Media_Ocr",
+  "Security_Cryptography",
+  "Storage_Streams",
 ] }
 windows-core = "0.62"
+
+# whisper.cpp is built by CMake with the profile's opt-level: "s" would map to
+# MinSizeRel (MSVC /O1, less vectorised). Inference code gets full optimisation.
+[profile.release.package.whisper-rs-sys]
+opt-level = 3
+
+[profile.release.package.whisper-rs]
+opt-level = 3
 
 [profile.release]
 codegen-units = 1
