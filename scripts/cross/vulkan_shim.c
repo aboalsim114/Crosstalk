@@ -1,5 +1,5 @@
 /*
- * ggml's Vulkan backend takes vkGetInstanceProcAddr (and two functions it
+ * ggml's Vulkan backend takes vkGetInstanceProcAddr (and a few functions it
  * calls directly) from the Vulkan loader, and resolves everything else
  * through it. Linking vulkan-1.dll directly would stop Crosstalk from
  * starting on a PC without a Vulkan driver; this shim (built as libvulkan.a by
@@ -72,4 +72,22 @@ void vkGetPhysicalDeviceFeatures2(void *device, void *features) {
         fn = (features2_fn)(void *)GetProcAddress(vulkan_dll(), "vkGetPhysicalDeviceFeatures2");
     }
     fn(device, features);
+}
+
+/* llama.cpp's ggml (crosstalk-llm) also resolves device functions directly. */
+typedef vk_void_fn (*device_proc_fn)(void *, const char *);
+
+vk_void_fn vkGetDeviceProcAddr(void *device, const char *name) {
+    static device_proc_fn fn;
+    if (!fn) {
+        HMODULE dll = vulkan_dll();
+        if (!dll) {
+            return NULL;
+        }
+        fn = (device_proc_fn)(void *)GetProcAddress(dll, "vkGetDeviceProcAddr");
+        if (!fn) {
+            return NULL;
+        }
+    }
+    return fn(device, name);
 }

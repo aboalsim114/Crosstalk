@@ -1,0 +1,26 @@
+[package]
+name = "crosstalk-llm"
+version = "0.1.0"
+edition = "2021"
+description = "Crosstalk local LLM translation helper (llama.cpp), driven over stdin/stdout"
+license = "MIT"
+publish = false
+
+[[bin]]
+name = "crosstalk-llm"
+path = "src/main.rs"
+
+[dependencies]
+llama-cpp-2 = { version = "=0.1.159", default-features = false }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+[features]
+# llama.cpp on the graphics card (Vulkan), as Whisper in the app.
+gpu = ["llama-cpp-2/vulkan"]
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+codegen-units = 1
+strip = true

@@ -22,3 +22,7 @@ dist-test/
 
 # Local validation packages (scripts/validate.ps1)
 dist-local/
+
+# Model weights (downloaded at install time, never committed)
+*.gguf
+!src-llm/tests/data/tiny-gemma3*.gguf
