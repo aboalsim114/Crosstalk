@@ -123,7 +123,7 @@ for (const f of shared) {
 // ---------- 3. Frontend imports ----------
 
 const SRC = 'src';
-const tsFiles = [...walk(SRC)].filter((p) => /\.(ts|tsx)$/.test(p) && !/\.test\.tsx?$/.test(p) && !p.includes('/test/'));
+const tsFiles = [...walk(SRC)].filter((p) => /\.(ts|tsx)$/.test(p) && !/\.test\.tsx?$/.test(p) && !/[\\/]test[\\/]/.test(p));
 const resolveImport = (from, spec) => {
   const base = normalize(join(dirname(from), spec));
   for (const cand of [base, `${base}.ts`, `${base}.tsx`, join(base, 'index.ts'), join(base, 'index.tsx')])
@@ -189,8 +189,9 @@ const CONTRACT = 'docs/architecture/ipc-contract.txt';
 if (process.argv.includes('--write')) {
   writeFileSync(CONTRACT, contract);
   console.log(`écrit : ${CONTRACT}`);
-} else if (!existsSync(CONTRACT) || readFileSync(CONTRACT, 'utf8') !== contract) {
-  const before = existsSync(CONTRACT) ? new Set(readFileSync(CONTRACT, 'utf8').split('\n')) : new Set();
+} else if (!existsSync(CONTRACT) || readFileSync(CONTRACT, 'utf8').replaceAll('\r\n', '\n') !== contract) {
+  // Git on Windows (core.autocrlf) checks the file out with CRLF line endings.
+  const before = existsSync(CONTRACT) ? new Set(readFileSync(CONTRACT, 'utf8').replaceAll('\r\n', '\n').split('\n')) : new Set();
   const after = new Set(contract.split('\n'));
   const gone = [...before].filter((l) => l && !l.startsWith('#') && !after.has(l));
   const added = [...after].filter((l) => l && !l.startsWith('#') && !before.has(l));

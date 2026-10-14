@@ -9,3 +9,10 @@ GGML_AVX2 = "ON"
 GGML_FMA = "ON"
 GGML_F16C = "ON"
 GGML_BMI2 = "ON"
+
+# Static C/C++ runtime (/MT): whisper.cpp's C++ code otherwise imports
+# MSVCP140.dll, which Windows does not ship and the Tauri NSIS/MSI installers
+# do not install (Visual C++ redistributable). Without it the app does not
+# start on a clean PC. Checked with `dumpbin /dependents` (docs/quality, CT-007).
+[target.x86_64-pc-windows-msvc]
+rustflags = ["-C", "target-feature=+crt-static"]

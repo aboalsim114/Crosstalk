@@ -52,6 +52,33 @@ export function overlayConfig(s: AppState, prev?: AppState): OverlayWindowConfig
   };
 }
 
+/**
+ * Sends the overlay window's flags to the Rust core when they change. The
+ * first call can come before the core has created the overlay window (the
+ * main window loads while the core is still starting): a failed call is
+ * retried at the next change, and the overlay's "ready" resends everything,
+ * including the corner saved in the settings.
+ */
+export function overlayFlagsSync(configure: (cfg: OverlayWindowConfig) => Promise<unknown>) {
+  let lastCfg = '';
+  const send = (cfg: OverlayWindowConfig) => {
+    const key = JSON.stringify(cfg);
+    if (key === lastCfg) return;
+    lastCfg = key;
+    configure(cfg).catch((e) => {
+      if (lastCfg === key) lastCfg = '';
+      console.warn('overlay_configure failed', e);
+    });
+  };
+  return {
+    sync: (s: AppState, prev?: AppState) => send(overlayConfig(s, prev)),
+    ready: (s: AppState) => {
+      lastCfg = '';
+      send(overlayConfig(s));
+    },
+  };
+}
+
 export function applyNativeAction(a: NativeAction) {
   const s = useApp.getState();
   const openReply = () => void reply.open(recentLangs(s.feed));
@@ -256,16 +283,16 @@ export function startNativeBridge(): () => void {
   unlisten.push(...startSetupBridge());
 
   const push = () => overlayWindow.pushState(overlayPayload(useApp.getState()));
-  unlisten.push(overlayWindow.onReady(push));
+  const windowFlags = overlayFlagsSync((cfg) => overlayWindow.configure(cfg));
+  unlisten.push(
+    overlayWindow.onReady(() => {
+      push();
+      windowFlags.ready(useApp.getState());
+    }),
+  );
 
-  let lastCfg = '';
   const sync = (s: AppState, prev?: AppState) => {
-    const cfg = overlayConfig(s, prev);
-    const key = JSON.stringify(cfg);
-    if (key !== lastCfg) {
-      lastCfg = key;
-      overlayWindow.configure(cfg).catch((e) => console.warn('overlay_configure failed', e));
-    }
+    windowFlags.sync(s, prev);
     if (!prev || prev.feed !== s.feed || prev.fmt !== s.fmt || prev.opacity !== s.opacity || prev.textSize !== s.textSize || prev.maxBlocks !== s.maxBlocks || prev.duration !== s.duration || prev.corner !== s.corner || prev.repos !== s.repos || prev.uiLang !== s.uiLang || prev.target !== s.target) push();
   };
   sync(useApp.getState());

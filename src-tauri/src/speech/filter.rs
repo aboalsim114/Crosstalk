@@ -135,9 +135,35 @@ fn is_cyrillic(c: char) -> bool {
     matches!(c, '\u{0400}'..='\u{04FF}')
 }
 
+/// A whole sentence followed by copies of itself ("Save your weapons this
+/// round. Save your weapons this round. Save your…"): Whisper heard it once,
+/// then looped. Returns that sentence. Only a phrase of at least three different
+/// words repeated end to end counts: a chant ("go go go go") stays a loop.
+pub fn collapse_repeats(text: &str) -> Option<String> {
+    let words: Vec<&str> = text.split_whitespace().collect();
+    let key = |w: &str| normalise(w);
+    let last = words.len().saturating_sub(1);
+    for period in 3..=words.len() / 2 {
+        let reps = words.len() / period;
+        // The output cap can cut the last copy mid-word ("weap…").
+        let whole = words.iter().enumerate().skip(period).all(|(i, w)| {
+            let (got, want) = (key(w), key(words[i % period]));
+            got == want || (i == last && !got.is_empty() && want.starts_with(&got))
+        });
+        let mut distinct: Vec<String> = words[..period].iter().map(|w| key(w)).collect();
+        distinct.sort_unstable();
+        distinct.dedup();
+        if reps >= 2 && whole && distinct.len() >= 3 {
+            return Some(words[..period].join(" "));
+        }
+    }
+    None
+}
+
 /// Accepts a recognition (returns the cleaned text) or says why it is dropped.
 pub fn judge(r: &Recognition, audio_ms: u32) -> Result<String, RejectReason> {
     let text = clean(&r.text);
+    let text = collapse_repeats(&text).unwrap_or(text);
     let letters: Vec<char> = text.chars().filter(|c| c.is_alphabetic()).collect();
     if letters.is_empty() {
         return Err(RejectReason::Empty);
@@ -173,6 +199,11 @@ pub fn judge(r: &Recognition, audio_ms: u32) -> Result<String, RejectReason> {
         return Err(RejectReason::WrongScript);
     }
     Ok(text)
+}
+
+/// The raw Whisper text loops (what `judge` rejects as `Repetition`).
+pub fn is_looping(text: &str) -> bool {
+    is_repetitive(&normalise(&clean(text)))
 }
 
 /// Looping output: a word or short phrase repeated over and over.
@@ -350,6 +381,50 @@ mod tests {
             Err(RejectReason::Repetition)
         );
         assert!(judge(&rec("go go go, push B", Lang::En), 2000).is_ok());
+        // What triggers a second decoding pass: the same test on the raw text.
+        assert!(is_looping(
+            "they are rotating mid, they are rotating mid, they are rotating mid, they are rotating mid"
+        ));
+        assert!(!is_looping("They are rotating mid, three of them."));
+    }
+
+    #[test]
+    fn keeps_a_sentence_whisper_repeated_after_hearing_it_once() {
+        // Seen in the app (speaker loopback, whisper base, reduced encoder).
+        assert_eq!(
+            judge(
+                &rec(
+                    "Save your weapons this round. Save your weapons this round. Save your weapons this round. Save your weap",
+                    Lang::En
+                ),
+                2080
+            ),
+            Ok("Save your weapons this round.".into())
+        );
+        assert_eq!(
+            judge(
+                &rec(
+                    "Je suis presque mort, je recule. Je suis presque mort, je recule. Je suis presque mort, je recule.",
+                    Lang::Fr
+                ),
+                2880
+            ),
+            Ok("Je suis presque mort, je recule.".into())
+        );
+        // Not a repeated sentence: unchanged, or still a loop.
+        assert_eq!(collapse_repeats("plant on B, plant on A now"), None);
+        assert_eq!(collapse_repeats("go go go go go go"), None);
+        // A repeated hallucination is still caught once collapsed.
+        assert_eq!(
+            judge(
+                &rec(
+                    "Thanks for watching! Thanks for watching! Thanks for watching!",
+                    Lang::En
+                ),
+                3000
+            ),
+            Err(RejectReason::Hallucination)
+        );
     }
 
     #[test]
