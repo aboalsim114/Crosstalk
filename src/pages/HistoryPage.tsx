@@ -20,7 +20,7 @@ export function historyRow(e: HistoryEntry) {
     tag: voice ? `VOIX · ${e.lang.toUpperCase()}` : `CHAT · ${CHANNEL_NAME[e.channel as Channel] ?? e.channel ?? ''}`,
     color: voice ? '#ffa24a' : '#7fd4ff',
     original: (e.sender ? `${e.sender} — ` : '') + e.original,
-    shown: e.translated ?? (e.status === 'original' ? 'Déjà en français' : 'Non traduit'),
+    shown: e.translated ?? (e.status === 'original' ? 'Déjà dans votre langue' : 'Non traduit'),
     muted: !e.translated,
   };
 }

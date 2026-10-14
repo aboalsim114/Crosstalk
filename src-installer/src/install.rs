@@ -2,8 +2,10 @@
 //!
 //! 0. PRÉPARATION   (0–12 %)  free space, Crosstalk not running.
 //! 1. EXTRACTION    (12–62 %) application files into a staging folder, then
-//!    the models (Silero VAD, Whisper base, Opus-MT ru/en → fr) downloaded into
-//!    %LOCALAPPDATA%\Crosstalk\models, weighted by their size.
+//!    the models (Silero VAD, Whisper base, Opus-MT) downloaded into
+//!    %LOCALAPPDATA%\Crosstalk\models, weighted by their size. Translation
+//!    models: into Windows' language (Russian and English players); the app
+//!    asks the user's languages at first launch and fetches what else they need.
 //! 2. CONFIGURATION (62–88 %) staged files moved into place, Crosstalk
 //!    registered for the user (HKCU\Software\Crosstalk).
 //! 3. FINALISATION  (88–100 %) Start menu (and desktop) shortcuts.
@@ -97,6 +99,25 @@ pub struct Installer {
     running: AtomicBool,
     installed: AtomicBool,
     downloader: Mutex<Option<Arc<Downloader>>>,
+    /// Languages of the translation models to install.
+    pub plan: downloads::TranslationPlan,
+}
+
+/// The translation models installed before the user chooses: into Windows'
+/// language when Crosstalk can translate into it (English otherwise), from
+/// the usual CS2 voice-chat languages.
+pub fn default_plan(locale: Option<&str>) -> downloads::TranslationPlan {
+    use crate::translation::models;
+    let Some(lang) = locale.map(|l| l.split(['-', '_']).next().unwrap_or("").to_lowercase()) else {
+        return downloads::TranslationPlan::default();
+    };
+    let target = if models::is_target(&lang) { lang } else { "en".to_string() };
+    let sources = models::DEFAULT_SOURCES
+        .iter()
+        .map(|s| s.to_string())
+        .filter(|s| *s != target)
+        .collect();
+    downloads::TranslationPlan { target, sources }
 }
 
 /// Download progress, forwarded to the installation thread.
@@ -131,6 +152,7 @@ impl Installer {
             running: AtomicBool::new(false),
             installed: AtomicBool::new(false),
             downloader: Mutex::new(None),
+            plan: default_plan(crate::system::user_locale().as_deref()),
         })
     }
 
@@ -144,7 +166,7 @@ impl Installer {
     }
 
     fn models_todo(&self) -> Vec<downloads::FileSpec> {
-        downloads::missing_all(&self.models_dir, WHISPER_MODELS, true)
+        downloads::missing_all(&self.models_dir, WHISPER_MODELS, Some(&self.plan))
     }
 
     pub fn platform(&self) -> &dyn Platform {
@@ -346,7 +368,7 @@ impl Installer {
         let d = Downloader::new(self.fetcher.clone(), Arc::new(Forward(Mutex::new(tx))));
         *self.downloader.lock().unwrap() = Some(d.clone());
         self.check()?;
-        if !d.start_all(self.models_dir.clone(), WHISPER_MODELS, true) {
+        if !d.start_all(self.models_dir.clone(), WHISPER_MODELS, Some(&self.plan)) {
             return Ok(());
         }
         for st in rx {
@@ -468,7 +490,7 @@ mod tests {
             if self.fail {
                 return Err("connexion impossible".into());
             }
-            let size = downloads::missing_all(&PathBuf::from("/nonexistent"), WHISPER_MODELS, true)
+            let size = downloads::missing_all(&PathBuf::from("/nonexistent"), WHISPER_MODELS, Some(&downloads::TranslationPlan::default()))
                 .into_iter()
                 .find(|f| f.url == url)
                 .unwrap()
@@ -559,7 +581,7 @@ mod tests {
         let inst = installer(&root, fetcher.clone(), Arc::new(Fake::default()));
         assert!(inst.model_bytes() > 700_000_000, "{}", inst.model_bytes());
         // Every model already present (sparse files of the exact size) but the VAD.
-        for f in downloads::missing_all(&inst.models_dir, WHISPER_MODELS, true) {
+        for f in downloads::missing_all(&inst.models_dir, WHISPER_MODELS, Some(&inst.plan)) {
             if f.path.ends_with(whisper::VAD_FILE) {
                 continue;
             }
@@ -693,4 +715,17 @@ mod tests {
         assert!(!root.join("app").join("crosstalk.exe").exists());
         let _ = std::fs::remove_dir_all(&root);
     }
+    #[test]
+    fn the_installed_translation_models_follow_windows_language() {
+        let p = default_plan(Some("ru-RU"));
+        assert_eq!((p.target.as_str(), p.sources.clone()), ("ru", vec!["en".to_string()]));
+        let p = default_plan(Some("de-DE"));
+        assert_eq!((p.target.as_str(), p.sources.len()), ("de", 2));
+        // Italian: no model into it, English instead.
+        let p = default_plan(Some("it-IT"));
+        assert_eq!((p.target.as_str(), p.sources.clone()), ("en", vec!["ru".to_string()]));
+        assert_eq!(default_plan(None), downloads::TranslationPlan::default());
+        assert_eq!(default_plan(Some("fr-CA")).target, "fr");
+    }
+
 }

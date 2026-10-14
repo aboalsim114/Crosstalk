@@ -5,6 +5,7 @@
 
 import { isTauri, settingsStore } from '../backend';
 import { isUiLang } from '../i18n';
+import { isTargetLang } from './langs';
 import { useAudio } from './audio';
 import type { GlossEntry, ModelId } from './data';
 import { useApp, type AppState } from './store';
@@ -14,7 +15,7 @@ const LOCAL_KEY = 'crosstalk.settings';
 
 type Persisted = Pick<
   AppState,
-  'mode' | 'fmt' | 'corner' | 'opacity' | 'textSize' | 'duration' | 'maxBlocks' | 'overlayOn' | 'tg' | 'chatPath' | 'ownName' | 'capture' | 'vad' | 'model' | 'accel' | 'src' | 'stream' | 'speaker' | 'voiceFocus' | 'uiLang'
+  'mode' | 'fmt' | 'corner' | 'opacity' | 'textSize' | 'duration' | 'maxBlocks' | 'overlayOn' | 'tg' | 'chatPath' | 'ownName' | 'capture' | 'vad' | 'model' | 'accel' | 'src' | 'stream' | 'speaker' | 'voiceFocus' | 'uiLang' | 'target' | 'langSetupDone'
 >;
 
 const oneOf =
@@ -46,6 +47,8 @@ const CHECKS: { [K in keyof Persisted]: (v: unknown) => boolean } = {
   speaker: (v) => typeof v === 'object' && v !== null,
   voiceFocus: isBool,
   uiLang: isUiLang,
+  target: isTargetLang,
+  langSetupDone: isBool,
 };
 
 export function snapshot(s: AppState, deviceId: string | null) {

@@ -30,6 +30,9 @@ describe('reply in the teammates’ language', () => {
     expect(recentLangs(feed)).toEqual(['ru', 'ru', 'en']);
     expect(teammatesLanguage(recentLangs(feed))).toBe('ru');
     expect(teammatesLanguage([])).toBe('en');
+    // A Russian user replying to English and German teammates.
+    expect(teammatesLanguage(['de', 'de', 'en'], ['en', 'de'])).toBe('de');
+    expect(teammatesLanguage([], ['de'])).toBe('de');
   });
 
   it('translates on Enter, copies the result and says how to paste it', async () => {
@@ -38,7 +41,7 @@ describe('reply in the teammates’ language', () => {
     translate.mockResolvedValue({ text: 'Они идут через верх', target: 'ru', via: 'model', ms: 640 });
     const copied = vi.fn();
     render(<ReplyBox target="ru" onTarget={() => {}} onCopied={copied} />);
-    const input = screen.getByLabelText('Message en français');
+    const input = screen.getByLabelText('Message (Français)');
     fireEvent.change(input, { target: { value: 'ils arrivent par le haut' } });
     await act(async () => {
       fireEvent.keyDown(input, { key: 'Enter' });
@@ -61,7 +64,7 @@ describe('reply in the teammates’ language', () => {
       fireEvent.click(await screen.findByText('Éco', undefined, { timeout: 2000 }));
     });
     expect(writeText).toHaveBeenCalledWith('Эко раунд');
-    const input = screen.getByLabelText('Message en français');
+    const input = screen.getByLabelText('Message (Français)');
     fireEvent.change(input, { target: { value: 'on se regroupe' } });
     await act(async () => {
       fireEvent.keyDown(input, { key: 'Enter' });

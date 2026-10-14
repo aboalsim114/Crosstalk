@@ -4,24 +4,53 @@ use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
 
-/// Languages the recogniser may output. Restricting Whisper to these avoids
-/// mis-detections (Ukrainian, Bulgarian…) on short or noisy CS2 callouts.
+/// Languages the recogniser may output: the players' languages and the
+/// user's own (chosen in Langues). Restricting Whisper to these avoids
+/// mis-detections (Bulgarian for Russian…) on short or noisy CS2 callouts.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Lang {
     Ru,
     En,
+    Fr,
+    De,
+    Es,
+    Uk,
+    Pl,
+    Tr,
 }
 
 impl Lang {
-    pub const ALL: [Lang; 2] = [Lang::Ru, Lang::En];
+    pub const ALL: [Lang; 8] = [
+        Lang::Ru,
+        Lang::En,
+        Lang::Fr,
+        Lang::De,
+        Lang::Es,
+        Lang::Uk,
+        Lang::Pl,
+        Lang::Tr,
+    ];
+    /// Before the user chooses: the usual languages of CS2 voice chat.
+    pub const DEFAULT: [Lang; 2] = [Lang::Ru, Lang::En];
 
     /// Whisper language code.
     pub fn code(self) -> &'static str {
         match self {
             Lang::Ru => "ru",
             Lang::En => "en",
+            Lang::Fr => "fr",
+            Lang::De => "de",
+            Lang::Es => "es",
+            Lang::Uk => "uk",
+            Lang::Pl => "pl",
+            Lang::Tr => "tr",
         }
+    }
+
+    /// Written in the Cyrillic alphabet.
+    pub fn cyrillic(self) -> bool {
+        matches!(self, Lang::Ru | Lang::Uk)
     }
 
     pub fn from_code(code: &str) -> Option<Lang> {
@@ -72,7 +101,7 @@ impl Default for SpeechConfig {
     fn default() -> Self {
         Self {
             model: super::models::DEFAULT_MODEL.into(),
-            languages: Lang::ALL.to_vec(),
+            languages: Lang::DEFAULT.to_vec(),
             vad_threshold: 0.55,
             glossary: super::filter::DEFAULT_GLOSSARY
                 .iter()
@@ -96,7 +125,7 @@ impl SpeechConfig {
             }
         }
         self.languages = if langs.is_empty() {
-            Lang::ALL.to_vec()
+            Lang::DEFAULT.to_vec()
         } else {
             langs
         };

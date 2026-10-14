@@ -2,6 +2,7 @@
 
 import { create } from 'zustand';
 import { modelDownload, type DownloadStatus } from '../backend';
+import { chosenSources } from './langs';
 import type { AppState } from './store';
 
 export const useSetup = create<{ status: DownloadStatus | null }>()(() => ({ status: null }));
@@ -45,11 +46,15 @@ export function setupView(s: DownloadStatus | null): SetupView {
   }
 }
 
-/** The models the current settings need: Whisper model, translation on or off. */
-export const setupNeeds = (s: Pick<AppState, 'model' | 'tg'>) => ({ model: s.model, translation: s.tg.translate });
+/** The models the current settings need: Whisper model, translation on or off, languages. */
+export const setupNeeds = (s: Pick<AppState, 'model' | 'tg'> & Partial<Pick<AppState, 'target' | 'src'>>) => ({
+  model: s.model,
+  translation: s.tg.translate,
+  plan: { target: s.target ?? 'fr', sources: s.src ? chosenSources(s.src) : ['ru', 'en'] },
+});
 
-export async function startSetup(s: Pick<AppState, 'model' | 'tg'>): Promise<void> {
+export async function startSetup(s: Pick<AppState, 'model' | 'tg'> & Partial<Pick<AppState, 'target' | 'src'>>): Promise<void> {
   const n = setupNeeds(s);
-  const status = await modelDownload.start(n.model, n.translation);
+  const status = await modelDownload.start(n.model, n.translation, n.plan);
   if (status) useSetup.setState({ status });
 }

@@ -7,6 +7,7 @@ import { create } from 'zustand';
 import { isTauri, speech, type ModelInfo, type RejectReason, type SpeechConfig, type SpeechStats, type SpeechStatus, type Transcript, type VoiceActivity } from '../backend';
 import type { GlossEntry } from './data';
 import type { AppState, FeedEntry } from './store';
+import { chosenSources } from './langs';
 
 export interface SpeechState {
   native: boolean;
@@ -27,11 +28,13 @@ export const useSpeech = create<SpeechState>()(() => ({
 // ---------- pure helpers (unit-tested) ----------
 
 /** Rust speech settings from the UI settings (threshold %, languages, glossary, model). */
-export function speechConfigFrom(s: Pick<AppState, 'model' | 'vad' | 'src' | 'gloss'> & Partial<Pick<AppState, 'accel' | 'voiceFocus'>>): SpeechConfig {
-  const languages = (['ru', 'en'] as const).filter((l) => s.src[l]);
+export function speechConfigFrom(s: Pick<AppState, 'model' | 'vad' | 'src' | 'gloss'> & Partial<Pick<AppState, 'accel' | 'voiceFocus' | 'target'>>): SpeechConfig {
+  // Whisper may hear the players' languages and the user's own (shown as is).
+  const languages = chosenSources(s.src);
+  if (languages.length && s.target && !languages.includes(s.target)) languages.push(s.target);
   return {
     model: s.model,
-    languages: languages.length ? [...languages] : ['ru', 'en'],
+    languages: languages.length ? languages : ['ru', 'en'],
     vadThreshold: Math.min(0.9, Math.max(0.2, s.vad / 100)),
     glossary: s.gloss.map((g: GlossEntry) => g[0]),
     accel: s.accel ?? 'auto',

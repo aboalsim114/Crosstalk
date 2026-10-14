@@ -144,7 +144,7 @@ export function drawRecapCard(ctx: CanvasRenderingContext2D, f: RecapFacts, opt:
   ctx.fillRect(0, CARD_H - 70, CARD_W, 70);
   ctx.font = `400 19px ${SANS}`;
   ctx.fillStyle = DIM;
-  ctx.fillText('Voix et chat de CS2 traduits en français, 100 % en local · gratuit · open source', 60, CARD_H - 28);
+  ctx.fillText('Voix et chat de CS2 traduits dans votre langue, 100 % en local · gratuit · open source', 60, CARD_H - 28);
   ctx.font = `500 18px ${MONO}`;
   ctx.fillStyle = ORANGE;
   ctx.textAlign = 'right';

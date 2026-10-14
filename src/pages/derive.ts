@@ -1,6 +1,6 @@
 // Pure view-model helpers shared by the pages (and covered by unit tests).
 
-import { channelName, langName, quote, t } from '../i18n';
+import { channelName, langName, quote, t, targetName, useTargetLang } from '../i18n';
 import type { FeedEntry, FeedStatus } from '../state/store';
 import { fmtSeconds } from '../components/atoms';
 
@@ -59,6 +59,9 @@ export interface FeedRow {
   lat: string;
 }
 
+/** Code of the translations' language ("FR", "RU"…). */
+const targetCode = () => useTargetLang.getState().target.toUpperCase();
+
 export function feedRow(f: FeedEntry): FeedRow {
   if (f.status === 'transcrit') {
     const voice = f.kind === 'voice';
@@ -67,7 +70,7 @@ export function feedRow(f: FeedEntry): FeedRow {
       tag: kindTag(f),
       color: voice ? '#ffa24a' : '#7fd4ff',
       time: f.time,
-      langs: (f.src === 'xx' ? '??' : f.src.toUpperCase()) + (f.shown ? ` → FR · ${t('feed.provisional')}` : ` · ${voice ? t('feed.transcription') : t('feed.original')}`),
+      langs: (f.src === 'xx' ? '??' : f.src.toUpperCase()) + (f.shown ? ` → ${targetCode()} · ${t('feed.provisional')}` : ` · ${voice ? t('feed.transcription') : t('feed.original')}`),
       lead: f.sender ? f.sender + ' — ' : '',
       // Provisional French (live line) above its original, else the original alone.
       orig: f.shown ? f.orig : '',
@@ -89,7 +92,7 @@ export function feedRow(f: FeedEntry): FeedRow {
     tag: voice ? t('feed.voice') : `${t('feed.chat')} · ${f.ch}`,
     color: voice ? '#ffa24a' : '#7fd4ff',
     time: f.time,
-    langs: f.src.toUpperCase() + (fr ? '' : ' → FR'),
+    langs: f.src.toUpperCase() + (fr ? '' : ` → ${targetCode()}`),
     lead: f.sender ? f.sender + ' — ' : '',
     orig: fr || f.err ? '' : f.orig,
     shown: f.shown || f.orig,
@@ -146,7 +149,7 @@ export function subtitle(f0: FeedEntry | undefined, live: boolean): Subtitle {
   const fr = f0.status === 'original';
   const prov = f0.status === 'provisoire';
   return {
-    tag: `${kindTag(f0)} · ${langName(f0.src)}${fr ? '' : ` → ${t('target.name')}`}`,
+    tag: `${kindTag(f0)} · ${langName(f0.src)}${fr ? '' : ` → ${targetName()}`}`,
     sender: f0.sender || '',
     color: f0.kind === 'voice' ? '#ffa24a' : '#7fd4ff',
     orig: fr ? '' : f0.orig,

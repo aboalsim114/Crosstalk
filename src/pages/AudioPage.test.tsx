@@ -120,7 +120,7 @@ describe('local translation card', () => {
     expect(screen.getByTestId('translation-metrics')).toHaveTextContent('Traduction p50 420 ms');
     expect(screen.getByTestId('translation-card')).toHaveTextContent('Aucune clé API');
     expect(screen.queryByText(/DeepL|Azure|cloud/i)).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole('switch', { name: 'Traduire les voix en français' }));
+    fireEvent.click(screen.getByRole('switch', { name: 'Traduire les voix et le chat' }));
     expect(useApp.getState().tg.translate).toBe(false);
   });
 });

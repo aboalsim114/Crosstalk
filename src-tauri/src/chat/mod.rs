@@ -333,8 +333,13 @@ impl ChatEvents for TauriChatEvents {
         if let Some(s) = self.0.try_state::<Arc<crate::speaker::SpeakerService>>() {
             s.chat_sender(&m.sender);
         }
-        // Only languages with a model are sent; French is shown as is (F-32).
-        if let Some(lang @ ("ru" | "en")) = m.lang.as_deref() {
+        // Languages Crosstalk can translate; the service shows the user's own
+        // language and the languages not chosen as is (F-32).
+        if let Some(lang) = m
+            .lang
+            .as_deref()
+            .filter(|l| crate::translation::models::is_language(l))
+        {
             if let Some(t) = self
                 .0
                 .try_state::<Arc<crate::translation::TranslationService>>()

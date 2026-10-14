@@ -28,7 +28,7 @@ describe('match recap: counts', () => {
     expect(f.hero).toBe(87);
     expect(f.rows.map((r) => `${r.label}=${r.value}`)).toEqual(['Russe → français=62', 'Anglais → français=25', 'Messages du chat=14', 'Latence vocale médiane=1,8 s', 'Mots traduits=412']);
     expect(recapFacts({ ...newMatch(null, 0), translated: 1 }, 1000).title).toBe('Session CS2');
-    expect(recapFacts({ ...newMatch(null, 0), translated: 1 }, 1000).heroLabel).toBe('annonce traduite en français');
+    expect(recapFacts({ ...newMatch(null, 0), translated: 1 }, 1000).heroLabel).toBe('annonce traduite');
   });
 
   it('helpers', () => {

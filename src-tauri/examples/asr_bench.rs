@@ -79,10 +79,10 @@ fn fail(msg: &str) -> ! {
 
 #[derive(Default)]
 struct Totals {
-    word_err: [usize; 2],
-    words: [usize; 2],
-    char_err: [usize; 2],
-    chars: [usize; 2],
+    word_err: [usize; Lang::ALL.len()],
+    words: [usize; Lang::ALL.len()],
+    char_err: [usize; Lang::ALL.len()],
+    chars: [usize; Lang::ALL.len()],
     audio_s: f64,
     asr_ms: Vec<u32>,
     latency_ms: Vec<u32>,
@@ -104,11 +104,9 @@ fn pct(v: &[u32], q: f32) -> u32 {
     s[((q * s.len() as f32) as usize).min(s.len() - 1)]
 }
 
+/// Index in `Lang::ALL` (Russian 0, English 1: the report's two columns).
 fn lang_idx(l: Lang) -> usize {
-    match l {
-        Lang::Ru => 0,
-        Lang::En => 1,
-    }
+    Lang::ALL.iter().position(|&x| x == l).unwrap_or(0)
 }
 
 /// Post-roll (13 frames) + worst VAD hop (192 ms) before Whisper starts.

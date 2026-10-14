@@ -8,9 +8,9 @@ const st = (over: Partial<DictationState>): DictationState => ({ state: 'listeni
 
 describe('spoken reply', () => {
   it('shows each step honestly', () => {
-    expect(dictationView(st({})).title).toBe('Parlez en français…');
+    expect(dictationView(st({})).title).toBe('Parlez dans votre langue…');
     expect(dictationView(st({})).detail).toMatch(/^1,4 s/);
-    expect(dictationView(st({ state: 'transcribing' })).detail).toBe('Sur ce PC, vers le russe');
+    expect(dictationView(st({ state: 'transcribing' })).detail).toBe('Sur ce PC, vers Русский');
     const done = dictationView(st({ state: 'done', text: 'deux en B, je drop', translated: 'Двое на Б', via: 'model', copied: true }));
     expect(done.title).toBe('Двое на Б');
     expect(done.detail).toBe(`Traduit sur ce PC · ${PASTE_HINT}`);

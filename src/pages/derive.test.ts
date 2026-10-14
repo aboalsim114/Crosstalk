@@ -38,8 +38,8 @@ describe('feedRow', () => {
   it('formats a final voice line', () => {
     expect(feedRow(voice())).toMatchObject({ tag: 'VOIX', langs: 'RU → FR', status: 'FINAL', lat: '1,50 s', italic: false, orig: 'Бомба на A' });
   });
-  it('marks French chat as untranslated', () => {
-    expect(feedRow(chat())).toMatchObject({ tag: 'CHAT · CT', langs: 'FR', lead: 'Lucas — ', shown: 'je prends B', orig: '', note: 'Déjà en français — non traduit' });
+  it("marks a chat line already in the user's language as untranslated", () => {
+    expect(feedRow(chat())).toMatchObject({ tag: 'CHAT · CT', langs: 'FR', lead: 'Lucas — ', shown: 'je prends B', orig: '', note: 'Déjà dans votre langue — non traduit' });
   });
   it('shows the original when the engine fails', () => {
     expect(feedRow(voice({ status: 'erreur', err: true, shown: null }))).toMatchObject({ shown: 'Бомба на A', orig: '', note: 'Moteur indisponible — original affiché' });

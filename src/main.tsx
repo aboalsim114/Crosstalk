@@ -5,6 +5,7 @@ import { diagnostics, isTauri } from './backend';
 import { loadSettings, startSettingsSync } from './state/persist';
 import { useApp } from './state/store';
 import './styles/global.css';
+import { prefillLanguages } from './state/langs';
 
 // Interface errors go to the diagnostic journal (logs.rs) of the desktop app.
 if (isTauri) {
@@ -15,6 +16,9 @@ if (isTauri) {
 // The stored settings are loaded before the first render, so the engines start
 // with the user's model, sources and glossary rather than the defaults.
 loadSettings().then((warnings) => {
+  // First launch: languages prefilled from Windows' (the user confirms them).
+  const prefill = prefillLanguages(useApp.getState(), navigator.language);
+  if (prefill) useApp.setState(prefill);
   createRoot(document.getElementById('root')!).render(
     <StrictMode>
       <App />

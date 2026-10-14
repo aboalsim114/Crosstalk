@@ -92,9 +92,19 @@ export function useT() {
   return (key: MessageKey, params?: Params) => translate(locale, key, params);
 }
 
-/** Name of a spoken language (`ru`, `en`, `fr`, `xx` = unknown), in capitals. */
+const SPOKEN = ['fr', 'en', 'ru', 'de', 'es', 'uk', 'pl', 'tr'] as const;
+
+/** Name of a spoken language (`ru`, `de`… , `xx` = unknown), in capitals. */
 export function langName(code: string): string {
-  return code === 'ru' || code === 'en' || code === 'fr' ? t(`lang.${code}`) : t('lang.xx');
+  return (SPOKEN as readonly string[]).includes(code) ? t(`lang.${code as (typeof SPOKEN)[number]}`) : t('lang.xx');
+}
+
+/** The language translations are written in (Langues › Mes langues), for labels. */
+export const useTargetLang = create<{ target: string }>()(() => ({ target: 'fr' }));
+
+/** "FRANÇAIS", "РУССКИЙ"…: the language of the translations, in capitals. */
+export function targetName(): string {
+  return langName(useTargetLang.getState().target);
 }
 
 /** Name of a CS2 chat channel. */

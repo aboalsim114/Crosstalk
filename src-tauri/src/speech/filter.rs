@@ -163,10 +163,11 @@ pub fn judge(r: &Recognition, audio_ms: u32) -> Result<String, RejectReason> {
     }
 
     let cyrillic = letters.iter().filter(|c| is_cyrillic(**c)).count();
-    let wrong_script = match r.lang {
-        // CS2 terms in Latin letters are fine inside Russian ("плент на B").
-        Lang::Ru => cyrillic == 0,
-        Lang::En => cyrillic * 2 > letters.len(),
+    // CS2 terms in Latin letters are fine inside Russian ("плент на B").
+    let wrong_script = if r.lang.cyrillic() {
+        cyrillic == 0
+    } else {
+        cyrillic * 2 > letters.len()
     };
     if wrong_script {
         return Err(RejectReason::WrongScript);
@@ -359,6 +360,18 @@ mod tests {
         );
         assert_eq!(
             judge(&rec("ротейт на бэ", Lang::En), 1500),
+            Err(RejectReason::WrongScript)
+        );
+        // Ukrainian is Cyrillic, German / Spanish / Polish / Turkish are Latin.
+        assert!(judge(&rec("Двоє на Б, у них снайперка", Lang::Uk), 1800).is_ok());
+        assert!(judge(&rec("zwei auf B, sie haben eine AWP", Lang::De), 1800).is_ok());
+        assert!(judge(&rec("czekaj, idziemy na B", Lang::Pl), 1800).is_ok());
+        assert_eq!(
+            judge(&rec("двое на бэ", Lang::Es), 1500),
+            Err(RejectReason::WrongScript)
+        );
+        assert_eq!(
+            judge(&rec("push B now", Lang::Uk), 1500),
             Err(RejectReason::WrongScript)
         );
     }

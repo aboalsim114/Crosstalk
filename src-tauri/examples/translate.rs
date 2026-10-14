@@ -5,6 +5,7 @@
 //!   crosstalk-translate --model-dir C:\models\opus-mt-ru-fr --max-new 24 "…"
 //!
 //! Models: `scripts/download-models.ps1 -Translation` (or CROSSTALK_MODELS_DIR).
+//! `--to de` picks the direct model into another language (French by default).
 //! `--exact` uses the full f32 output layer (reference), default is the app's fast mode.
 //! `--greedy` decodes greedily (live lines) instead of the beam search of final lines.
 //! `--max-new` forces the number of decoding steps (timing with random weights).
@@ -29,7 +30,7 @@ fn main() {
         .rev()
         .find(|(i, a)| {
             // Only these flags take a value; --exact and --greedy do not.
-            let after_value_flag = *i > 0 && matches!(args[i - 1].as_str(), "--lang" | "--model-dir" | "--repeat" | "--max-new");
+            let after_value_flag = *i > 0 && matches!(args[i - 1].as_str(), "--lang" | "--to" | "--model-dir" | "--repeat" | "--max-new");
             !a.starts_with("--") && !after_value_flag
         })
         .map(|(_, a)| a.clone())
@@ -38,9 +39,10 @@ fn main() {
             std::process::exit(2)
         });
     let lang = opt("--lang").unwrap_or_else(|| "ru".into());
+    let to = opt("--to").unwrap_or_else(|| "fr".into());
     let dir = opt("--model-dir").map(PathBuf::from).unwrap_or_else(|| {
-        let pair = models::pair(&lang).unwrap_or_else(|| {
-            eprintln!("langue non gérée : {lang} (ru ou en)");
+        let pair = models::pair(&lang, &to).unwrap_or_else(|| {
+            eprintln!("pas de modèle direct {lang} → {to}");
             std::process::exit(2)
         });
         models::pair_dir(&crosstalk_lib::speech::models::models_dir(), pair)

@@ -36,9 +36,14 @@ const status = (over: Partial<SpeechStatus> = {}): SpeechStatus => ({
 
 describe('speech settings', () => {
   it('maps the UI settings to the Rust config', () => {
-    const c = speechConfigFrom({ model: 'small', vad: 55, src: { ru: true, en: false, de: true, es: false, pt: false, pl: false }, gloss: GLOSSARY.slice(0, 2) });
-    expect(c).toEqual({ model: 'small', languages: ['ru'], vadThreshold: 0.55, glossary: ['rush B', 'mid'], accel: 'auto', voiceFocus: false });
-    expect(speechConfigFrom({ model: 'small', vad: 55, src: { ru: true, en: false, de: false, es: false, pt: false, pl: false }, gloss: [], accel: 'cpu' }).accel).toBe('cpu');
+    const c = speechConfigFrom({ model: 'small', vad: 55, src: { ru: true, en: false, de: true, es: false, fr: false, uk: false, pl: false, tr: false }, gloss: GLOSSARY.slice(0, 2) });
+    expect(c).toEqual({ model: 'small', languages: ['ru', 'de'], vadThreshold: 0.55, glossary: ['rush B', 'mid'], accel: 'auto', voiceFocus: false });
+    expect(speechConfigFrom({ model: 'small', vad: 55, src: { ru: true, en: false, de: false, es: false, fr: false, uk: false, pl: false, tr: false }, gloss: [], accel: 'cpu' }).accel).toBe('cpu');
+  });
+
+  it("listens to the players' languages and to the user's own", () => {
+    const c = speechConfigFrom({ ...useApp.getState(), target: 'ru', src: { ...useApp.getState().src, ru: false, en: true, de: true } });
+    expect(c.languages).toEqual(['en', 'de', 'ru']);
   });
 
   it('sends "Focus voix", off by default', () => {
@@ -51,7 +56,8 @@ describe('speech settings', () => {
   });
 
   it('never sends an empty language list or an out-of-range threshold', () => {
-    const c = speechConfigFrom({ model: 'base', vad: 5, src: { ru: false, en: false, de: true, es: false, pt: false, pl: false }, gloss: [] });
+    const none = { ru: false, en: false, de: false, es: false, fr: false, uk: false, pl: false, tr: false };
+    const c = speechConfigFrom({ model: 'base', vad: 5, src: none, gloss: [] });
     expect(c.languages).toEqual(['ru', 'en']);
     expect(c.vadThreshold).toBe(0.2);
   });

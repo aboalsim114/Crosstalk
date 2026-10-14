@@ -39,7 +39,7 @@ describe('local history', () => {
 
   it('shows stored lines honestly', () => {
     const base: HistoryEntry = { ts: Date.UTC(2026, 9, 13, 10), kind: 'chat', channel: 'CT', sender: 'Bob', lang: 'en', original: 'gg', status: 'original' };
-    expect(historyRow(base)).toMatchObject({ original: 'Bob — gg', shown: 'Déjà en français', muted: true });
+    expect(historyRow(base)).toMatchObject({ original: 'Bob — gg', shown: 'Déjà dans votre langue', muted: true });
     expect(historyRow({ ...base, kind: 'voice', status: 'final', translated: 'bien joué' })).toMatchObject({ tag: 'VOIX · EN', shown: 'bien joué', muted: false });
     expect(historyRow({ ...base, status: 'transcrit' }).shown).toBe('Non traduit');
   });

@@ -27,15 +27,46 @@ fn complete(spec: &FileSpec) -> bool {
     std::fs::metadata(&spec.path).is_ok_and(|m| m.len() == spec.bytes)
 }
 
+/// The user's languages, for the translation models to fetch.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TranslationPlan {
+    /// The user's language.
+    pub target: String,
+    /// The players' languages.
+    pub sources: Vec<String>,
+}
+
+impl Default for TranslationPlan {
+    fn default() -> Self {
+        Self {
+            target: opus::DEFAULT_TARGET.into(),
+            sources: opus::DEFAULT_SOURCES
+                .iter()
+                .map(|s| s.to_string())
+                .collect(),
+        }
+    }
+}
+
 /// Files the app needs and does not have yet: VAD, the chosen Whisper model
-/// and, when translation is on, both Opus-MT models.
-pub fn missing(dir: &Path, whisper_model: &str, translation: bool) -> Vec<FileSpec> {
+/// and, when translation is on, the Opus-MT models of the chosen languages
+/// (into the user's language, and back for "Répondre").
+pub fn missing(
+    dir: &Path,
+    whisper_model: &str,
+    translation: Option<&TranslationPlan>,
+) -> Vec<FileSpec> {
     missing_all(dir, &[whisper_model], translation)
 }
 
 /// Same, for several Whisper models (the installer fetches every model the
 /// app can run on the CPU, so that changing model never downloads anything).
-pub fn missing_all(dir: &Path, whisper_models: &[&str], translation: bool) -> Vec<FileSpec> {
+pub fn missing_all(
+    dir: &Path,
+    whisper_models: &[&str],
+    translation: Option<&TranslationPlan>,
+) -> Vec<FileSpec> {
     let mut all = vec![FileSpec {
         label: "Détection de parole (Silero)".into(),
         url: whisper::VAD_URL.into(),
@@ -52,22 +83,15 @@ pub fn missing_all(dir: &Path, whisper_models: &[&str], translation: bool) -> Ve
             sha1: Some(m.sha1),
         });
     }
-    if translation {
-        for p in opus::CATALOG {
+    if let Some(plan) = translation {
+        for p in opus::needed_with_replies(&plan.target, &plan.sources) {
             for &(file, bytes) in &p.files {
                 all.push(FileSpec {
-                    label: format!("Traduction {} → français", p.source.to_uppercase()),
-                    url: format!("https://huggingface.co/{}/resolve/main/{file}", p.repo),
-                    path: opus::pair_dir(dir, p).join(file),
-                    bytes,
-                    sha1: None,
-                });
-            }
-        }
-        for p in opus::REPLY {
-            for &(file, bytes) in &p.files {
-                all.push(FileSpec {
-                    label: format!("Réponse français → {}", p.target.to_uppercase()),
+                    label: format!(
+                        "Traduction {} → {}",
+                        p.source.to_uppercase(),
+                        p.target.to_uppercase()
+                    ),
                     url: format!("https://huggingface.co/{}/resolve/main/{file}", p.repo),
                     path: opus::pair_dir(dir, p).join(file),
                     bytes,
@@ -187,7 +211,12 @@ impl Downloader {
     }
 
     /// Current state, with what is still missing for this configuration.
-    pub fn status(&self, dir: &Path, whisper_model: &str, translation: bool) -> DownloadStatus {
+    pub fn status(
+        &self,
+        dir: &Path,
+        whisper_model: &str,
+        translation: Option<&TranslationPlan>,
+    ) -> DownloadStatus {
         let todo = missing(dir, whisper_model, translation);
         let mut st = self.status.lock().unwrap().clone();
         if !self.running.load(Ordering::SeqCst) {
@@ -199,7 +228,12 @@ impl Downloader {
 
     /// Starts downloading what is missing, on a background thread. Returns
     /// false when a download already runs or nothing is missing.
-    pub fn start(self: &Arc<Self>, dir: PathBuf, whisper_model: &str, translation: bool) -> bool {
+    pub fn start(
+        self: &Arc<Self>,
+        dir: PathBuf,
+        whisper_model: &str,
+        translation: Option<&TranslationPlan>,
+    ) -> bool {
         self.start_all(dir, &[whisper_model], translation)
     }
 
@@ -208,7 +242,7 @@ impl Downloader {
         self: &Arc<Self>,
         dir: PathBuf,
         whisper_models: &[&str],
-        translation: bool,
+        translation: Option<&TranslationPlan>,
     ) -> bool {
         let files = missing_all(&dir, whisper_models, translation);
         if files.is_empty() || self.running.swap(true, Ordering::SeqCst) {
@@ -583,12 +617,12 @@ mod tests {
     #[test]
     fn the_starter_pack_is_vad_whisper_and_the_translation_models() {
         let d = dir("pack");
-        let all = missing(&d, "base", true);
+        let all = missing(&d, "base", Some(&TranslationPlan::default()));
         // VAD + Whisper, ru/en → fr, then fr → en/ru (replies).
         assert_eq!(all.len(), 2 + 10 + 10);
         assert_eq!(
             all.iter()
-                .filter(|f| f.label.starts_with("Réponse"))
+                .filter(|f| f.label.starts_with("Traduction FR"))
                 .count(),
             10
         );
@@ -597,22 +631,46 @@ mod tests {
         assert!(all
             .iter()
             .all(|f| f.url.starts_with("https://huggingface.co/")));
-        assert_eq!(missing(&d, "base", false).len(), 2);
+        assert_eq!(missing(&d, "base", None).len(), 2);
         std::fs::write(
             d.join(whisper::VAD_FILE),
             vec![0u8; whisper::VAD_BYTES as usize],
         )
         .unwrap();
-        assert_eq!(missing(&d, "base", false).len(), 1);
+        assert_eq!(missing(&d, "base", None).len(), 1);
     }
 
     #[test]
     fn the_installer_pack_holds_every_cpu_model() {
         let d = dir("all");
-        let all = missing_all(&d, &["base", "small"], true);
+        let all = missing_all(&d, &["base", "small"], Some(&TranslationPlan::default()));
         assert_eq!(all.len(), 3 + 20);
         let mb: u64 = all.iter().map(|f| f.bytes).sum::<u64>() / 1_000_000;
         assert!((1800..1950).contains(&mb), "{mb} Mo");
         assert_eq!(all.iter().filter(|f| f.sha1.is_some()).count(), 2);
+    }
+    #[test]
+    fn the_translation_pack_follows_the_chosen_languages() {
+        let d = dir("plan-ru");
+        let plan = TranslationPlan {
+            target: "ru".into(),
+            sources: vec!["en".into(), "de".into()],
+        };
+        let mut dirs: Vec<String> = missing(&d, "base", Some(&plan))
+            .iter()
+            .filter(|f| f.label.starts_with("Traduction"))
+            .filter_map(|f| f.path.parent()?.file_name()?.to_str().map(String::from))
+            .collect();
+        dirs.dedup();
+        // en → ru, de → en (→ ru), and back for "Répondre": ru → en (→ de) and en → de.
+        assert_eq!(
+            dirs,
+            [
+                "opus-mt-en-ru",
+                "opus-mt-de-en",
+                "opus-mt-ru-en",
+                "opus-mt-en-de"
+            ]
+        );
     }
 }

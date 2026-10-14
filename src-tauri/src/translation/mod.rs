@@ -50,10 +50,17 @@ pub fn translation_status(t: State<'_, Arc<TranslationService>>) -> TranslationS
 
 #[tauri::command]
 pub fn translation_configure(
+    app: AppHandle,
     t: State<'_, Arc<TranslationService>>,
     config: TranslationConfig,
 ) -> TranslationStatus {
-    t.configure(config)
+    use tauri::Manager;
+    let st = t.configure(config);
+    // "Répondre" writes from the user's language into the players'.
+    if let Some(r) = app.try_state::<Arc<crate::reply::ReplyService>>() {
+        r.set_languages(&st.config.target, &st.config.sources);
+    }
+    st
 }
 
 #[tauri::command]
@@ -61,9 +68,11 @@ pub fn translation_rescan(t: State<'_, Arc<TranslationService>>) -> TranslationS
     t.rescan()
 }
 
+/// Routes of the current languages (models, size, installed).
 #[tauri::command]
-pub fn translation_models() -> Vec<models::PairInfo> {
-    models::list(&crate::speech::models::models_dir())
+pub fn translation_models(t: State<'_, Arc<TranslationService>>) -> Vec<models::PairInfo> {
+    let c = t.status().config;
+    models::list(&crate::speech::models::models_dir(), &c.target, &c.sources)
 }
 
 /// Manual test from the Audio page: blocks a worker thread, not the UI.

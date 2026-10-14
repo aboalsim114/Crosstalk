@@ -472,6 +472,7 @@ mod tests {
         let probs = |l: Lang| match l {
             Lang::Ru => 0.3,
             Lang::En => 0.1,
+            _ => 0.0,
         };
         let (l, p) = pick_language(&[Lang::Ru, Lang::En], probs);
         assert_eq!(l, Lang::Ru);
