@@ -27,6 +27,7 @@ Dans un terminal ouvert dans `dist-local\<commit>\` :
 | 1.2 | `.\crosstalk-asr-bench.exe --noise-only 120 --model base` | « **0 fausses transcriptions affichées** ». Sinon, notez les phrases inventées. |
 | 1.3 | Corpus de référence : `python fetch-asr-corpus.py --out corpus --per-lang 15` (inclus dans le paquet ; Python 3 requis), puis `.\crosstalk-asr-bench.exe --manifest corpus\manifest.tsv --model base,small --markdown bench.md` | Un tableau avec WER/CER russe et anglais, latence et CPU, propre (`clean`) et sous bruit de combat synthétique (`combat`). Collez `bench.md` dans la PR. |
 | 1.4 | **Vos enregistrements CS2** (voir ci-dessous) : `.\crosstalk-asr-bench.exe --manifest mes-wav.tsv --scenario clean --model base --verbose` | Pour chaque fichier : les phrases transcrites et les segments rejetés (`Transient` = tir ou explosion, `Hallucination`, …). Vérifiez à l'oreille si le texte correspond à ce qui est dit. |
+| 1.5 | **Comparaison des traitements audio** (A actuel / B Focus voix / C débruiteur) : `.\crosstalk-asr-bench.exe --manifest corpus\manifest.tsv --compare-fronts plain,focus,focus+band,rnnoise,focus+rnnoise --model base,small --repeat 2 --markdown fronts.md` | Un tableau par modèle, avec pour chaque traitement : WER/CER, voix manquées, faux sous-titres pendant le combat seul, rejets, temps Whisper, coût du traitement. Collez `fronts.md` dans `docs/reports/CS2_AUDIO_PIPELINE_BENCHMARK.md`. |
 
 **Format de `mes-wav.tsv`** (un fichier par ligne, séparateur tabulation ; la référence est facultative) :
 

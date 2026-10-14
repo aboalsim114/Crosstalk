@@ -12,11 +12,9 @@ Les sons exactement au centre, comme ses propres tirs, ne peuvent pas être sép
 
 Implémentation : `src-tauri/src/speech/focus.rs`. Le traitement se fait avant la conversion en 16 kHz, avec une FFT de 1024 points et un recouvrement de 50 %. Il ajoute 10,7 ms de latence. Désactivé par défaut (Audio & IA › Détection de parole › **Focus voix**).
 
-## Mesures (Linux, banc `focus_bench`)
+## Mesures (Linux, premier banc)
 
-```
-cargo run --release --example focus_bench -- --voice corpus/jfk.wav --vad corpus/ggml-silero-v5.1.2.bin [--peak 1.0]
-```
+Ces premières mesures ont été faites avec un banc provisoire, `focus_bench`. Il est désormais remplacé par `crosstalk-asr-bench --compare-fronts`, qui compare A, B et C sur les mêmes scènes, avec Whisper quand un modèle est installé. Voir [le rapport de benchmark](../reports/CS2_AUDIO_PIPELINE_BENCHMARK.md).
 
 Conditions de mesure :
 - **voix réelle** : `jfk.wav`, 11 s, répétée 3 fois et placée au centre ;
