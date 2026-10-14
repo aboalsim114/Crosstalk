@@ -146,8 +146,10 @@ let testTimer: ReturnType<typeof setInterval> | undefined;
 /**
  * Opens the selected source for 10 s (unless a capture already runs) and
  * records the highest real peak. `onLevel` in the bridge feeds `maxPeakDb`.
+ * The capture it opened is closed at the end, unless a session started
+ * meanwhile and now uses it (`sessionCaptures`).
  */
-export async function runCaptureTest(source: CaptureSource): Promise<void> {
+export async function runCaptureTest(source: CaptureSource, sessionCaptures: () => boolean = () => false): Promise<void> {
   const st = useAudio.getState();
   if (st.test.running) return;
   const ownCapture = !isCapturing(st.status);
@@ -170,7 +172,7 @@ export async function runCaptureTest(source: CaptureSource): Promise<void> {
     }
     clearInterval(testTimer);
     useAudio.setState({ test: { ...test, progress: 100, running: false, done: true } });
-    if (ownCapture) await audioCapture.stop();
+    if (ownCapture && !sessionCaptures()) await audioCapture.stop();
   }, 250);
 }
 
