@@ -43,6 +43,9 @@ const MB: f64 = 1e6;
 const PREPARATION_END: f64 = 12.0;
 const EXTRACTION_END: f64 = 62.0;
 const CONFIGURATION_END: f64 = 88.0;
+/// Copy progress is reported at most this often (each report is an event
+/// sent to the interface; the payload is read in 256 KB chunks).
+const REPORT_EVERY: std::time::Duration = std::time::Duration::from_millis(100);
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -348,6 +351,14 @@ impl Installer {
         std::fs::create_dir_all(staging)
             .map_err(|e| fail(format!("Impossible d’écrire dans {} : {e}", dir.display())))?;
         let mut done = 0u64;
+        let mut last_report: Option<std::time::Instant> = None;
+        let copy = |bytes: u64| {
+            Progress::at(
+                1,
+                pct(bytes),
+                format!("Copie de l’application · {} / {} Mo", mb(bytes), mb(app)),
+            )
+        };
         for f in self.files {
             self.check()?;
             let mut src = flate2::read::DeflateDecoder::new(f.data);
@@ -367,15 +378,10 @@ impl Installer {
                     .map_err(|e| fail(format!("Écriture de {} impossible : {e}", f.name)))?;
                 written += n as u64;
                 self.check()?;
-                report(Progress::at(
-                    1,
-                    pct(done + written),
-                    format!(
-                        "Copie de l’application · {} / {} Mo",
-                        mb(done + written),
-                        mb(app)
-                    ),
-                ));
+                if last_report.map_or(true, |t| t.elapsed() >= REPORT_EVERY) {
+                    last_report = Some(std::time::Instant::now());
+                    report(copy(done + written));
+                }
             }
             if written != f.size {
                 return Err(fail(format!(
@@ -384,6 +390,7 @@ impl Installer {
                 )));
             }
             done += written;
+            report(copy(done));
         }
         Ok(())
     }
@@ -624,6 +631,50 @@ mod tests {
             assert!(p.pct >= lo && p.pct <= hi, "{p:?}");
         }
         assert!(seen.last().unwrap().done);
+        std::fs::remove_dir_all(&root).unwrap();
+    }
+
+    #[test]
+    fn copy_progress_is_throttled_but_reaches_the_full_size() {
+        let root = tmp("throttle");
+        // 24 MB: 96 chunks of 256 KB, read in far less than 100 ms each.
+        let big = vec![0u8; 24 << 20];
+        let files: &'static [Entry] = Box::leak(Box::new([Entry {
+            name: "crosstalk.exe",
+            size: big.len() as u64,
+            data: pack(&big),
+        }]));
+        let inst = Installer::new(
+            files,
+            root.join("models"),
+            "0.2.0",
+            Arc::new(Zeros {
+                fail: false,
+                calls: AtomicUsize::new(0),
+            }),
+            Arc::new(Fake::default()),
+        );
+        let seen = Mutex::new(Vec::new());
+        let r = inst.run(
+            &Options {
+                dir: root.join("Crosstalk"),
+                desktop: false,
+                models: false,
+            },
+            &|p| seen.lock().unwrap().push(p),
+        );
+        assert_eq!(r, Ok(()));
+        let copies: Vec<Progress> = seen
+            .into_inner()
+            .unwrap()
+            .into_iter()
+            .filter(|p| p.detail.starts_with("Copie"))
+            .collect();
+        assert!(copies.len() < 20, "{} reports for 96 chunks", copies.len());
+        assert_eq!(
+            copies.last().unwrap().detail,
+            "Copie de l’application · 25 / 25 Mo"
+        );
         std::fs::remove_dir_all(&root).unwrap();
     }
 
