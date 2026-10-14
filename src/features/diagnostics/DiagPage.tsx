@@ -4,12 +4,19 @@ import { config } from '../../app/config';
 import { fnt } from '../../shared/ui/atoms';
 import { useAudio, type AudioState } from '../audio/audio';
 import { engineSummary, useSpeech } from '../speech/speech';
-import { percentile, translationSummary, useTranslation } from '../translation/translation';
+import { percentile, translationHealth, translationSummary, useTranslation, type TranslationHealth } from '../translation/translation';
 import { useApp } from '../../app/state/store';
 import { useChat } from '../chat/chat';
 import type { ChatStatus } from '../../shared/ipc';
 
 type DiagState = 'OK' | 'AVERT.' | 'ÉCHEC';
+
+/** Diagnostic verdict of the local translation, from its state (never from a display colour). */
+export function translationDiag(health: TranslationHealth): DiagState {
+  if (health === 'ready') return 'OK';
+  if (health === 'error') return 'ÉCHEC';
+  return 'AVERT.';
+}
 
 /** Real process-loopback row from the Rust capture and the Windows build. */
 export function captureDiag(a: Pick<AudioState, 'platform' | 'status'>): [string, DiagState] {
@@ -90,7 +97,7 @@ export function DiagPage() {
   const trSum = translationSummary(trStatus);
   const p50 = percentile(trTimes, 0.5);
   const trRow: [string, string, DiagState] = sp.native
-    ? ['Traduction locale · Opus-MT', `${trSum.value}${p50 != null ? ` · p50 ${p50} ms` : ''}`, trSum.color === '#7fe0a8' ? 'OK' : trSum.color === '#ff8a7a' ? 'ÉCHEC' : 'AVERT.']
+    ? ['Traduction locale · Opus-MT', `${trSum.value}${p50 != null ? ` · p50 ${p50} ms` : ''}`, translationDiag(translationHealth(trStatus))]
     : ['Traduction locale · Opus-MT', down ? 'Délai dépassé (5 s) — repli sur l’original' : 'Réponse en 210 ms', down ? 'ÉCHEC' : 'OK'];
   const chatStatus = useChat((x) => x.status);
   const chatRows: [string, string, DiagState][] = sp.native

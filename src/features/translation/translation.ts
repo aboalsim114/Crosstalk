@@ -57,16 +57,30 @@ export function pairSummary(p: PairStatus): PairSummary {
   }
 }
 
+/** State of the local translation as a whole: what the colours and the diagnostics derive from. */
+export type TranslationHealth = 'off' | 'loading' | 'error' | 'missing' | 'ready';
+
+export function translationHealth(st: TranslationStatus | null): TranslationHealth {
+  if (!st || !st.config.enabled) return 'off';
+  if (st.pairs.some((p) => p.state === 'loading')) return 'loading';
+  if (st.pairs.some((p) => p.state === 'error')) return 'error';
+  return st.pairs.some((p) => p.state === 'ready') ? 'ready' : 'missing';
+}
+
+const HEALTH_COLOR: Record<TranslationHealth, string> = { off: '#8f8a83', loading: '#ffa24a', error: '#ff8a7a', missing: '#ffa24a', ready: '#7fe0a8' };
+
 /** One line for the pipeline, the status cards and the diagnostics. */
 export function translationSummary(st: TranslationStatus | null): PairSummary {
   const label = t('tr.label');
-  if (!st) return { label, value: '…', color: '#8f8a83' };
-  if (!st.config.enabled) return { label, value: t('tr.disabled'), color: '#8f8a83' };
+  const health = translationHealth(st);
+  const color = HEALTH_COLOR[health];
+  if (!st) return { label, value: '…', color };
+  if (health === 'off') return { label, value: t('tr.disabled'), color };
+  if (health === 'loading') return { label, value: t('tr.loading'), color };
+  if (health === 'error') return { label, value: t('tr.error'), color };
+  if (health === 'missing') return { label, value: t('tr.missing'), color };
   const ready = st.pairs.filter((p) => p.state === 'ready').map((p) => p.source.toUpperCase());
-  if (st.pairs.some((p) => p.state === 'loading')) return { label, value: t('tr.loading'), color: '#ffa24a' };
-  if (st.pairs.some((p) => p.state === 'error')) return { label, value: t('tr.error'), color: '#ff8a7a' };
-  if (!ready.length) return { label, value: t('tr.missing'), color: '#ffa24a' };
-  return { label, value: t('tr.ready', { langs: ready.join(', '), target: (st.config.target ?? 'fr').toUpperCase() }), color: '#7fe0a8' };
+  return { label, value: t('tr.ready', { langs: ready.join(', '), target: (st.config.target ?? 'fr').toUpperCase() }), color };
 }
 
 export function percentile(times: number[], q: number): number | null {
