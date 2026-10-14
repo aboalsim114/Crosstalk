@@ -7,7 +7,13 @@ Sévérités : P0 inutilisable · P1 fonction principale défaillante · P2 pré
 | ID | Sév. | Résumé | Statut |
 |---|---|---|---|
 | CT-001 | P2 | Une boucle de Whisper sur un segment court fait rejeter toute l'annonce | Corrigé, vérifié au banc (f201140) |
-| CT-002 | P2 | La version officielle MSVC (`validate.ps1`) est compilée sans la fonctionnalité `gpu` : pas de Whisper sur carte graphique, contrairement au README | Voir fiche |
+| CT-002 | P2 | La version officielle MSVC (`validate.ps1`) est compilée sans la fonctionnalité `gpu` : pas de Whisper sur carte graphique, contrairement au README | Ouvert, rendu visible dans le rapport |
+| CT-003 | P3 | L'intro affiche « V0.2 » en dur dans la version 0.3.0 | Corrigé, vérifié par test |
+| CT-004 | P3 | Le coin d'overlay enregistré est ignoré au démarrage (« overlay window missing ») | Corrigé, vérifié dans l'application |
+| CT-005 | P3 | « modèles absents » et un WARN au journal à chaque démarrage, alors que les modèles sont installés | Corrigé, vérifié dans l'application |
+| CT-006 | P3 | Licences tierces inexactes dans À propos (rubato cité ; candle, modèles et CC-BY absents) | Corrigé, vérifié par test |
+| CT-007 | P1 | `crosstalk.exe` (MSVC) dépend de `MSVCP140.dll`, que ni Windows ni l'installateur ne fournissent | Voir fiche |
+| CT-008 | P2 | Dans l'application, Whisper répète une phrase entière (« Save your weapons this round. » ×4) : l'annonce est rejetée | Voir fiche |
 
 ## CT-001 — Une boucle de Whisper fait perdre l'annonce
 
@@ -37,3 +43,53 @@ Sévérités : P0 inutilisable · P1 fonction principale défaillante · P2 pré
 - **Ce qui est fait** : le rapport `validation.md` indique désormais « Whisper GPU : absent de ce build MSVC », pour que personne ne prenne ce paquet pour une version avec GPU.
 - **Ce qui reste à faire** : un build MSVC avec `gpu` et `/DELAYLOAD:vulkan-1.dll` (plus `delayimp.lib`), puis un test sur un PC avec et sans pilote Vulkan. Impossible ici : le SDK Vulkan (`glslc`) n'est pas installé sur cette machine.
 - **Statut** : ouvert, documenté.
+
+## CT-003 — Version « V0.2 » en dur sur l'intro
+
+- **Constaté** : capture CDP de l'application 0.3.0 lancée : « V0.2 — MMXXVI ».
+- **Cause** : texte écrit en dur dans `src/app/shell/Intro.tsx`.
+- **Correction** : la version vient de `package.json`, injectée par Vite (`__APP_VERSION__`), de même que la valeur de repli de `getAppInfo` hors Tauri.
+- **Test** : `App.test.tsx` vérifie « V0.3 — MMXXVI » et `introVersion('0.3.0')`.
+- **Statut** : corrigé (60991ef).
+
+## CT-004 — Coin d'overlay enregistré ignoré au démarrage
+
+- **Reproduction** : copie de test, Overlay › « Bas gauche » (fenêtre placée en 24,448, réglage enregistré `"corner":"bl"`), puis redémarrage.
+- **Constaté** : l'overlay revient en 1456,24 (haut droite). La console de la fenêtre principale affiche `overlay_configure failed · overlay window missing` (REA `inspect-web-page`, ev_a24fee67…).
+- **Cause** : la fenêtre principale envoie les réglages d'overlay avant que le cœur ait créé la fenêtre overlay (dans `setup`, après le démarrage des services). L'échec n'était jamais renvoyé, et le coin n'est renvoyé que s'il change.
+- **Correction** : `overlayFlagsSync` (`src/app/native.ts`). Un envoi en échec est retenté au changement suivant, et le signal « prête » de l'overlay renvoie tous les réglages, coin compris.
+- **Validation** : même scénario après correction, overlay en 24,448 au redémarrage. Test : `native.test.tsx`.
+- **Statut** : corrigé (e14f59d), vérifié dans l'application.
+
+## CT-005 — « modèles absents » au démarrage
+
+- **Constaté** : le journal de l'application lancée affiche à chaque démarrage `translation: en→fr : missing` (WARN), puis `loading`, puis `ready` ; l'interface affiche « modèles absents » pendant ce temps.
+- **Cause** : une paire pas encore examinée par le thread de traduction démarrait à l'état `Missing`.
+- **Correction** : état initial `Loading` (`translation/service/mod.rs`) ; le thread décide ensuite `Missing` ou `Ready`.
+- **Validation** : journal du démarrage suivant, `loading` puis `ready` et aucun WARN. Test : `models_not_yet_examined_are_loading_not_missing`.
+- **Statut** : corrigé (c02e61b).
+
+## CT-006 — Licences tierces inexactes
+
+- **Constaté** : À propos cite rubato (absent de `Cargo.lock`) et omet candle, ureq, React, les modèles Whisper, Silero VAD et Opus-MT.
+- **Vérification** : licences des 37 dépôts Opus-MT du catalogue lues sur l'API Hugging Face : 35 en Apache-2.0, `opus-mt-ru-en` et `opus-mt-en-de` en CC-BY-4.0 (attribution obligatoire). whisper.cpp et whisper-vad sont en MIT.
+- **Correction** : `src/app/state/data.ts`. Test : `licenses.test.ts`, qui confronte la liste à `src-tauri/Cargo.toml`.
+- **Statut** : corrigé (d4ec04a). La revue juridique complète (texte des licences livré avec l'application) reste à faire.
+
+## CT-007 — Dépendance à MSVCP140.dll (redistribuable Visual C++)
+
+- **Constaté** : `dumpbin /dependents` sur le `crosstalk.exe` officiel (MSVC, 97e6682) liste `MSVCP140.dll`. Les imports sont des fonctions de la bibliothèque standard C++ (flux, `std::regex`, `_Thrd_join`) utilisées par whisper.cpp.
+- **Risque** : sur un Windows sans le redistribuable Visual C++ 2015-2022, l'application ne démarre pas (« MSVCP140.dll introuvable »). L'installateur NSIS/MSI de Tauri ne l'installe pas. Cette machine l'a (14.51.36247), donc le démarrage y fonctionne : le défaut n'a **pas** été reproduit sur un PC vierge, faute de machine ou de VM disponible (Windows Famille, pas de Windows Sandbox).
+- **Correction** : CRT statique pour la cible MSVC (`src-tauri/.cargo/config.toml`, `+crt-static`) ; CMake compile alors whisper.cpp en `/MT`.
+- **Validation** : voir l'état mis à jour ci-dessous.
+
+## CT-008 — Whisper répète une phrase entière : l'annonce est rejetée
+
+- **Reproduction** : copie de test, source « Périphérique de sortie », session démarrée, fichiers du corpus synthétique joués sur la sortie audio. `CROSSTALK_SPEECH_DIAGNOSTICS=1`, stderr redirigé.
+- **Constaté** : sur 10 annonces jouées, 2 rejetées `Repetition`. Le texte brut était `Save your weapons this round. Save your weapons this round. Save your…` et `Je suis presque mort, je recule.` ×4. Whisper avait bien entendu la phrase, puis l'avait répétée jusqu'au plafond de jetons. La seconde passe de CT-001 bouclait elle aussi.
+- **Cause** : boucle du décodage glouton après la fin réelle de la phrase, avec la fenêtre d'encodeur réduite.
+- **Correction** :
+  1. `filter::collapse_repeats` : une phrase d'au moins 3 mots différents, répétée bout à bout (dernière copie éventuellement coupée), est ramenée à une seule occurrence avant les autres contrôles. Un « go go go go » reste une boucle rejetée, et une hallucination répétée (« Thanks for watching! » ×3) reste rejetée une fois ramenée à un exemplaire.
+  2. La seconde passe (CT-001) n'a lieu que si cette réduction ne suffit pas.
+- **Essai écarté (mesuré)** : une seconde passe sur la fenêtre complète de 30 s récupérait « Je suis presque mort, je recule. », mais coûtait +4,3 s sur le processeur (full_ms 5 162). L'annonce suivante devenait alors périmée (Stale).
+- **Tests** : `keeps_a_sentence_whisper_repeated_after_hearing_it_once`, `rejects_loops`.
