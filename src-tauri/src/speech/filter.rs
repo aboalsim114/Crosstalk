@@ -175,6 +175,11 @@ pub fn judge(r: &Recognition, audio_ms: u32) -> Result<String, RejectReason> {
     Ok(text)
 }
 
+/// The raw Whisper text loops (what `judge` rejects as `Repetition`).
+pub fn is_looping(text: &str) -> bool {
+    is_repetitive(&normalise(&clean(text)))
+}
+
 /// Looping output: a word or short phrase repeated over and over.
 fn is_repetitive(norm: &str) -> bool {
     let words: Vec<&str> = norm.split(' ').filter(|w| !w.is_empty()).collect();
@@ -350,6 +355,11 @@ mod tests {
             Err(RejectReason::Repetition)
         );
         assert!(judge(&rec("go go go, push B", Lang::En), 2000).is_ok());
+        // What triggers a second decoding pass: the same test on the raw text.
+        assert!(is_looping(
+            "they are rotating mid, they are rotating mid, they are rotating mid, they are rotating mid"
+        ));
+        assert!(!is_looping("They are rotating mid, three of them."));
     }
 
     #[test]
