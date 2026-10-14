@@ -116,6 +116,19 @@ describe('capture test', () => {
     expect(stop).toHaveBeenCalledOnce();
   });
 
+  it('leaves the capture open when a session started during the test', async () => {
+    vi.useFakeTimers();
+    vi.spyOn(audioCapture, 'start').mockResolvedValue(capturing());
+    const stop = vi.spyOn(audioCapture, 'stop').mockResolvedValue(IDLE_CAPTURE);
+    let session = false;
+    await runCaptureTest('process', () => session);
+    // The user starts a session while the test runs: it shares the capture.
+    session = true;
+    await vi.advanceTimersByTimeAsync(CAPTURE_TEST_MS + 300);
+    expect(useAudio.getState().test).toMatchObject({ running: false, done: true });
+    expect(stop).not.toHaveBeenCalled();
+  });
+
   it('reuses a running capture without stopping it', async () => {
     vi.useFakeTimers();
     useAudio.setState({ status: capturing() });

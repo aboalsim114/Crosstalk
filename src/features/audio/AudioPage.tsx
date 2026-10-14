@@ -1,4 +1,5 @@
 import { config } from '../../app/config';
+import { capturesDuring } from '../../app/native';
 import { useState } from 'react';
 import { isTauri, translation as nativeTranslation, type Translation } from '../../shared/ipc';
 import { Radio, Seg, Slider, Toggle, ToggleRow, fnt } from '../../shared/ui/atoms';
@@ -135,7 +136,7 @@ function CaptureCard() {
         <div
           className="pill pill-ember flex-none px-4 py-[9px]"
           role="button"
-          onClick={() => (native ? runCaptureTest(s.capture) : s.runTest())}
+          onClick={() => (native ? runCaptureTest(s.capture, () => capturesDuring(useApp.getState().session)) : s.runTest())}
           style={{ font: fnt(500, 12.5) }}
         >
           {testing ? 'Écoute…' : native ? 'Tester la capture 10 s' : 'Test audio 10 s'}
