@@ -49,21 +49,6 @@ pub fn translation_status(t: State<'_, Arc<TranslationService>>) -> TranslationS
 }
 
 #[tauri::command]
-pub fn translation_configure(
-    app: AppHandle,
-    t: State<'_, Arc<TranslationService>>,
-    config: TranslationConfig,
-) -> TranslationStatus {
-    use tauri::Manager;
-    let st = t.configure(config);
-    // "Répondre" writes from the user's language into the players'.
-    if let Some(r) = app.try_state::<Arc<crate::reply::ReplyService>>() {
-        r.set_languages(&st.config.target, &st.config.sources);
-    }
-    st
-}
-
-#[tauri::command]
 pub fn translation_rescan(t: State<'_, Arc<TranslationService>>) -> TranslationStatus {
     t.rescan()
 }

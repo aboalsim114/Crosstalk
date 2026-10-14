@@ -5,8 +5,8 @@
 //!
 //! ```text
 //! steam (detection, -condebug) → tail (console.log) → parser (rules, dedup)
-//!   → own messages filtered → lang (ru / en / fr / ?) → chat://message
-//!                                                     → translation (ru, en)
+//!   → own messages filtered → lang → ChatEvents (crate::wiring: chat://message,
+//!                                                 then the translation service)
 //! ```
 //!
 //! The chat is followed only while a session runs (`chat_start` / `chat_stop`)
@@ -318,37 +318,6 @@ fn handle_line(inner: &Inner, line: &str, dedup: &mut Dedup, generation: u64) {
 }
 
 // ---------- Tauri ----------
-
-pub struct TauriChatEvents(pub tauri::AppHandle);
-
-impl ChatEvents for TauriChatEvents {
-    fn status(&self, status: &ChatStatus) {
-        use tauri::Emitter;
-        let _ = self.0.emit(STATUS_EVENT, status);
-    }
-    fn message(&self, m: &ChatMessage) {
-        use tauri::{Emitter, Manager};
-        let _ = self.0.emit(MESSAGE_EVENT, m);
-        // A chat sender is a known name for "Qui parle ?" (memory only).
-        if let Some(s) = self.0.try_state::<Arc<crate::speaker::SpeakerService>>() {
-            s.chat_sender(&m.sender);
-        }
-        // Languages Crosstalk can translate; the service shows the user's own
-        // language and the languages not chosen as is (F-32).
-        if let Some(lang) = m
-            .lang
-            .as_deref()
-            .filter(|l| crate::translation::models::is_language(l))
-        {
-            if let Some(t) = self
-                .0
-                .try_state::<Arc<crate::translation::TranslationService>>()
-            {
-                t.submit(m.id, lang, &m.message);
-            }
-        }
-    }
-}
 
 #[tauri::command]
 pub fn chat_status(chat: tauri::State<'_, Arc<ChatService>>) -> ChatStatus {

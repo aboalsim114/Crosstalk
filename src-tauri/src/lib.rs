@@ -41,6 +41,7 @@ pub mod translation;
 mod tray;
 mod updater;
 mod version;
+mod wiring;
 
 use std::sync::Arc;
 
@@ -49,27 +50,6 @@ use tauri_plugin_autostart::MacosLauncher;
 
 /// Passed by the autostart entry so Windows login starts Crosstalk in the tray.
 pub const MINIMIZED_FLAG: &str = "--minimized";
-
-/// Capture events go to the UI; a capture that stops also purges the speech and
-/// translation pipelines (nothing survives a stop, an emergency stop or CS2 closing).
-struct CaptureEvents {
-    ui: audio::TauriEvents,
-    speech: Arc<speech::SpeechService>,
-    translation: Arc<translation::TranslationService>,
-}
-
-impl audio::AudioEvents for CaptureEvents {
-    fn status(&self, status: &audio::CaptureStatus) {
-        if status.state != audio::CaptureState::Capturing {
-            self.speech.purge();
-            self.translation.purge();
-        }
-        self.ui.status(status);
-    }
-    fn level(&self, reading: audio::LevelReading) {
-        self.ui.level(reading);
-    }
-}
 
 pub fn run() {
     // GPU test in a separate process (speech::gpu_guard): a driver crash
@@ -107,7 +87,7 @@ pub fn run() {
             speech::speech_configure,
             speech::speech_rescan,
             translation::translation_status,
-            translation::translation_configure,
+            wiring::translation_configure,
             translation::translation_rescan,
             translation::translation_models,
             translation::translation_test,
@@ -185,7 +165,7 @@ pub fn run() {
             ));
             let translation = translation::start(handle);
             app.manage(translation.clone());
-            let speech = speech::start(handle);
+            let speech = wiring::start_speech(handle);
             app.manage(speech.clone());
             let history = history::History::new(history::default_path());
             let _ = history.purge(history::now_ms());
@@ -197,7 +177,7 @@ pub fn run() {
                 updater::feed_url(),
             ));
             let chat = chat::ChatService::new(
-                Arc::new(chat::TauriChatEvents(handle.clone())),
+                Arc::new(wiring::ChatBridge(handle.clone())),
                 chat::user_rules_file(),
             );
             app.manage(chat.clone());
@@ -224,7 +204,7 @@ pub fn run() {
             app.manage(gsi.clone());
             let audio = Arc::new(audio::AudioService::new(
                 audio::default_backend(),
-                Arc::new(CaptureEvents {
+                Arc::new(wiring::CaptureEvents {
                     ui: audio::TauriEvents(handle.clone()),
                     speech: speech.clone(),
                     translation: translation.clone(),

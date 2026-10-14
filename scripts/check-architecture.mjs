@@ -73,7 +73,7 @@ function cycles(graph) {
 const RUST = 'src-tauri/src';
 // Known cycles, kept on purpose and documented in dependencies.md. A cycle
 // that is not listed here (or grows) fails the check.
-const KNOWN_RUST_CYCLES = [['reply', 'speaker', 'speech', 'translation']];
+const KNOWN_RUST_CYCLES = [];
 
 const modules = new Map();
 for (const name of readdirSync(RUST)) {
