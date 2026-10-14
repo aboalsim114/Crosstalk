@@ -2,10 +2,12 @@
 //! no network, nothing to pay.
 
 pub mod callouts;
+pub mod engine;
 pub mod glossary;
 pub mod marian;
 pub mod models;
 mod network;
+pub mod opus;
 mod pth;
 pub mod service;
 
@@ -35,7 +37,7 @@ impl service::TranslationEvents for TauriEvents {
 pub fn start(app: &AppHandle) -> Arc<TranslationService> {
     TranslationService::start(
         Arc::new(TauriEvents(app.clone())),
-        Arc::new(service::OpusLoader),
+        Arc::new(opus::OpusLoader),
         crate::paths::models_dir(),
         TranslationConfig::default(),
     )

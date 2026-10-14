@@ -21,9 +21,9 @@ use tauri::{
     AppHandle, Emitter, LogicalSize, Manager, PhysicalPosition, WebviewUrl, WebviewWindowBuilder,
 };
 
+use crate::translation::engine::Engine;
 use crate::translation::glossary::{self, Term};
 use crate::translation::models;
-use crate::translation::service::Engine;
 
 pub const LABEL: &str = "reply";
 pub const OPEN_EVENT: &str = "reply://open";
@@ -96,7 +96,7 @@ impl ReplyService {
         Self::with_loader(
             models_dir,
             Box::new(move |from, to| {
-                use crate::translation::service::{EngineLoader, OpusLoader};
+                use crate::translation::{engine::EngineLoader, opus::OpusLoader};
                 let route = models::route(from, to).ok_or("langue non gérée")?;
                 if let Some((p, f)) = route
                     .iter()
