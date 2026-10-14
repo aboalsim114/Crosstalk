@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { Translation } from '../backend';
+import type { StreamOpts, Translation } from '../backend';
 import { config } from '../config';
 import { isCapturing, useAudio } from './audio';
 import type { UiLang } from '../i18n';
@@ -18,15 +18,7 @@ export type CaptureSource = 'process' | 'device' | 'wav';
 export type Accel = 'cpu' | 'gpu' | 'auto';
 export type ToggleKey = 'click' | 'noise' | 'translate' | 'hist' | 'skipFr' | 'ignoreOwn';
 /** Mode streamer: subtitles for OBS (src-tauri/src/stream). */
-export interface StreamOpts {
-  enabled: boolean;
-  names: boolean;
-  original: boolean;
-  watermark: boolean;
-  size: number;
-  max: number;
-  duration: number;
-}
+export type { StreamOpts } from '../backend';
 /** "Qui parle ?": names read on CS2's voice indicator (src-tauri/src/speaker). */
 export interface SpeakerOpts {
   enabled: boolean;
