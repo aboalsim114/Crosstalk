@@ -1,6 +1,6 @@
 # Architecture — Crosstalk
 
-Complète le [cahier des charges](cahier-des-charges.md) (§6). Ce document décrit l'architecture **cible**. La section 7 indique ce qui existe déjà dans le dépôt et le chemin pour y arriver.
+Complète le [cahier des charges](cahier-des-charges.md) (§6). Ce document décrit l'architecture **cible du produit** (session pilotée par Rust, contrat d'événements). L'organisation du code telle qu'elle est aujourd'hui, ses règles de dépendance et ses décisions sont dans [`docs/architecture/`](architecture/overview.md). La section 7 indique l'écart entre les deux.
 
 ## 1. Principes
 
@@ -54,7 +54,7 @@ Le découpage se fait d'abord en **modules** de la crate existante (`src-tauri/s
 | `overlay`, `tray`, `shortcuts`, `actions` | Intégration Windows (existants) | thread principal Tauri |
 | `storage` | Réglages, glossaire, historique local (`history.jsonl`), modèles | tâche tokio |
 
-Les traits `AudioCapture`, `Transcriber`, `Translator` et `ChatSource` existent déjà dans `pipeline/`. Ils permettent de tester chaque module avec des implémentations factices et d'alimenter le banc d'essai hors ligne avec des fichiers WAV.
+Chaque module se teste avec des implémentations factices de ses traits (`CaptureBackend`, `VoiceDetector`, `Recognizer`, `translation::Engine`, `Fetcher` ; voir [modules.md](architecture/modules.md#contrats-des-moteurs-dia)), et le banc d'essai hors ligne rejoue des fichiers WAV.
 
 ### Installateur (`src-installer/`)
 
@@ -94,7 +94,7 @@ Annuler pendant les deux premières phases supprime le dossier temporaire : une 
 
 ## 6. Contrat d'événements (Rust → interface)
 
-Événements typés (`serde`, `camelCase`), versionnés par un champ `v`. Ils reprennent les notions déjà présentes dans l'interface (`FeedEntry` : statuts provisoire, final, original, erreur ; latence) et dans `pipeline::Utterance`.
+Événements typés (`serde`, `camelCase`), versionnés par un champ `v`. Ils reprennent les notions déjà présentes dans l'interface (`FeedEntry` : statuts provisoire, final, original, erreur ; latence) et dans `speech::Transcript`.
 
 | Événement | Contenu principal | Usage |
 | --- | --- | --- |
@@ -126,10 +126,10 @@ Dans cet exemple, la confiance est insuffisante : l'interface affiche « Joueur 
 
 | Élément | Aujourd'hui | Cible |
 | --- | --- | --- |
-| État de session, flux, simulation | Store Zustand dans la fenêtre principale React (`src/state/store.ts`) | Module Rust `session`. Le store React devient un miroir alimenté par les événements |
-| Overlay | Reçoit son état de la fenêtre principale (`src/native.ts`) | Reçoit les événements directement de Rust |
+| État de session, flux, simulation | Store Zustand dans la fenêtre principale React (`src/app/state/store.ts`) | Module Rust `session`. Le store React devient un miroir alimenté par les événements |
+| Overlay | Reçoit son état de la fenêtre principale (`src/app/native.ts`) | Reçoit les événements directement de Rust |
 | Raccourcis, tray, overlay, autostart | Rust ✅ | Inchangé ; les actions appellent directement `session` |
-| Pipeline réel | Traits seulement (`src-tauri/src/pipeline/`) | Implémentations lot par lot (L0 → L4) |
+| Pipeline réel | Capture, parole, traduction, chat, GSI et locuteur en Rust ✅ ; câblage dans `wiring.rs` | Module `session` qui porte l'état |
 | Fenêtre masquée | Le WebView peut ralentir ses minuteries en arrière-plan | Sans effet sur le pipeline (Rust). Option Tauri `backgroundThrottling` à évaluer pour l'overlay |
 
 **Migration en trois étapes :**
@@ -157,4 +157,4 @@ Aucune image n'est conservée. Les pseudos sont expurgés des journaux.
 | `track.rs` | Nettoyage des lignes OCR, regroupement des variantes d'un même pseudo, fenêtre de 30 s de lectures, pseudo dominant d'un intervalle. |
 | `mod.rs` | Thread de lecture (activé par la VAD), statut `speaker://status`, commandes `speaker_configure`, `speaker_status` et `speaker_test`. |
 
-`speech::TauriEvents::transcript` appelle `SpeakerService::speaker_for(latence, durée)` et remplit `Transcript.speaker`. L'interface en fait le `sender` de la ligne vocale (Script, overlay, historique, mode streamer).
+`wiring::SpeechBridge` appelle `SpeakerService::speaker_for(latence, durée)` et remplit `Transcript.speaker`. L'interface en fait le `sender` de la ligne vocale (Script, overlay, historique, mode streamer).

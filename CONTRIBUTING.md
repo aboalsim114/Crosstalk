@@ -70,8 +70,9 @@ powershell -ExecutionPolicy Bypass -File scripts\validate.ps1 -SkipBundle  # san
 | Étape | Commande |
 | --- | --- |
 | Garde anti-triche | `npm run check:anticheat` (aucune API d'accès à un autre processus) |
+| Règles d'architecture | `npm run check:architecture` (cycles, fichiers partagés avec l'installateur, couche IPC, contrat IPC) |
 | Interface | `npm run typecheck`, `npm test`, `npm run build` |
-| Rust | `cargo fmt --all -- --check`, `cargo clippy --all-targets --locked -- -D warnings`, `cargo test --all-targets --locked` |
+| Rust | `cargo fmt --all -- --check`, `cargo clippy --all-targets --locked -- -D warnings`, `cargo test --all-targets --locked` (dans `src-tauri` puis `src-installer`) |
 | Windows | `npx tauri build --target x86_64-pc-windows-msvc` (NSIS + MSI) |
 | Outils | `crosstalk-audio-probe`, `crosstalk-asr-bench`, `crosstalk-translate` (release, MSVC) |
 

@@ -131,7 +131,7 @@ Le cap produit est simple : **moins de bruit, des traductions utiles, et un mini
 
 </div>
 
-La capture ciblée récupère l'audio attribué au processus CS2 — **y compris les sons du jeu**, pas exclusivement la voix de vos coéquipiers. Le pipeline tente ensuite d'identifier les segments de parole avant de les transcrire et de les traduire. Les fonctions à venir sont décrites dans le [cahier des charges v2.0](docs/cahier-des-charges.md) et l'[architecture technique](docs/architecture.md).
+La capture ciblée récupère l'audio attribué au processus CS2 — **y compris les sons du jeu**, pas exclusivement la voix de vos coéquipiers. Le pipeline tente ensuite d'identifier les segments de parole avant de les transcrire et de les traduire. Les fonctions à venir sont décrites dans le [cahier des charges v2.0](docs/cahier-des-charges.md) et l'[architecture cible](docs/architecture.md) ; le code actuel est décrit dans [docs/architecture/](docs/architecture/overview.md).
 
 ### Stack technique
 
@@ -148,14 +148,21 @@ La capture ciblée récupère l'audio attribué au processus CS2 — **y compris
 
 ```text
 Crosstalk/
-├── src/               # Application React, écrans, overlay et UI de l'installateur
-├── src-tauri/         # Cœur Rust, intégration Windows et configuration Tauri
+├── src/               # Interface React
+│   ├── app/           #   fenêtre principale : coquille, store de session, ponts natifs
+│   ├── features/      #   une fonctionnalité par dossier (audio, speech, translation, chat…)
+│   ├── shared/        #   appels Tauri (ipc), langues de l'interface (i18n), atomes (ui)
+│   ├── windows/       #   fenêtres overlay et Répondre
+│   └── installer/     #   interface de l'installateur
+├── src-tauri/         # Cœur Rust : un module par fonctionnalité, câblés dans wiring.rs
 ├── src-installer/     # Installateur personnalisé séparé
-├── docs/              # Architecture, cahier des charges et protocoles de test
+├── docs/              # Architecture, développement, cahier des charges, protocoles de test
 ├── design/            # Maquettes et archives de conception
-├── scripts/           # Validation locale, publication et bancs d'essai
+├── scripts/           # Validation locale, contrôles, publication et bancs d'essai
 └── CONTRIBUTING.md    # Workflow de contribution
 ```
+
+Architecture du code : [docs/architecture/overview.md](docs/architecture/overview.md). Démarrer : [docs/development/getting-started.md](docs/development/getting-started.md).
 
 ## Développer en local
 
@@ -185,7 +192,7 @@ Les bundles Tauri sont générés dans `src-tauri/target/release/bundle/` (`nsis
 powershell -ExecutionPolicy Bypass -File scripts\validate.ps1
 ```
 
-La validation couvre les contrôles anti-triche du dépôt, les vérifications TypeScript, les tests, `rustfmt`, `clippy`, la compilation Windows et les bundles prévus par le script. Un rapport est généré dans `dist-local\<commit>\validation.md`. Les vérifications audio et les essais réels dans CS2 restent manuels et doivent être rapportés séparément.
+La validation couvre les contrôles anti-triche et d'architecture du dépôt, les vérifications TypeScript, les tests (application et installateur), `rustfmt`, `clippy`, la compilation Windows et les bundles prévus par le script. Un rapport est généré dans `dist-local\<commit>\validation.md`. Les vérifications audio et les essais réels dans CS2 restent manuels et doivent être rapportés séparément.
 
 `npm run dev` lance seulement l'interface web pour la conception ; **le produit livré est l'application desktop Tauri**.
 
