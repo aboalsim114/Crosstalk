@@ -336,8 +336,12 @@ pub fn summarize(event: &str, v: &Value) -> Vec<(String, &'static str, &'static 
                     .iter()
                     .map(|p| {
                         let src = s(p, &["source"]).unwrap_or("?");
+                        // The user's language (Langues), French by default.
+                        let target = s(p, &["target"])
+                            .or_else(|| s(v, &["config", "target"]))
+                            .unwrap_or("fr");
                         let state = s(p, &["state"]).unwrap_or("?");
-                        let mut msg = format!("{src}→fr : {state}");
+                        let mut msg = format!("{src}→{target} : {state}");
                         if let Some(ms) = n(p, &["loadMs"]) {
                             msg.push_str(&format!(" · chargé en {ms} ms"));
                         }
@@ -775,6 +779,29 @@ mod tests {
                 "ru→fr : error · chargé en 300 ms · illisible"
             )
         );
+
+        // A Russian user: the arrow points to their language.
+        let into_russian = TranslationStatus {
+            config: TranslationConfig {
+                target: "ru".into(),
+                ..TranslationConfig::default()
+            },
+            pairs: vec![PairStatus {
+                source: "en".into(),
+                target: "ru".into(),
+                repo: "Helsinki-NLP/opus-mt-en-ru".into(),
+                state: PairState::Ready,
+                error: None,
+                load_ms: None,
+            }],
+            models_dir: "models".into(),
+            queued: 0,
+        };
+        let line = &summarize(
+            "translation://status",
+            &serde_json::to_value(&into_russian).unwrap(),
+        )[0];
+        assert_eq!(line.3, "en→ru : ready");
 
         let idle = serde_json::to_value(CaptureStatus::idle()).unwrap();
         assert_eq!(summarize("audio://status", &idle)[0].3, "capture à l’arrêt");
