@@ -94,3 +94,11 @@ export function prefillLanguages<S extends { langSetupDone: boolean; target: Tar
   if (target === s.target) return null;
   return { target, src: { ...s.src, [target]: false, ...(target === 'en' ? { ru: true } : { en: true }) } } as Partial<S>;
 }
+
+/** Recent languages heard or read (voice and chat), newest first. */
+export function recentLangs(feed: { src: string; tid?: number }[], n = 20): string[] {
+  return feed
+    .filter((f) => f.tid != null)
+    .slice(-n)
+    .map((f) => f.src);
+}

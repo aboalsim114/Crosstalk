@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { act, fireEvent, render, screen } from '@testing-library/react';
-import { recentLangs } from '../pages/ReplyCard';
+import { recentLangs } from '../state/langs';
 
 const translate = vi.fn();
 vi.mock('../backend', async (orig) => {

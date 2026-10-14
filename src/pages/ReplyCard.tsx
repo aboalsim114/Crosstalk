@@ -2,16 +2,9 @@ import { useEffect, useState } from 'react';
 import { modelDownload, reply, type ReplyModel, type ReplyTarget } from '../backend';
 import { fnt } from '../components/atoms';
 import { ReplyBox, targetName, teammatesLanguage } from '../reply/ReplyBox';
+import { recentLangs } from '../state/langs';
 import { setupNeeds } from '../state/setup';
 import { useApp } from '../state/store';
-
-/** Recent languages heard or read (voice and chat), newest first. */
-export function recentLangs(feed: { src: string; tid?: number }[], n = 20): string[] {
-  return feed
-    .filter((f) => f.tid != null)
-    .slice(-n)
-    .map((f) => f.src);
-}
 
 /** "Réponds dans leur langue": the same box as the in-game pop-up. */
 export function ReplyCard() {

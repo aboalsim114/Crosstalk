@@ -2,13 +2,13 @@
 // in-game overlay window out. Only active inside the Tauri app.
 
 import { resolveLocale, type Locale } from './i18n';
-import { recentLangs } from './pages/ReplyCard';
 import { audioCapture, chat, cs2, dictation, isTauri, modelDownload, onNativeAction, overlayWindow, reply, speech, translation, type CaptureStatus, type NativeAction, type OverlayWindowConfig } from './backend';
 import { refreshModels, speechConfigFrom, transcriptEntry, useSpeech } from './state/speech';
 import { recordTime, translationConfigFrom, useTranslation } from './state/translation';
 import { setupNeeds, startSetup, useSetup } from './state/setup';
 import { chatConfigFrom, chatEntry, useChat } from './state/chat';
 import { captureModeFor, levelToUnit, recordTestLevel, refreshDevices, useAudio } from './state/audio';
+import { recentLangs } from './state/langs';
 import { isRunning, useApp, type AppState, type FeedEntry, type Session } from './state/store';
 
 export interface OverlayPayload {
