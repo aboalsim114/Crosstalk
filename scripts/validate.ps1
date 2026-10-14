@@ -4,8 +4,8 @@
 #   powershell -ExecutionPolicy Bypass -File scripts\validate.ps1 -SkipBundle   # sans installateurs
 #   powershell -ExecutionPolicy Bypass -File scripts\validate.ps1 -Release      # + contrôles de release
 #
-# Étapes : garde anti-triche, typecheck, tests UI, build UI, rustfmt, clippy,
-# tests Rust, installateurs NSIS + MSI (MSVC), crosstalk-audio-probe,
+# Étapes : garde anti-triche, règles d'architecture, typecheck, tests UI,
+# build UI, rustfmt, clippy, tests Rust (application et installateur), installateurs NSIS + MSI (MSVC), crosstalk-audio-probe,
 # crosstalk-asr-bench et crosstalk-translate. Résultat : dist-local\<commit>\ avec les exécutables,
 # SHA256SUMS.txt et validation.md, le rapport à coller dans la Pull Request.
 # S'arrête à la première étape en échec. Ne mesure ni Whisper en partie, ni CS2,
@@ -106,12 +106,20 @@ if ($Release) {
 # --- Contrôles --------------------------------------------------------------
 Step 'Dépendances JS (npm ci)' $root { npm ci }
 Step 'Garde anti-triche' $root { npm run check:anticheat }
+Step 'Règles d’architecture' $root { npm run check:architecture }
 Step 'Typecheck UI' $root { npm run typecheck }
 Step 'Tests UI (Vitest)' $root { npm test }
 Step 'Build UI' $root { npm run build }
 Step 'rustfmt' "$root\src-tauri" { cargo fmt --all -- --check }
 Step 'clippy -D warnings' "$root\src-tauri" { cargo clippy --all-targets --locked -- -D warnings }
 Step 'Tests Rust' "$root\src-tauri" { cargo test --all-targets --locked }
+Step 'Installateur : rustfmt, clippy, tests' "$root\src-installer" {
+    cargo fmt --all -- --check
+    if ($LASTEXITCODE -ne 0) { throw 'rustfmt' }
+    cargo clippy --all-targets --locked -- -D warnings
+    if ($LASTEXITCODE -ne 0) { throw 'clippy' }
+    cargo test --locked
+}
 if (-not $SkipBundle) {
     Step 'Installateurs NSIS + MSI (MSVC)' $root { npx tauri build --target $target }
 }
