@@ -12,6 +12,7 @@ use serde::{Deserialize, Serialize};
 
 use super::callouts;
 use super::glossary::{self, Term};
+use super::llm::{Backend, EngineChoice, LlmStatus};
 use super::models;
 
 /// A line waiting longer than this is shown untranslated (F-34).
@@ -25,6 +26,14 @@ pub struct TranslationConfig {
     pub enabled: bool,
     #[serde(default)]
     pub glossary: Vec<Term>,
+    /// TranslateGemma, Opus-MT or automatic (src/translation/llm).
+    #[serde(default)]
+    pub engine: EngineChoice,
+    #[serde(default)]
+    pub llm_backend: Backend,
+    /// TranslateGemma's generation threads; 0: automatic.
+    #[serde(default)]
+    pub llm_threads: u32,
 }
 
 impl Default for TranslationConfig {
@@ -32,6 +41,9 @@ impl Default for TranslationConfig {
         Self {
             enabled: true,
             glossary: Vec::new(),
+            engine: EngineChoice::default(),
+            llm_backend: Backend::default(),
+            llm_threads: 0,
         }
     }
 }
@@ -62,6 +74,8 @@ pub struct TranslationStatus {
     pub pairs: Vec<PairStatus>,
     pub models_dir: String,
     pub queued: usize,
+    /// TranslateGemma's state (None without it, e.g. in tests).
+    pub llm: Option<LlmStatus>,
 }
 
 /// Result for one line, matched to the transcript by `id`.
@@ -83,6 +97,10 @@ pub struct Translation {
     /// Quick translation of a live (partial) line, replaced by the final one.
     #[serde(default)]
     pub partial: bool,
+    /// What produced the text: "translategemma", "opus-mt", "lexique"
+    /// (Counter-Strike callouts) or "cache".
+    #[serde(default)]
+    pub engine: Option<String>,
 }
 
 pub trait Engine: Send {
@@ -91,11 +109,24 @@ pub trait Engine: Send {
     fn translate_fast(&mut self, text: &str) -> Result<String, String> {
         self.translate(text)
     }
+    /// Engine behind the last translation (shown with the line).
+    fn engine_name(&self) -> &'static str {
+        "opus-mt"
+    }
 }
 
 pub trait EngineLoader: Send + Sync {
     fn installed(&self, dir: &Path, source: &str) -> bool;
     fn load(&self, dir: &Path, source: &str) -> Result<Box<dyn Engine>, String>;
+    /// New settings; true when the loaded engines must be rebuilt.
+    fn configure(&self, _config: &TranslationConfig) -> bool {
+        false
+    }
+    /// "Rechercher les modèles" / after a download: try failed engines again.
+    fn rescan(&self) {}
+    fn llm_status(&self) -> Option<LlmStatus> {
+        None
+    }
 }
 
 pub trait TranslationEvents: Send + Sync {
@@ -161,6 +192,8 @@ struct Inner {
     generation: AtomicU64,
     /// Asks the worker to (re)load the installed models.
     reload: AtomicBool,
+    /// Asks the worker to drop its engines first (engine choice changed).
+    reset: AtomicBool,
     shutdown: AtomicBool,
 }
 
@@ -200,6 +233,7 @@ impl TranslationService {
             map_terms: Mutex::new(Vec::new()),
             generation: AtomicU64::new(0),
             reload: AtomicBool::new(true),
+            reset: AtomicBool::new(false),
             shutdown: AtomicBool::new(false),
         });
         let worker = inner.clone();
@@ -215,14 +249,22 @@ impl TranslationService {
     }
 
     pub fn configure(&self, config: TranslationConfig) -> TranslationStatus {
-        let changed_glossary = {
+        let (changed_glossary, changed_engine) = {
             let mut c = self.inner.config.lock().unwrap();
-            let changed = c.glossary != config.glossary;
-            *c = config;
-            changed
+            let g = c.glossary != config.glossary;
+            let e = c.engine != config.engine
+                || c.llm_backend != config.llm_backend
+                || c.llm_threads != config.llm_threads
+                || c.enabled != config.enabled;
+            *c = config.clone();
+            (g, e)
         };
-        if changed_glossary {
+        let rebuild = self.inner.loader.configure(&config);
+        if changed_glossary || changed_engine {
             *self.inner.cache.lock().unwrap() = Cache::default();
+        }
+        if rebuild || (changed_engine && config.engine != EngineChoice::Auto) {
+            self.inner.reset.store(true, Ordering::SeqCst);
         }
         self.rescan()
     }
@@ -246,6 +288,7 @@ impl TranslationService {
 
     /// Looks for newly installed models (and loads them).
     pub fn rescan(&self) -> TranslationStatus {
+        self.inner.loader.rescan();
         self.inner.reload.store(true, Ordering::SeqCst);
         self.inner.wake.notify_all();
         let st = self.inner.status();
@@ -360,6 +403,7 @@ impl Inner {
                 .collect(),
             models_dir: self.models_dir.display().to_string(),
             queued: self.queue.lock().unwrap().len(),
+            llm: self.loader.llm_status(),
         }
     }
 
@@ -395,13 +439,18 @@ fn failure(id: u64, lang: &str, text: &str, why: &str, queue_ms: u32) -> Transla
         cached: false,
         glossary: true,
         partial: false,
+        engine: None,
     }
 }
 
 fn worker_loop(inner: &Inner) {
     crate::speech::cpu::lower_current_thread_priority();
     let mut engines: HashMap<&'static str, Box<dyn Engine>> = HashMap::new();
+    let mut last_llm = llm_signature(inner);
     while !inner.shutdown.load(Ordering::SeqCst) {
+        if inner.reset.swap(false, Ordering::SeqCst) {
+            engines.clear();
+        }
         if inner.reload.swap(false, Ordering::SeqCst) {
             load_installed(inner, &mut engines);
         }
@@ -428,6 +477,12 @@ fn worker_loop(inner: &Inner) {
         };
         let Some(job) = job else { continue };
         let result = run(inner, &mut engines, &job);
+        // TranslateGemma's latency or state moved: refresh the engine card.
+        let sig = llm_signature(inner);
+        if sig != last_llm {
+            last_llm = sig;
+            inner.events.status(&inner.status());
+        }
         match (&job.reply, result) {
             (Some(tx), Some(t)) => {
                 let _ = tx.send(t);
@@ -436,6 +491,16 @@ fn worker_loop(inner: &Inner) {
             _ => {}
         }
     }
+}
+
+/// What the engine card shows of TranslateGemma, to send it only on change.
+fn llm_signature(inner: &Inner) -> Option<String> {
+    inner.loader.llm_status().map(|s| {
+        format!(
+            "{:?}{:?}{:?}{:?}{:?}",
+            s.state, s.backend, s.p50_ms, s.error, s.translations
+        )
+    })
 }
 
 fn load_installed(inner: &Inner, engines: &mut HashMap<&'static str, Box<dyn Engine>>) {
@@ -503,6 +568,7 @@ fn run(
             translated: Some(text),
             error: None,
             partial: job.partial,
+            engine: Some("lexique".into()),
             ..failure(job.id, &job.lang, &job.text, "", queue_ms)
         });
     }
@@ -547,6 +613,7 @@ fn run(
                     ms: started.elapsed().as_millis() as u32,
                     glossary: protected,
                     partial: true,
+                    engine: Some(engine.engine_name().into()),
                     ..failure(job.id, &job.lang, &job.text, "", queue_ms)
                 })
             }
@@ -559,6 +626,7 @@ fn run(
             error: None,
             cached: true,
             ms: started.elapsed().as_millis() as u32,
+            engine: Some("cache".into()),
             ..failure(job.id, &job.lang, &job.text, "", queue_ms)
         });
     }
@@ -581,6 +649,7 @@ fn run(
                 cached: false,
                 glossary: protected,
                 partial: false,
+                engine: Some(engine.engine_name().into()),
             })
         }
         Ok(_) => fail("traduction vide"),
@@ -790,6 +859,7 @@ mod tests {
         svc.configure(TranslationConfig {
             enabled: false,
             glossary: vec![],
+            ..TranslationConfig::default()
         });
         svc.submit(2, "ru", "Двое");
         assert_eq!(next(&rx).error.as_deref(), Some("traduction désactivée"));
@@ -839,6 +909,7 @@ mod tests {
                 source: "smoke".into(),
                 target: None,
             }],
+            ..TranslationConfig::default()
         });
         let t = svc.translate_blocking("en", "throw Smoke");
         assert_eq!(t.translated.as_deref(), Some("FR:throw Smoke"));
@@ -854,6 +925,7 @@ mod tests {
                 source: "palace".into(),
                 target: Some("palais".into()),
             }],
+            ..TranslationConfig::default()
         });
         svc.translate_blocking("en", "go jungle");
         svc.translate_blocking("en", "go jungle");

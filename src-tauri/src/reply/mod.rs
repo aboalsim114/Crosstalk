@@ -4,8 +4,10 @@
 //! Nothing is typed into the game: the user pastes and sends it themselves.
 //!
 //! Usual calls come from a hand-written phrasebook (`phrases.rs`, exact and
-//! instant); free text goes to Opus-MT fr→en / fr→ru (Apache-2.0), loaded the
-//! first time it is needed. CS terms and the current map's callouts are kept.
+//! instant); free text goes to TranslateGemma when it is installed (the same
+//! helper as the subtitles), otherwise to Opus-MT fr→en / fr→ru
+//! (Apache-2.0), loaded the first time it is needed. CS terms and the current
+//! map's callouts are kept.
 
 pub mod phrases;
 
@@ -20,6 +22,7 @@ use tauri::{
 };
 
 use crate::translation::glossary::{self, Term};
+use crate::translation::llm::LlmRuntime;
 use crate::translation::models;
 use crate::translation::service::Engine;
 
@@ -41,7 +44,7 @@ const KEEP: &[&str] = &[
 pub struct ReplyResult {
     pub text: String,
     pub target: String,
-    /// `phrasebook` (exact, hand-written) or `model` (Opus-MT).
+    /// `phrasebook` (exact, hand-written), `translategemma` or `model` (Opus-MT).
     pub via: &'static str,
     pub ms: u32,
 }
@@ -63,13 +66,15 @@ pub struct ReplyService {
     loader: Loader,
     engines: Mutex<HashMap<String, Box<dyn Engine>>>,
     map_terms: Mutex<Vec<String>>,
+    llm: Option<Arc<LlmRuntime>>,
 }
 
 impl ReplyService {
-    pub fn new(models_dir: PathBuf) -> Arc<Self> {
+    pub fn new(models_dir: PathBuf, llm: Option<Arc<LlmRuntime>>) -> Arc<Self> {
         let dir = models_dir.clone();
-        Self::with_loader(
+        Self::build(
             models_dir,
+            llm,
             Box::new(move |target| {
                 let p = models::reply_pair(target).ok_or("langue non gérée")?;
                 if let Some(f) = models::missing_file(&dir, p) {
@@ -87,12 +92,18 @@ impl ReplyService {
         )
     }
 
+    #[cfg(test)]
     pub fn with_loader(models_dir: PathBuf, loader: Loader) -> Arc<Self> {
+        Self::build(models_dir, None, loader)
+    }
+
+    pub fn build(models_dir: PathBuf, llm: Option<Arc<LlmRuntime>>, loader: Loader) -> Arc<Self> {
         Arc::new(Self {
             models_dir,
             loader,
             engines: Mutex::new(HashMap::new()),
             map_terms: Mutex::new(Vec::new()),
+            llm,
         })
     }
 
@@ -138,12 +149,6 @@ impl ReplyService {
         if let Some(t) = phrases::lookup(text, target) {
             return Ok(done(t, "phrasebook"));
         }
-        let mut engines = self.engines.lock().unwrap();
-        if !engines.contains_key(target) {
-            let e = (self.loader)(target)?;
-            engines.insert(target.to_string(), e);
-        }
-        let engine = engines.get_mut(target).expect("loaded");
         let terms: Vec<Term> = KEEP
             .iter()
             .map(|s| s.to_string())
@@ -153,6 +158,20 @@ impl ReplyService {
                 target: None,
             })
             .collect();
+        if let Some(rt) = self.llm.as_ref().filter(|rt| rt.usable()) {
+            let out = glossary::translate(text, &terms, |t| rt.translate("fr", target, t))
+                .map(|(t, _)| crate::translation::callouts::clean_output(&t));
+            if let Some(out) = out.ok().filter(|o| !o.is_empty()) {
+                return Ok(done(out, "translategemma"));
+            }
+            // Otherwise Opus-MT below.
+        }
+        let mut engines = self.engines.lock().unwrap();
+        if !engines.contains_key(target) {
+            let e = (self.loader)(target)?;
+            engines.insert(target.to_string(), e);
+        }
+        let engine = engines.get_mut(target).expect("loaded");
         let (out, _) = glossary::translate(text, &terms, |t| engine.translate(t))?;
         let out = crate::translation::callouts::clean_output(&out);
         if out.is_empty() {
@@ -316,13 +335,36 @@ mod tests {
         assert!(svc.translate("   ", "en").is_err());
         assert!(svc.translate("salut", "de").is_err());
         assert!(svc.translate(&"a".repeat(301), "en").is_err());
-        let real = ReplyService::new(std::env::temp_dir().join("crosstalk-reply-none"));
+        let real = ReplyService::new(std::env::temp_dir().join("crosstalk-reply-none"), None);
         let e = real
             .translate("on se retrouve après le round", "ru")
             .unwrap_err();
         assert!(e.contains("absent"), "{e}");
         assert!(real.models().iter().all(|m| !m.installed && !m.loaded));
         assert_eq!(real.models().len(), 2);
+    }
+
+    #[test]
+    fn free_text_goes_to_translategemma_when_installed() {
+        use crate::translation::llm::runtime::tests::{installed_dir, runtime, FakeSpawner};
+        let dir = installed_dir("reply");
+        let loads = Arc::new(AtomicUsize::new(0));
+        let l = loads.clone();
+        let svc = ReplyService::build(
+            dir.clone(),
+            Some(runtime(&dir, FakeSpawner::new())),
+            Box::new(move |_| {
+                l.fetch_add(1, Ordering::SeqCst);
+                Err("pas d'Opus-MT ici".into())
+            }),
+        );
+        let r = svc.translate("ils arrivent par le haut", "ru").unwrap();
+        assert_eq!(r.via, "translategemma");
+        assert_eq!(r.text, "FR(ils arrivent par le haut)");
+        assert_eq!(loads.load(Ordering::SeqCst), 0);
+        // The phrasebook still answers first.
+        assert_eq!(svc.translate("gg", "en").unwrap().via, "phrasebook");
+        std::fs::remove_dir_all(&dir).unwrap();
     }
 
     #[test]

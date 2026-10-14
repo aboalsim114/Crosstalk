@@ -180,7 +180,9 @@ pub fn run() {
                 Arc::new(downloads::HttpFetcher),
                 Arc::new(download_commands::TauriDownloadEvents(handle.clone())),
             ));
-            let translation = translation::start(handle);
+            let llm = translation::llm_runtime();
+            app.manage(llm.clone());
+            let translation = translation::start(handle, llm.clone());
             app.manage(translation.clone());
             let speech = speech::start(handle);
             app.manage(speech.clone());
@@ -198,7 +200,7 @@ pub fn run() {
                 chat::user_rules_file(),
             );
             app.manage(chat.clone());
-            let reply = reply::ReplyService::new(speech::models::models_dir());
+            let reply = reply::ReplyService::new(speech::models::models_dir(), Some(llm.clone()));
             app.manage(reply.clone());
             app.manage(Arc::new(dictation::Dictation::default()));
             app.manage(stream::StreamService::new());

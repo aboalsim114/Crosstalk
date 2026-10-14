@@ -3,6 +3,7 @@
 
 pub mod callouts;
 pub mod glossary;
+pub mod llm;
 pub mod marian;
 pub mod models;
 mod network;
@@ -31,11 +32,21 @@ impl service::TranslationEvents for TauriEvents {
     }
 }
 
-/// Starts the translation service with the Opus-MT models of the models directory.
-pub fn start(app: &AppHandle) -> Arc<TranslationService> {
+/// TranslateGemma's helper for the session (shared with "Répondre").
+pub fn llm_runtime() -> Arc<llm::LlmRuntime> {
+    llm::LlmRuntime::new(
+        crate::speech::models::models_dir(),
+        llm::process::helper_path(),
+        Box::new(llm::runtime::RealSpawner),
+    )
+}
+
+/// Starts the translation service: TranslateGemma when installed, Opus-MT
+/// otherwise, from the models directory.
+pub fn start(app: &AppHandle, rt: Arc<llm::LlmRuntime>) -> Arc<TranslationService> {
     TranslationService::start(
         Arc::new(TauriEvents(app.clone())),
-        Arc::new(service::OpusLoader),
+        Arc::new(llm::HybridLoader::new(rt, Arc::new(service::OpusLoader))),
         crate::speech::models::models_dir(),
         TranslationConfig::default(),
     )
