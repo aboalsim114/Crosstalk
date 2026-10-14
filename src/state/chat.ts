@@ -1,5 +1,6 @@
 // Written chat of CS2, read by the Rust core from console.log (src-tauri/src/chat).
 
+import { t } from '../i18n';
 import { create } from 'zustand';
 import { isTauri, type ChatConfig, type ChatMessage, type ChatStatus, type Cs2Setup } from '../backend';
 import type { Lang } from './data';
@@ -62,37 +63,37 @@ export function cs2SetupSummary(st: ChatStatus | null): Summary & { action: stri
   if (!st)
     return {
       value: '…',
-      detail: 'Recherche de CS2…',
+      detail: t('chat.searching'),
       color: '#8f8a83',
       action: null,
     };
   const s: Cs2Setup = st.setup;
   if (!s.consoleLog)
     return {
-      value: 'CS2 introuvable',
-      detail: s.steamDir ? `Steam trouvé (${s.libraries.length} bibliothèque${s.libraries.length > 1 ? 's' : ''}), mais pas Counter-Strike 2` : 'Steam introuvable sur ce PC',
+      value: t('chat.notFound'),
+      detail: s.steamDir ? t('chat.steamFound', { count: s.libraries.length }) : t('chat.noSteam'),
       color: '#ff8a7a',
-      action: 'Indiquez le dossier de Counter-Strike 2 ci-dessous.',
+      action: t('chat.pickFolder'),
     };
   if (s.condebug === 'absent')
     return {
-      value: '-condebug absent',
+      value: t('chat.noCondebug'),
       detail: s.consoleLog,
       color: '#ffa24a',
-      action: 'Steam › Counter-Strike 2 › Propriétés › Options de lancement : ajoutez -condebug, puis relancez CS2.',
+      action: t('chat.addCondebug'),
     };
   if (st.state === 'waiting' || !s.consoleLogExists)
     return {
-      value: 'En attente de console.log',
+      value: t('chat.waitingLog'),
       detail: s.consoleLog,
       color: '#ffa24a',
-      action: s.condebug === 'unknown' ? 'Lancez CS2 avec l’option -condebug : le fichier apparaît au lancement.' : 'Lancez CS2 : le fichier est créé au lancement du jeu.',
+      action: s.condebug === 'unknown' ? t('chat.launchCondebug') : t('chat.launch'),
     };
   return {
-    value: st.state === 'following' ? 'Chat suivi' : s.condebug === 'present' ? 'Prêt' : 'console.log trouvé',
+    value: st.state === 'following' ? t('chat.following') : s.condebug === 'present' ? t('chat.ready') : t('chat.found'),
     detail: s.consoleLog,
     color: '#7fe0a8',
-    action: s.condebug === 'unknown' ? 'Options Steam illisibles : vérifiez que -condebug est bien dans les options de lancement.' : null,
+    action: s.condebug === 'unknown' ? t('chat.optionsUnreadable') : null,
   };
 }
 

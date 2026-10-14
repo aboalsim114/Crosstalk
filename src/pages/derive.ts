@@ -1,6 +1,6 @@
 // Pure view-model helpers shared by the pages (and covered by unit tests).
 
-import { CHANNEL_NAME, LANG_NAME } from '../state/data';
+import { channelName, langName, quote, t } from '../i18n';
 import type { FeedEntry, FeedStatus } from '../state/store';
 import { fmtSeconds } from '../components/atoms';
 
@@ -12,9 +12,6 @@ export const STATUS_COLOR: Record<FeedStatus, string> = {
   transcrit: '#7fd4ff',
 };
 
-/** Shown under a real transcript while its French translation is computed. */
-export const TRANSCRIPT_NOTE = 'Transcription en langue originale — traduction en cours';
-export const CHAT_PENDING_NOTE = 'Message en langue originale — traduction en cours';
 
 /**
  * In the desktop app every real line carries the id of its source (a voice
@@ -28,18 +25,20 @@ export function isDemoLine(native: boolean, f: FeedEntry | undefined): boolean {
 /** Advice when the measured voice delay is too long for live subtitles. */
 export function latencyAdvice(p50Ms: number, model: string): string | null {
   if (p50Ms <= 3000) return null;
-  if (model !== 'tiny' && model !== 'base') return `Trop lent pour le direct avec whisper-${model} : choisissez whisper-base (Audio & IA)`;
-  return 'Délai élevé : le processeur est très chargé pendant la partie';
+  if (model !== 'tiny' && model !== 'base') return t('advice.slowModel', { model });
+  return t('advice.cpu');
 }
 
-export const LIVE_NOTE = 'En cours d’écoute… le texte se complète';
-export const PROVISIONAL_NOTE = 'Traduction provisoire — version soignée en cours';
-
 export function transcriptNote(f: FeedEntry): string {
-  if (f.live) return f.shown ? `${LIVE_NOTE} · traduction provisoire` : LIVE_NOTE;
-  if (f.shown && !f.note) return PROVISIONAL_NOTE;
-  if (f.note) return `Non traduit — ${f.note}`;
-  return f.kind === 'chat' ? CHAT_PENDING_NOTE : TRANSCRIPT_NOTE;
+  if (f.live) return f.shown ? t('note.liveProvisional') : t('note.live');
+  if (f.shown && !f.note) return t('note.provisional');
+  if (f.note) return t('note.untranslated', { reason: f.note });
+  return f.kind === 'chat' ? t('note.chatPending') : t('note.transcript');
+}
+
+/** "VOIX" or "CHAT · ÉQUIPE CT" in the interface language. */
+function kindTag(f: FeedEntry): string {
+  return f.kind === 'voice' ? t('feed.voice') : `${t('feed.chat')} · ${channelName(f.ch)}`;
 }
 
 export interface FeedRow {
@@ -65,10 +64,10 @@ export function feedRow(f: FeedEntry): FeedRow {
     const voice = f.kind === 'voice';
     return {
       id: f.id,
-      tag: voice ? 'VOIX' : 'CHAT · ' + CHANNEL_NAME[f.ch!],
+      tag: kindTag(f),
       color: voice ? '#ffa24a' : '#7fd4ff',
       time: f.time,
-      langs: (f.src === 'xx' ? '??' : f.src.toUpperCase()) + (f.shown ? ' → FR · PROVISOIRE' : voice ? ' · TRANSCRIPTION' : ' · ORIGINAL'),
+      langs: (f.src === 'xx' ? '??' : f.src.toUpperCase()) + (f.shown ? ` → FR · ${t('feed.provisional')}` : ` · ${voice ? t('feed.transcription') : t('feed.original')}`),
       lead: f.sender ? f.sender + ' — ' : '',
       // Provisional French (live line) above its original, else the original alone.
       orig: f.shown ? f.orig : '',
@@ -77,7 +76,7 @@ export function feedRow(f: FeedEntry): FeedRow {
       italic: !!f.live || !!f.shown,
       note: transcriptNote(f),
       noteColor: '#6e6961',
-      status: f.live ? 'EN DIRECT' : 'TRANSCRIT',
+      status: f.live ? t('feed.live') : t('status.transcrit'),
       statusColor: STATUS_COLOR.transcrit,
       lat: f.lat ? fmtSeconds(f.lat) : '',
     };
@@ -87,7 +86,7 @@ export function feedRow(f: FeedEntry): FeedRow {
   const prov = f.status === 'provisoire';
   return {
     id: f.id,
-    tag: voice ? 'VOIX' : 'CHAT · ' + f.ch,
+    tag: voice ? t('feed.voice') : `${t('feed.chat')} · ${f.ch}`,
     color: voice ? '#ffa24a' : '#7fd4ff',
     time: f.time,
     langs: f.src.toUpperCase() + (fr ? '' : ' → FR'),
@@ -96,9 +95,9 @@ export function feedRow(f: FeedEntry): FeedRow {
     shown: f.shown || f.orig,
     trColor: prov ? '#8f8a83' : '#ece6dc',
     italic: prov,
-    note: fr ? 'Déjà en français — non traduit' : f.err ? `Moteur indisponible — original affiché${f.note ? ` (${f.note})` : ''}` : (f.note ?? ''),
+    note: fr ? t('note.alreadyTarget') : f.err ? (f.note ? t('note.engineDownWhy', { reason: f.note }) : t('note.engineDown')) : (f.note ?? ''),
     noteColor: f.err ? '#ff8a7a' : '#5a5650',
-    status: f.status.toUpperCase(),
+    status: t(`status.${f.status}`),
     statusColor: STATUS_COLOR[f.status],
     lat: f.lat ? fmtSeconds(f.lat) : '',
   };
@@ -120,24 +119,24 @@ export interface Subtitle {
 export function subtitle(f0: FeedEntry | undefined, live: boolean): Subtitle {
   if (!f0)
     return {
-      tag: live ? 'EN ÉCOUTE' : 'HORS LIGNE',
+      tag: live ? t('sub.listening') : t('sub.offline'),
       sender: '',
       color: '#5a5650',
       orig: '',
-      text: live ? 'En attente d’une voix…' : 'Le silence, pour l’instant.',
+      text: live ? t('sub.waiting') : t('sub.silence'),
       italic: true,
       trColor: '#6e6961',
-      note: live ? '' : 'Démarrez la session pour sous-titrer la partie.',
+      note: live ? '' : t('sub.start'),
       noteColor: '#5a5650',
     };
   if (f0.status === 'transcrit') {
     const voice = f0.kind === 'voice';
     return {
-      tag: (voice ? 'VOIX' : 'CHAT · ' + CHANNEL_NAME[f0.ch!]) + ' · ' + LANG_NAME[f0.src] + (voice ? ' · TRANSCRIPTION' : ' · ORIGINAL'),
+      tag: `${kindTag(f0)} · ${langName(f0.src)} · ${voice ? t('feed.transcription') : t('feed.original')}`,
       sender: f0.sender ?? '',
       color: voice ? '#ffa24a' : '#7fd4ff',
       orig: f0.shown ? f0.orig : '',
-      text: '« ' + (f0.shown ?? f0.orig) + (f0.live ? ' …' : '') + ' »',
+      text: quote((f0.shown ?? f0.orig) + (f0.live ? ' …' : '')),
       italic: !!f0.live || !!f0.shown,
       trColor: f0.live || f0.shown ? '#c9c2b7' : '#f3ede3',
       note: transcriptNote(f0),
@@ -147,14 +146,14 @@ export function subtitle(f0: FeedEntry | undefined, live: boolean): Subtitle {
   const fr = f0.status === 'original';
   const prov = f0.status === 'provisoire';
   return {
-    tag: (f0.kind === 'voice' ? 'VOIX' : 'CHAT · ' + CHANNEL_NAME[f0.ch!]) + ' · ' + LANG_NAME[f0.src] + (fr ? '' : ' → FRANÇAIS'),
+    tag: `${kindTag(f0)} · ${langName(f0.src)}${fr ? '' : ` → ${t('target.name')}`}`,
     sender: f0.sender || '',
     color: f0.kind === 'voice' ? '#ffa24a' : '#7fd4ff',
     orig: fr ? '' : f0.orig,
-    text: '« ' + (f0.shown || f0.orig) + ' »',
+    text: quote(f0.shown || f0.orig),
     italic: prov,
     trColor: prov ? '#a49d92' : '#f3ede3',
-    note: prov ? 'Transcription provisoire — correction en cours' : f0.err ? 'Moteur de traduction indisponible — original affiché' : (f0.note ?? ''),
+    note: prov ? t('note.provTranscript') : f0.err ? t('note.trDown') : (f0.note ?? ''),
     noteColor: f0.err ? '#ff8a7a' : '#6e6961',
   };
 }

@@ -1,19 +1,16 @@
 import { isTauri } from '../backend';
 import { Seg, Slider, ToggleRow, fnt } from '../components/atoms';
-import { CHANNEL_NAME, LANG_NAME, SAMPLE_OVERLAY, type OverlayLine } from '../state/data';
+import { channelName, langName, quote, t, useT, type MessageKey } from '../i18n';
+import { SAMPLE_OVERLAY, type OverlayLine } from '../state/data';
 import { useApp, type AppState, type Corner, type OverlayFormat } from '../state/store';
 import { StreamCard } from './StreamCard';
 
-const FORMATS: [OverlayFormat, string][] = [
-  ['minimal', 'Minimal'],
-  ['bilingue', 'Bilingue'],
-  ['accessible', 'Accessible'],
-];
-export const CORNERS: [Corner, string][] = [
-  ['tl', 'Haut gauche'],
-  ['tr', 'Haut droite'],
-  ['bl', 'Bas gauche'],
-  ['br', 'Bas droite'],
+const FORMATS: OverlayFormat[] = ['minimal', 'bilingue', 'accessible'];
+export const CORNERS: [Corner, MessageKey][] = [
+  ['tl', 'ov.corner.tl'],
+  ['tr', 'ov.corner.tr'],
+  ['bl', 'ov.corner.bl'],
+  ['br', 'ov.corner.br'],
 ];
 
 export interface OverlayBlock {
@@ -30,7 +27,9 @@ export function overlayBlocks(feed: OverlayLine[], maxBlocks: number): OverlayBl
   const src = feed.length ? feed : SAMPLE_OVERLAY;
   return src.slice(0, maxBlocks).map((f, i) => {
     const voice = f.kind === 'voice';
-    const t = f.shown || f.orig;
+    const kind = voice ? t('feed.voice') : `${t('feed.chat')} • ${channelName(f.ch)}`;
+    const to = `→ ${t('target.name')}`;
+    const text = f.shown || f.orig;
     // A real transcript is the original text: never labelled as French.
     const transcript = f.status === 'transcrit';
     // Provisional French of a line still being spoken (or whose final translation is pending).
@@ -38,9 +37,9 @@ export function overlayBlocks(feed: OverlayLine[], maxBlocks: number): OverlayBl
       return {
         key: `${i}-${f.orig}`,
         color: voice ? '#ffa24a' : '#7fd4ff',
-        head: `${voice ? 'VOIX' : `CHAT • ${CHANNEL_NAME[f.ch!]}`} • ${LANG_NAME[f.src]} → FRANÇAIS (PROVISOIRE)`,
+        head: `${kind} • ${langName(f.src)} ${to} ${t('ov.provisional')}`,
         orig: f.orig,
-        line: `${f.sender ? f.sender + ' : ' : ''}« ${f.shown}${f.live ? ' …' : ''} »`,
+        line: `${f.sender ? f.sender + ' : ' : ''}${quote(f.shown + (f.live ? ' …' : ''))}`,
         opacity: i === maxBlocks - 1 && maxBlocks > 2 ? 0.5 : 1,
       };
     }
@@ -49,14 +48,15 @@ export function overlayBlocks(feed: OverlayLine[], maxBlocks: number): OverlayBl
       color: voice ? '#ffa24a' : '#7fd4ff',
       head: transcript
         ? voice
-          ? `VOIX • ${LANG_NAME[f.src]} • TRANSCRIPTION (NON TRADUITE)`
-          : `CHAT • ${CHANNEL_NAME[f.ch!]} • ${LANG_NAME[f.src]} (NON TRADUIT)`
-        : voice
-          ? `VOIX • ${LANG_NAME[f.src]} → FRANÇAIS`
-          : `CHAT • ${CHANNEL_NAME[f.ch!]} • ${LANG_NAME[f.src]} → FRANÇAIS`,
+          ? `${kind} • ${langName(f.src)} • ${t('ov.voiceUntranslated')}`
+          : `${kind} • ${langName(f.src)} ${t('ov.chatUntranslated')}`
+        : `${kind} • ${langName(f.src)} ${to}`,
       orig: transcript ? '' : f.orig,
       line: transcript
-        ? `${f.sender ? f.sender + ' : ' : `[${f.src === 'xx' ? '??' : f.src.toUpperCase()}] `}« ${t}${f.live ? ' …' : ''} »` : f.sender ? `${f.sender} : « ${t} »` : `« ${t} »`,
+        ? `${f.sender ? f.sender + ' : ' : `[${f.src === 'xx' ? '??' : f.src.toUpperCase()}] `}${quote(text + (f.live ? ' …' : ''))}`
+        : f.sender
+          ? `${f.sender} : ${quote(text)}`
+          : quote(text),
       opacity: i === maxBlocks - 1 && maxBlocks > 2 ? 0.5 : 1,
     };
   });
@@ -64,6 +64,7 @@ export function overlayBlocks(feed: OverlayLine[], maxBlocks: number): OverlayBl
 
 /** The subtitle stack itself; shared by the preview and the real overlay window. */
 export function OverlayStack({ s, outline }: { s: Pick<AppState, 'feed' | 'maxBlocks' | 'fmt' | 'opacity' | 'textSize'>; outline?: string }) {
+  useT(); // re-render when the language changes
   const blocks = overlayBlocks(s.feed, s.maxBlocks);
   const size = s.fmt === 'accessible' ? s.textSize + 6 : s.textSize;
   return (
@@ -84,6 +85,7 @@ export function OverlayStack({ s, outline }: { s: Pick<AppState, 'feed' | 'maxBl
 }
 
 export function OverlayPage() {
+  const t = useT();
   const s = useApp();
   const pad = 22;
   const c = s.corner;
@@ -97,7 +99,7 @@ export function OverlayPage() {
           >
             <div className="absolute inset-0" style={{ background: 'repeating-linear-gradient(135deg,rgba(255,255,255,.018) 0 2px,transparent 2px 22px)' }} />
             <div className="absolute right-0 bottom-[22px] left-0 text-center" style={{ font: fnt(500, 10, 'mono'), letterSpacing: '.2em', color: '#4a4640' }}>
-              CAPTURE DU JEU · FENÊTRÉ SANS BORDURES
+              {t('ov.game')}
             </div>
             <div className="absolute top-1/2 left-1/2 h-3.5 w-3.5 -translate-x-1/2 -translate-y-1/2">
               <div className="absolute top-0 left-1.5 h-3.5 w-0.5" style={{ background: 'rgba(127,224,168,.7)' }} />
@@ -120,15 +122,15 @@ export function OverlayPage() {
             )}
           </div>
           <div className="flex justify-between" style={{ font: fnt(400, 11.5), color: '#6e6961' }}>
-            <span>Aperçu à l’échelle · {s.feed.length ? 'répliques en direct' : 'exemples'}</span>
-            <span>Plein écran exclusif : expérimental, non garanti</span>
+            <span>{s.feed.length ? t('ov.previewLive') : t('ov.previewSamples')}</span>
+            <span>{t('ov.exclusive')}</span>
           </div>
         </div>
 
         <div className="glass flex flex-col gap-3.5 p-5">
           <div className="flex flex-col gap-[9px]">
-            <div className="lbl">FORMAT</div>
-            <Seg options={FORMATS} value={s.fmt} onChange={(v) => s.set({ fmt: v })} grid={3} item={{ padding: '6px 0', textAlign: 'center', font: fnt(500, 11.5) }} />
+            <div className="lbl">{t('ov.format')}</div>
+            <Seg options={FORMATS.map((f) => [f, t(`ov.fmt.${f}`)] as [OverlayFormat, string])} value={s.fmt} onChange={(v) => s.set({ fmt: v })} grid={3} item={{ padding: '6px 0', textAlign: 'center', font: fnt(500, 11.5) }} />
           </div>
           <div className="flex items-center gap-4">
             <div className="grid h-[52px] w-[88px] flex-none grid-cols-2 gap-1 rounded-lg p-1" style={{ border: '1px solid rgba(255,255,255,.08)' }}>
@@ -136,7 +138,7 @@ export function OverlayPage() {
                 <div
                   key={id}
                   role="button"
-                  aria-label={label}
+                  aria-label={t(label)}
                   aria-pressed={s.corner === id}
                   onClick={() => s.set({ corner: id })}
                   className="cursor-pointer rounded-[3px]"
@@ -145,15 +147,15 @@ export function OverlayPage() {
               ))}
             </div>
             <div className="flex flex-col gap-1">
-              <div className="lbl">POSITION</div>
-              <div style={{ font: fnt(400, 20, 'serif'), color: '#ece6dc' }}>{CORNERS.find(([id]) => id === s.corner)![1]}</div>
+              <div className="lbl">{t('ov.position')}</div>
+              <div style={{ font: fnt(400, 20, 'serif'), color: '#ece6dc' }}>{t(CORNERS.find(([id]) => id === s.corner)![1])}</div>
             </div>
           </div>
-          <Slider label="Opacité du fond" unit="%" min={0} max={100} value={s.opacity} onChange={(v) => s.set({ opacity: v })} />
-          <Slider label="Taille du texte" unit="px" min={14} max={28} value={s.textSize} onChange={(v) => s.set({ textSize: v })} />
-          <Slider label="Fondu après" unit="s" min={4} max={8} value={s.duration} onChange={(v) => s.set({ duration: v })} />
+          <Slider label={t('ov.opacity')} unit="%" min={0} max={100} value={s.opacity} onChange={(v) => s.set({ opacity: v })} />
+          <Slider label={t('ov.textSize')} unit="px" min={14} max={28} value={s.textSize} onChange={(v) => s.set({ textSize: v })} />
+          <Slider label={t('ov.fade')} unit="s" min={4} max={8} value={s.duration} onChange={(v) => s.set({ duration: v })} />
           <div className="flex items-center justify-between">
-            <span style={{ font: fnt(400, 12.5), color: '#bdb6ab' }}>Blocs visibles</span>
+            <span style={{ font: fnt(400, 12.5), color: '#bdb6ab' }}>{t('ov.blocks')}</span>
             <Seg
               options={[
                 [2, '2'],
@@ -165,15 +167,15 @@ export function OverlayPage() {
             />
           </div>
           <div className="h-px" style={{ background: 'rgba(255,255,255,.06)' }} />
-          <ToggleRow title="Click-through en jeu" sub="Aucun vol de focus clavier" on={s.tg.click} onClick={() => s.toggle('click')} />
-          <ToggleRow title="Overlay affiché" sub="⌃⌥F8" subMono on={s.overlayOn} onClick={s.toggleOverlay} />
+          <ToggleRow title={t('ov.click')} sub={t('ov.clickSub')} on={s.tg.click} onClick={() => s.toggle('click')} />
+          <ToggleRow title={t('ov.shown')} sub="⌃⌥F8" subMono on={s.overlayOn} onClick={s.toggleOverlay} />
           <div
             role="button"
             onClick={() => s.set({ repos: !s.repos })}
             className="cursor-pointer rounded-full py-2.5 text-center"
             style={{ border: '1px solid rgba(255,255,255,.1)', font: fnt(500, 12.5), color: '#ece6dc', background: s.repos ? 'rgba(255,162,74,.1)' : 'transparent', transition: 'background .3s' }}
           >
-            {s.repos ? 'Terminer le repositionnement' : 'Repositionner l’overlay'}
+            {s.repos ? t('ov.reposDone') : t('ov.repos')}
           </div>
         </div>
       </div>

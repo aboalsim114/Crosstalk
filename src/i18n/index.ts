@@ -91,3 +91,18 @@ export function useT() {
   const locale = useLocale((s) => s.locale);
   return (key: MessageKey, params?: Params) => translate(locale, key, params);
 }
+
+/** Name of a spoken language (`ru`, `en`, `fr`, `xx` = unknown), in capitals. */
+export function langName(code: string): string {
+  return code === 'ru' || code === 'en' || code === 'fr' ? t(`lang.${code}`) : t('lang.xx');
+}
+
+/** Name of a CS2 chat channel. */
+export function channelName(ch: string | undefined): string {
+  return ch === 'CT' || ch === 'T' || ch === 'ALL' ? t(`channel.${ch}`) : (ch ?? '');
+}
+
+/** Quoted text with the typography of the language (« », “ ”, „ “…). */
+export function quote(text: string): string {
+  return t('quote.open') + text + t('quote.close');
+}
