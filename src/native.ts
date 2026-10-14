@@ -24,6 +24,8 @@ export interface OverlayPayload {
   repos: boolean;
   /** Interface language of the labels ("VOIX • RUSSE", quotes…). */
   locale: Locale;
+  /** Language of the translations ("RUSSE → FRANÇAIS"). */
+  target: string;
 }
 
 export function overlayPayload(s: AppState): OverlayPayload {
@@ -37,6 +39,7 @@ export function overlayPayload(s: AppState): OverlayPayload {
     corner: s.corner,
     repos: s.repos,
     locale: resolveLocale(s.uiLang),
+    target: s.target,
   };
 }
 
@@ -129,6 +132,8 @@ function startSetupBridge(): Promise<() => void>[] {
   let lastKey = '';
   let timer: ReturnType<typeof setTimeout> | undefined;
   const push = (s: AppState) => {
+    // First launch: nothing is fetched before the user chose their languages.
+    if (!s.langSetupDone) return;
     const key = JSON.stringify(setupNeeds(s));
     if (key === lastKey) return;
     lastKey = key;
@@ -258,7 +263,7 @@ export function startNativeBridge(): () => void {
       lastCfg = key;
       overlayWindow.configure(cfg).catch((e) => console.warn('overlay_configure failed', e));
     }
-    if (!prev || prev.feed !== s.feed || prev.fmt !== s.fmt || prev.opacity !== s.opacity || prev.textSize !== s.textSize || prev.maxBlocks !== s.maxBlocks || prev.duration !== s.duration || prev.corner !== s.corner || prev.repos !== s.repos || prev.uiLang !== s.uiLang) push();
+    if (!prev || prev.feed !== s.feed || prev.fmt !== s.fmt || prev.opacity !== s.opacity || prev.textSize !== s.textSize || prev.maxBlocks !== s.maxBlocks || prev.duration !== s.duration || prev.corner !== s.corner || prev.repos !== s.repos || prev.uiLang !== s.uiLang || prev.target !== s.target) push();
   };
   sync(useApp.getState());
   const unsub = useApp.subscribe(sync);

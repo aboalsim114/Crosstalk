@@ -4,6 +4,8 @@ import { config } from '../config';
 import { isCapturing, useAudio } from './audio';
 import type { UiLang } from '../i18n';
 import { EVENTS, GLOSSARY, type GlossEntry, type ModelId, type PageId, type SimEvent } from './data';
+import type { PlayerLang, TargetLang } from './langs';
+import { useTargetLang } from '../i18n';
 
 export type Session = 'IDLE' | 'INITIALIZING' | 'LISTENING' | 'DEGRADED' | 'PAUSED' | 'STOPPING' | 'STOPPED';
 /** 'transcrit': real speech recognition in the original language, not (yet) translated. */
@@ -34,7 +36,7 @@ export interface SpeakerOpts {
 export const SPEAKER_DEFAULTS: SpeakerOpts = { enabled: false, region: { x: 0, y: 0.5, w: 0.25, h: 0.3 } };
 export const STREAM_DEFAULTS: StreamOpts = { enabled: false, names: false, original: false, watermark: true, size: 34, max: 3, duration: 8 };
 
-export type SourceLang = 'ru' | 'en' | 'de' | 'es' | 'pt' | 'pl';
+export type SourceLang = PlayerLang;
 
 export interface FeedEntry extends SimEvent {
   id: number;
@@ -90,7 +92,12 @@ export interface AppState {
   accel: Accel;
   /** "Focus voix": keep the centred voice chat, turn down game sounds from the sides. */
   voiceFocus: boolean;
+  /** The players' languages (Langues › Mes langues). */
   src: Record<SourceLang, boolean>;
+  /** The user's language: everything is translated into it. */
+  target: TargetLang;
+  /** Languages chosen once (first launch asks before anything else). */
+  langSetupDone: boolean;
   gloss: GlossEntry[];
   newTerm: string;
   test: number;
@@ -170,7 +177,9 @@ const initial: AppState = {
   model: 'base',
   accel: 'auto',
   voiceFocus: false,
-  src: { ru: true, en: true, de: false, es: false, pt: false, pl: false },
+  src: { fr: false, en: true, ru: true, de: false, es: false, uk: false, pl: false, tr: false },
+  target: 'fr',
+  langSetupDone: false,
   gloss: GLOSSARY,
   newTerm: '',
   test: 0,
@@ -427,7 +436,7 @@ export const KEPT_NOTE = 'Termes CS conservés tels quels (glossaire, modifiable
 export function withTranslation(f: FeedEntry, t: Translation): FeedEntry {
   const total = (f.lat ?? 0) + t.queueMs + t.ms;
   if (t.translated) {
-    if (t.lang === 'fr') return { ...f, status: 'original', shown: null, tr: null };
+    if (t.lang === (t.target || 'fr')) return { ...f, status: 'original', shown: null, tr: null };
     // Only CS terms kept by the glossary: say so, else it looks untranslated.
     const same = (x: string) => x.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
     const note = same(t.translated) === same(f.orig) ? KEPT_NOTE : undefined;
@@ -437,3 +446,8 @@ export function withTranslation(f: FeedEntry, t: Translation): FeedEntry {
   if (QUIET_FAILURES.includes(why)) return { ...f, note: why, shown: null };
   return { ...f, status: 'erreur', shown: null, err: true, lat: total, note: why };
 }
+
+// Labels ("→ FRANÇAIS") follow the language of the translations.
+useApp.subscribe((s, prev) => {
+  if (s.target !== prev.target) useTargetLang.setState({ target: s.target });
+});

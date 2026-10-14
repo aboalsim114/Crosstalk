@@ -117,7 +117,7 @@ export function recapFacts(m: MatchStats, now = Date.now()): RecapFacts {
     title: m.mapName ?? 'Session CS2',
     subtitle: parts.join(' · '),
     hero: m.translated,
-    heroLabel: m.translated === 1 ? 'annonce traduite en français' : 'annonces traduites en français',
+    heroLabel: m.translated === 1 ? 'annonce traduite' : 'annonces traduites',
     rows: rows.slice(0, 5),
   };
 }

@@ -1,11 +1,12 @@
 // Local French translation (Opus-MT on the CPU, no API key), mirrored from the
 // Rust core (`translation://*` events).
 
-import { t } from '../i18n';
+import { langName, t } from '../i18n';
 import { create } from 'zustand';
 import { isTauri, translation, type PairStatus, type Translation, type TranslationConfig, type TranslationStatus } from '../backend';
-import type { GlossEntry } from './data';
+import { GLOSSARY, type GlossEntry } from './data';
 import type { AppState } from './store';
+import { chosenSources } from './langs';
 
 export interface TranslationState {
   native: boolean;
@@ -17,14 +18,24 @@ export interface TranslationState {
 export const useTranslation = create<TranslationState>()(() => ({ native: isTauri, status: null, times: [] }));
 
 /** Rust translation settings from the UI: on/off switch and glossary. */
-export function translationConfigFrom(s: Pick<AppState, 'tg' | 'gloss'>): TranslationConfig {
+export function translationConfigFrom(s: Pick<AppState, 'tg' | 'gloss'> & Partial<Pick<AppState, 'target' | 'src'>>): TranslationConfig {
+  const target = s.target ?? 'fr';
+  // The built-in renderings are French: into another language the term is kept as spoken.
+  const builtIn = (term: string, rendering: string) => GLOSSARY.some(([t, m, r]) => t === term && m === 'Traduire' && r === rendering);
   return {
     enabled: s.tg.translate,
-    glossary: s.gloss.map(([source, mode, rendering]: GlossEntry) => ({ source, target: mode === 'Traduire' ? rendering : null })),
+    glossary: s.gloss.map(([source, mode, rendering]: GlossEntry) => ({ source, target: mode === 'Traduire' && (target === 'fr' || !builtIn(source, rendering)) ? rendering : null })),
+    target,
+    sources: s.src ? chosenSources(s.src) : ['ru', 'en'],
   };
 }
 
-export const PAIR_NAME: Record<string, string> = { ru: 'Russe → français', en: 'Anglais → français' };
+const cap = (s: string) => s.charAt(0) + s.slice(1).toLowerCase();
+
+/** "Russe → français" in the interface's language. */
+export function pairName(source: string, target: string): string {
+  return `${cap(langName(source))} → ${langName(target).toLowerCase()}`;
+}
 
 export interface PairSummary {
   label: string;
@@ -33,7 +44,7 @@ export interface PairSummary {
 }
 
 export function pairSummary(p: PairStatus): PairSummary {
-  const label = PAIR_NAME[p.source] ?? p.source;
+  const label = pairName(p.source, p.target ?? 'fr');
   switch (p.state) {
     case 'ready':
       return { label, value: p.loadMs != null ? `prêt · chargé en ${p.loadMs} ms` : 'prêt', color: '#7fe0a8' };
@@ -55,7 +66,7 @@ export function translationSummary(st: TranslationStatus | null): PairSummary {
   if (st.pairs.some((p) => p.state === 'loading')) return { label, value: t('tr.loading'), color: '#ffa24a' };
   if (st.pairs.some((p) => p.state === 'error')) return { label, value: t('tr.error'), color: '#ff8a7a' };
   if (!ready.length) return { label, value: t('tr.missing'), color: '#ffa24a' };
-  return { label, value: t('tr.ready', { langs: ready.join(', ') }), color: '#7fe0a8' };
+  return { label, value: t('tr.ready', { langs: ready.join(', '), target: (st.config.target ?? 'fr').toUpperCase() }), color: '#7fe0a8' };
 }
 
 export function percentile(times: number[], q: number): number | null {
@@ -66,7 +77,7 @@ export function percentile(times: number[], q: number): number | null {
 
 /** Keeps the last 50 real translation times (cache hits excluded). */
 export function recordTime(t: Translation): void {
-  if (!t.translated || t.cached || t.lang === 'fr') return;
+  if (!t.translated || t.cached || t.lang === (t.target || 'fr')) return;
   useTranslation.setState((s) => ({ times: [...s.times, t.ms].slice(-50) }));
 }
 

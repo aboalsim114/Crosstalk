@@ -23,6 +23,7 @@ import { Dashboard } from './pages/Dashboard';
 import { DiagPage } from './pages/DiagPage';
 import { HistoryPage } from './pages/HistoryPage';
 import { LangPage } from './pages/LangPage';
+import { LanguageSetup } from './pages/LanguagesCard';
 import { OverlayPage } from './pages/OverlayPage';
 import { Stage } from './scene/Stage';
 import type { PageId } from './state/data';
@@ -125,6 +126,7 @@ export default function App() {
           </main>
         </div>
 
+        {entered && <LanguageSetup />}
         {showIntro && <Intro />}
         <Letterbox />
       </div>

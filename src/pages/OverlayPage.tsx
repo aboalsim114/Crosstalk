@@ -1,6 +1,6 @@
 import { isTauri } from '../backend';
 import { Seg, Slider, ToggleRow, fnt } from '../components/atoms';
-import { channelName, langName, quote, t, useT, type MessageKey } from '../i18n';
+import { channelName, langName, quote, t, useT, type MessageKey, targetName } from '../i18n';
 import { SAMPLE_OVERLAY, type OverlayLine } from '../state/data';
 import { useApp, type AppState, type Corner, type OverlayFormat } from '../state/store';
 import { StreamCard } from './StreamCard';
@@ -28,7 +28,7 @@ export function overlayBlocks(feed: OverlayLine[], maxBlocks: number): OverlayBl
   return src.slice(0, maxBlocks).map((f, i) => {
     const voice = f.kind === 'voice';
     const kind = voice ? t('feed.voice') : `${t('feed.chat')} • ${channelName(f.ch)}`;
-    const to = `→ ${t('target.name')}`;
+    const to = `→ ${targetName()}`;
     const text = f.shown || f.orig;
     // A real transcript is the original text: never labelled as French.
     const transcript = f.status === 'transcrit';

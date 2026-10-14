@@ -1,14 +1,14 @@
 import { dictation, type DictationState } from '../backend';
 import { fnt } from '../components/atoms';
-import { PASTE_HINT, TARGET_NAME } from './ReplyBox';
+import { PASTE_HINT, targetName } from './ReplyBox';
 
 /** What the dictation panel says, from the Rust state. */
 export function dictationView(st: DictationState): { title: string; detail: string; color: string } {
   switch (st.state) {
     case 'listening':
-      return { title: 'Parlez en français…', detail: `${st.seconds.toFixed(1).replace('.', ',')} s · la phrase se termine toute seule (ou Ctrl+Alt+F6)`, color: '#ff8a7a' };
+      return { title: 'Parlez dans votre langue…', detail: `${st.seconds.toFixed(1).replace('.', ',')} s · la phrase se termine toute seule (ou Ctrl+Alt+F6)`, color: '#ff8a7a' };
     case 'transcribing':
-      return { title: 'Transcription et traduction…', detail: `Sur ce PC, vers le ${TARGET_NAME[st.target].toLowerCase()}`, color: '#ffa24a' };
+      return { title: 'Transcription et traduction…', detail: `Sur ce PC, vers ${targetName(st.target)}`, color: '#ffa24a' };
     case 'done':
       return {
         title: st.translated ?? '',

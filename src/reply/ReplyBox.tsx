@@ -1,8 +1,20 @@
 import { useEffect, useRef, useState } from 'react';
 import { dictation, isTauri, reply, type ReplyPhrase, type ReplyTarget } from '../backend';
 import { fnt } from '../components/atoms';
+import { NATIVE_NAME, isPlayerLang } from '../state/langs';
 
-export const TARGET_NAME: Record<ReplyTarget, string> = { en: 'Anglais', ru: 'Russe' };
+/** A language in its own words ("English", "Русский"…). */
+export const targetName = (t: string) => (isPlayerLang(t) ? NATIVE_NAME[t] : t.toUpperCase());
+
+/** Where replies can go and the user's language, from the Rust core (browser preview: French into en / ru). */
+export function useReplyLanguages(reloadKey = 0): { me: string; targets: ReplyTarget[] } {
+  const [langs, setLangs] = useState<{ me: string; targets: ReplyTarget[] }>({ me: 'fr', targets: isTauri ? [] : ['en', 'ru'] });
+  useEffect(() => {
+    if (!isTauri) return;
+    reply.models().then((m) => setLangs({ me: m[0]?.source ?? 'fr', targets: m.map((x) => x.target) }));
+  }, [reloadKey]);
+  return langs;
+}
 
 /** Copies to the clipboard (Clipboard API, or the old way if it is refused). */
 export async function copyText(text: string): Promise<boolean> {
@@ -20,11 +32,15 @@ export async function copyText(text: string): Promise<boolean> {
   }
 }
 
-/** Teammates' language from the recent lines (voice and chat). */
-export function teammatesLanguage(langs: string[]): ReplyTarget {
-  const ru = langs.filter((l) => l === 'ru').length;
-  const en = langs.filter((l) => l === 'en').length;
-  return ru > en ? 'ru' : 'en';
+/** Teammates' language from the recent lines (voice and chat): the most heard of the reply languages. */
+export function teammatesLanguage(langs: string[], targets: ReplyTarget[] = ['en', 'ru']): ReplyTarget {
+  let best: ReplyTarget | null = null;
+  let most = 0;
+  for (const t of targets) {
+    const n = langs.filter((l) => l === t).length;
+    if (n > most) [best, most] = [t, n];
+  }
+  return best ?? (targets.includes('en') ? 'en' : (targets[0] ?? 'en'));
 }
 
 export const PASTE_HINT = 'Copié ✓ — dans CS2 : Y (tous) ou U (équipe), Ctrl+V, Entrée';
@@ -37,8 +53,10 @@ interface Props {
   autoFocusKey?: number;
 }
 
-/** French in, the teammates' language out, copied to the clipboard. */
+/** The user's language in, the teammates' language out, copied to the clipboard. */
 export function ReplyBox({ target, onTarget, onCopied, autoFocusKey }: Props) {
+  const { me, targets } = useReplyLanguages(autoFocusKey);
+  const myName = targetName(me);
   const [text, setText] = useState('');
   const [phrases, setPhrases] = useState<ReplyPhrase[]>([]);
   const [busy, setBusy] = useState(false);
@@ -81,7 +99,8 @@ export function ReplyBox({ target, onTarget, onCopied, autoFocusKey }: Props) {
     <div className="flex flex-col gap-3">
       <div className="flex items-center gap-2">
         <span className="lbl">RÉPONDRE EN</span>
-        {(['en', 'ru'] as const).map((t) => (
+        {targets.length === 0 && <span style={{ font: fnt(400, 11.5), color: '#8f8a83' }}>aucune langue de coéquipier (Langues › Mes langues)</span>}
+        {targets.map((t) => (
           <div
             key={t}
             role="button"
@@ -90,7 +109,7 @@ export function ReplyBox({ target, onTarget, onCopied, autoFocusKey }: Props) {
             className={`pill px-3 py-1 ${target === t ? 'pill-ember' : ''}`}
             style={{ font: fnt(500, 11.5) }}
           >
-            {TARGET_NAME[t]}
+            {targetName(t)}
           </div>
         ))}
       </div>
@@ -98,8 +117,8 @@ export function ReplyBox({ target, onTarget, onCopied, autoFocusKey }: Props) {
         <input
           ref={input}
           className="text-input"
-          aria-label="Message en français"
-          placeholder="Écrivez en français, puis Entrée…"
+          aria-label={`Message (${myName})`}
+          placeholder={`Écrivez en ${myName}, puis Entrée…`}
           value={text}
           maxLength={300}
           disabled={busy}
@@ -108,12 +127,12 @@ export function ReplyBox({ target, onTarget, onCopied, autoFocusKey }: Props) {
           style={{ flex: 1, minWidth: 0 }}
         />
         {isTauri && (
-          <div className="pill flex-none px-3 py-2" role="button" title="Dicter en français (Ctrl+Alt+F6)" onClick={() => void dictation.toggle([], target)} style={{ font: fnt(500, 12) }}>
+          <div className="pill flex-none px-3 py-2" role="button" title={`Dicter en ${myName} (Ctrl+Alt+F6)`} onClick={() => void dictation.toggle([], target)} style={{ font: fnt(500, 12) }}>
             🎙 Dicter
           </div>
         )}
       </div>
-      {phrases.length > 0 && (
+      {me === 'fr' && phrases.length > 0 && (
         <div className="flex flex-wrap gap-1.5">
           {phrases.map((p) => (
             <div key={p.id} role="button" className="pill px-2.5 py-1" onClick={() => quick(p)} style={{ font: fnt(400, 11) }}>

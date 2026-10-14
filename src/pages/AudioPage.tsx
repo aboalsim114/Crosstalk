@@ -382,9 +382,9 @@ export function TranslationCard() {
         <span style={{ font: fnt(500, 9.5, 'mono'), letterSpacing: '.12em', color: '#6e6961' }}>CPU · SANS CLÉ API</span>
       </div>
       <div style={{ font: fnt(400, 11, 'sans', 1.5), color: '#8f8a83' }}>
-        Les voix russes et anglaises sont traduites en français sur ce PC. Aucune clé API, aucun abonnement, rien n’est envoyé en ligne.
+        Les voix et le chat des joueurs sont traduits dans votre langue sur ce PC (Langues › Mes langues). Aucune clé API, aucun abonnement, rien n’est envoyé en ligne.
       </div>
-      <ToggleRow title="Traduire les voix en français" sub="Sinon, la transcription reste en langue originale" on={on} onClick={() => toggle('translate')} />
+      <ToggleRow title="Traduire les voix et le chat" sub="Sinon, la transcription reste en langue originale" on={on} onClick={() => toggle('translate')} />
       {tr.native ? (
         <>
           {(tr.status?.pairs ?? []).map((p) => {

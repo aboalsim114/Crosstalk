@@ -5,6 +5,8 @@ import { create } from 'zustand';
 import { isTauri, type ChatConfig, type ChatMessage, type ChatStatus, type Cs2Setup } from '../backend';
 import type { Lang } from './data';
 import type { AppState, FeedEntry } from './store';
+import { useTargetLang } from '../i18n';
+import { isPlayerLang } from './langs';
 
 export interface ChatStore {
   native: boolean;
@@ -26,13 +28,13 @@ export function chatConfigFrom(s: Pick<AppState, 'chatPath' | 'ownName' | 'tg'>)
 
 /** Why a chat line is shown untranslated, when it is. */
 export function chatUntranslated(lang: string | null): string | null {
-  if (lang === 'ru' || lang === 'en' || lang === 'fr') return null;
+  if (isPlayerLang(lang)) return null;
   return lang ? `langue non gérée (${lang})` : 'langue non reconnue';
 }
 
-/** A real chat message as a Script / overlay line: waits for its translation (ru, en). */
-export function chatEntry(m: ChatMessage, now = new Date()): FeedEntry {
-  const src: Lang = m.lang === 'ru' || m.lang === 'en' || m.lang === 'fr' ? m.lang : 'xx';
+/** A real chat message as a Script / overlay line: waits for its translation. */
+export function chatEntry(m: ChatMessage, now = new Date(), target = useTargetLang.getState().target): FeedEntry {
+  const src: Lang = isPlayerLang(m.lang) ? m.lang : 'xx';
   const note = chatUntranslated(m.lang);
   const base = {
     kind: 'chat' as const,
@@ -48,7 +50,8 @@ export function chatEntry(m: ChatMessage, now = new Date()): FeedEntry {
     lat: null,
     err: false,
   };
-  if (src === 'fr') return { ...base, status: 'original', lat: 0 };
+  // Already in the user's language: shown as is.
+  if (src === target) return { ...base, status: 'original', lat: 0 };
   return { ...base, status: 'transcrit', ...(note ? { note } : {}) };
 }
 

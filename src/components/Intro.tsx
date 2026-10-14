@@ -4,6 +4,7 @@ import { engineSummary, useSpeech } from '../state/speech';
 import { useApp } from '../state/store';
 import { translationSummary, useTranslation } from '../state/translation';
 import { EASE, fnt } from './atoms';
+import { IN_LANGUAGE_FR } from '../state/langs';
 
 // Each [data-reveal] element of the mockup fades up out of a blur, 160 ms apart, after 500 ms.
 const container: Variants = { show: { transition: { delayChildren: 0.5, staggerChildren: 0.16 } } };
@@ -24,6 +25,7 @@ export function introStatus(
 }
 
 export function Intro() {
+  const target = useApp((s) => s.target);
   const entered = useApp((s) => s.entered);
   const audio = useAudio();
   const engine = engineSummary(useSpeech((x) => x.status));
@@ -50,10 +52,10 @@ export function Intro() {
         <motion.div variants={reveal} style={{ font: fnt(400, 76, 'serif', 0.98), color: '#f3ede3', letterSpacing: '-.02em', textShadow: '0 4px 40px rgba(0,0,0,.9)' }}>
           Chaque call,
           <br />
-          <span style={{ fontStyle: 'italic', color: '#ffc68a' }}>en français.</span>
+          <span style={{ fontStyle: 'italic', color: '#ffc68a' }}>{IN_LANGUAGE_FR[target]}.</span>
         </motion.div>
         <motion.div variants={reveal} className="max-w-[520px]" style={{ font: fnt(300, 15, 'sans', 1.6), color: '#a49d92' }}>
-          Les voix et le chat de vos coéquipiers russophones et anglophones, traduits en temps réel dans un overlay discret.
+          Les voix et le chat de vos coéquipiers, traduits en temps réel dans votre langue, dans un overlay discret.
         </motion.div>
         <motion.div variants={reveal} className="flex items-center gap-3 pt-2.5">
           <div

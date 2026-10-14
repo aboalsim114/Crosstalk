@@ -172,7 +172,8 @@ export const cs2 = {
 
 // ---------- speech recognition (src-tauri/src/speech) ----------
 
-export type SpeechLang = 'ru' | 'en';
+/** Whisper languages: the players' and the user's own (src/state/langs.ts). */
+export type SpeechLang = 'fr' | 'en' | 'ru' | 'de' | 'es' | 'uk' | 'pl' | 'tr';
 export type EngineState = 'missing' | 'loading' | 'ready' | 'error';
 export type RejectReason =
   | 'short'
@@ -266,10 +267,16 @@ export interface TranslationTerm {
 export interface TranslationConfig {
   enabled: boolean;
   glossary: TranslationTerm[];
+  /** The user's language: everything is translated into it. */
+  target?: string;
+  /** The players' languages. */
+  sources?: string[];
 }
 export type PairState = 'missing' | 'loading' | 'ready' | 'error';
 export interface PairStatus {
-  source: 'ru' | 'en';
+  source: string;
+  target?: string;
+  /** "A + B" when the route goes through English. */
   repo: string;
   state: PairState;
   error: string | null;
@@ -294,6 +301,8 @@ export interface Translation {
   glossary: boolean;
   /** Quick translation of a live line, replaced by the final one. */
   partial?: boolean;
+  /** Language of `translated` (the user's language when it was sent). */
+  target?: string;
 }
 
 export const translation = {
@@ -321,11 +330,17 @@ export interface DownloadStatus {
   error: string | null;
 }
 
+/** The user's language and the players', for the translation models to fetch. */
+export interface TranslationPlan {
+  target: string;
+  sources: string[];
+}
+
 export const modelDownload = {
-  status: (model: string, translation: boolean): Promise<DownloadStatus | null> =>
-    isTauri ? invoke<DownloadStatus>('models_download_status', { model, translation }) : Promise.resolve(null),
-  start: (model: string, translation: boolean): Promise<DownloadStatus | null> =>
-    isTauri ? invoke<DownloadStatus>('models_download_start', { model, translation }) : Promise.resolve(null),
+  status: (model: string, translation: boolean, plan?: TranslationPlan): Promise<DownloadStatus | null> =>
+    isTauri ? invoke<DownloadStatus>('models_download_status', { model, translation, plan: plan ?? null }) : Promise.resolve(null),
+  start: (model: string, translation: boolean, plan?: TranslationPlan): Promise<DownloadStatus | null> =>
+    isTauri ? invoke<DownloadStatus>('models_download_start', { model, translation, plan: plan ?? null }) : Promise.resolve(null),
   cancel: (): Promise<void> => (isTauri ? invoke<void>('models_download_cancel') : Promise.resolve()),
   onProgress: (cb: (s: DownloadStatus) => void) => (isTauri ? listen<DownloadStatus>('models://download', (e) => cb(e.payload)) : Promise.resolve(noop)),
 };
@@ -517,7 +532,8 @@ export const gsi = {
 
 // ---------- reply in the teammates' language (src-tauri/src/reply) ----------
 
-export type ReplyTarget = 'en' | 'ru';
+/** A players' language Crosstalk can write into. */
+export type ReplyTarget = string;
 export interface ReplyPhrase {
   id: string;
   fr: string;
@@ -530,6 +546,8 @@ export interface ReplyResult {
   ms: number;
 }
 export interface ReplyModel {
+  /** The user's language. */
+  source: string;
   target: ReplyTarget;
   repo: string;
   sizeMb: number;
