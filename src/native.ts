@@ -1,6 +1,7 @@
 // Wires the store to the native side: global shortcuts / tray actions in, and the
 // in-game overlay window out. Only active inside the Tauri app.
 
+import { resolveLocale, type Locale } from './i18n';
 import { recentLangs } from './pages/ReplyCard';
 import { audioCapture, chat, cs2, dictation, isTauri, modelDownload, onNativeAction, overlayWindow, reply, speech, translation, type CaptureStatus, type NativeAction, type OverlayWindowConfig } from './backend';
 import { refreshModels, speechConfigFrom, transcriptEntry, useSpeech } from './state/speech';
@@ -21,6 +22,8 @@ export interface OverlayPayload {
   corner: AppState['corner'];
   /** Repositioning: show placeholder lines and a dashed frame, accept drags. */
   repos: boolean;
+  /** Interface language of the labels ("VOIX • RUSSE", quotes…). */
+  locale: Locale;
 }
 
 export function overlayPayload(s: AppState): OverlayPayload {
@@ -33,6 +36,7 @@ export function overlayPayload(s: AppState): OverlayPayload {
     duration: s.duration,
     corner: s.corner,
     repos: s.repos,
+    locale: resolveLocale(s.uiLang),
   };
 }
 
@@ -254,7 +258,7 @@ export function startNativeBridge(): () => void {
       lastCfg = key;
       overlayWindow.configure(cfg).catch((e) => console.warn('overlay_configure failed', e));
     }
-    if (!prev || prev.feed !== s.feed || prev.fmt !== s.fmt || prev.opacity !== s.opacity || prev.textSize !== s.textSize || prev.maxBlocks !== s.maxBlocks || prev.duration !== s.duration || prev.corner !== s.corner || prev.repos !== s.repos) push();
+    if (!prev || prev.feed !== s.feed || prev.fmt !== s.fmt || prev.opacity !== s.opacity || prev.textSize !== s.textSize || prev.maxBlocks !== s.maxBlocks || prev.duration !== s.duration || prev.corner !== s.corner || prev.repos !== s.repos || prev.uiLang !== s.uiLang) push();
   };
   sync(useApp.getState());
   const unsub = useApp.subscribe(sync);

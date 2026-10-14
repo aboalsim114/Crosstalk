@@ -1,5 +1,6 @@
 import { AnimatePresence, motion } from 'motion/react';
 import { config } from '../config';
+import { t, useT, type MessageKey } from '../i18n';
 import { EASE, Seg, fmtSeconds, fnt } from '../components/atoms';
 import { SIGNAL_THRESHOLD_DB, captureSummary, cs2Summary, isCapturing, useAudio } from '../state/audio';
 import { engineSummary, useSpeech } from '../state/speech';
@@ -8,13 +9,14 @@ import { cs2SetupSummary, useChat } from '../state/chat';
 import { isLive, useApp, type FeedMode } from '../state/store';
 import { feedRow, isDemoLine, latencyAdvice, subtitle, voiceLatency } from './derive';
 
-const MODES: [FeedMode, string][] = [
-  ['text', 'Texte'],
-  ['voice', 'Voix'],
-  ['mixed', 'Mixte'],
+const MODES: [FeedMode, MessageKey][] = [
+  ['text', 'dash.mode.text'],
+  ['voice', 'dash.mode.voice'],
+  ['mixed', 'dash.mode.mixed'],
 ];
 
 function Subtitle() {
+  useT(); // re-render when the language changes
   const f0 = useApp((s) => s.feed[0]);
   const live = useApp(isLive);
   const sub = subtitle(f0, live);
@@ -36,7 +38,7 @@ function Subtitle() {
         className="flex flex-col items-center gap-3"
       >
         <div className="flex items-center gap-2.5" style={{ font: fnt(500, 10.5, 'mono'), letterSpacing: '.16em', color: sub.color }}>
-          {demo && <span style={{ color: '#ffa24a' }}>DÉMO ·</span>}
+          {demo && <span style={{ color: '#ffa24a' }}>{t('dash.demo')}</span>}
           <span>{sub.tag}</span>
           <span style={{ color: '#5a5650' }}>{sub.sender}</span>
         </div>
@@ -63,6 +65,7 @@ function Subtitle() {
 }
 
 function Pipeline() {
+  const t = useT();
   const s = useApp();
   const live = isLive(s);
   const audio = useAudio();
@@ -71,12 +74,13 @@ function Pipeline() {
   const translating = s.feed.some((f) => f.tid != null && f.status === 'transcrit' && !f.note && !f.live);
   const fb = config.win10Fallback;
   const captureSub = audio.native ? captureSummary(audio.status).short : fb ? 'loopback' : 'cs2.exe';
+  const threshold = t('dash.vad.threshold', { n: s.vad });
   const stages: [string, string][] = [
-    ['Capture', captureSub],
-    ['VAD', audio.native ? `Silero · seuil ${s.vad} %` : `seuil ${s.vad} %`],
-    ['Transcription', audio.native ? `whisper ${s.model} · ${sp.status?.state === 'ready' ? 'prêt' : engineSummary(sp.status).value.toLowerCase()}` : `whisper ${s.model}`],
-    ['Traduction', audio.native ? translationSummary(tr).value : 'opus-mt → fr'],
-    ['Overlay', s.fmt],
+    [t('dash.stage.capture'), captureSub],
+    [t('dash.stage.vad'), audio.native ? `Silero · ${threshold}` : threshold],
+    [t('dash.stage.asr'), audio.native ? `whisper ${s.model} · ${sp.status?.state === 'ready' ? t('dash.ready') : engineSummary(sp.status).value.toLowerCase()}` : `whisper ${s.model}`],
+    [t('dash.stage.translation'), audio.native ? translationSummary(tr).value : 'opus-mt → fr'],
+    [t('dash.stage.overlay'), t(`ov.fmt.${s.fmt}`)],
   ];
   return (
     <div className="flex items-center px-2 pb-[22px]">
@@ -105,6 +109,7 @@ function Pipeline() {
 }
 
 function StatusCards() {
+  const t = useT();
   const s = useApp();
   const live = isLive(s);
   const fb = config.win10Fallback;
@@ -118,18 +123,23 @@ function StatusCards() {
   const chatSum = cs2SetupSummary(useChat((x) => x.status));
   const cards = [
     audio.native
-      ? { label: 'COUNTER-STRIKE 2', value: cs2.value, sub: `${cs2.detail} · chat : ${chatSum.value}`, dot: cs2.color }
-      : { label: 'COUNTER-STRIKE 2', value: live ? 'En cours' : 'Détecté', sub: 'console.log · -condebug actif', dot: '#7fe0a8' },
+      ? { label: t('dash.card.cs2'), value: cs2.value, sub: t('dash.cs2.sub', { detail: cs2.detail, chat: chatSum.value }), dot: cs2.color }
+      : { label: t('dash.card.cs2'), value: live ? t('dash.demo.running') : t('dash.demo.detected'), sub: t('dash.demo.condebug'), dot: '#7fe0a8' },
     audio.native
-      ? { label: 'CAPTURE', value: capture.value, sub: capture.detail, dot: capture.color }
-      : { label: 'CAPTURE', value: fb ? 'Loopback système' : 'Process loopback', sub: fb ? 'Repli — tout le périphérique' : 'Son de cs2.exe uniquement', dot: fb ? '#ffa24a' : '#7fe0a8' },
+      ? { label: t('dash.card.capture'), value: capture.value, sub: capture.detail, dot: capture.color }
+      : {
+          label: t('dash.card.capture'),
+          value: fb ? t('dash.demo.fallback') : t('dash.demo.process'),
+          sub: fb ? t('dash.demo.fallbackSub') : t('dash.demo.processSub'),
+          dot: fb ? '#ffa24a' : '#7fe0a8',
+        },
     audio.native
-      ? { label: 'TRANSCRIPTION', value: engine.value, sub: `${engine.detail} · traduction ${trSum.value}`, dot: engine.color }
-      : { label: 'MOTEURS', value: `Whisper ${s.model}`, sub: `${s.accel.toUpperCase()} · Opus-MT${down ? ' indisponible' : ''}`, dot: down ? '#ff8a7a' : '#7fe0a8' },
+      ? { label: t('dash.card.asr'), value: engine.value, sub: t('dash.asr.sub', { detail: engine.detail, tr: trSum.value }), dot: engine.color }
+      : { label: t('dash.card.engines'), value: `Whisper ${s.model}`, sub: `${s.accel.toUpperCase()} · Opus-MT${down ? ` ${t('dash.demo.unavailable')}` : ''}`, dot: down ? '#ff8a7a' : '#7fe0a8' },
     {
-      label: 'LATENCE VOIX',
+      label: t('dash.card.latency'),
       value: lat ? `p50 ${fmtSeconds(lat.p50)}` : '—',
-      sub: lat ? (latencyAdvice(lat.p50, s.model) ?? `p95 ${fmtSeconds(lat.p95)} · ${lat.n} phrases`) : 'Objectif p50 ≤ 2 s · p95 ≤ 4 s',
+      sub: lat ? (latencyAdvice(lat.p50, s.model) ?? t('dash.latency.sub', { p95: fmtSeconds(lat.p95), count: lat.n })) : t('dash.latency.goal'),
       dot: !lat ? '#3d3a36' : latencyAdvice(lat.p50, s.model) ? '#ffa24a' : '#7fe0a8',
     },
   ];
@@ -150,6 +160,7 @@ function StatusCards() {
 }
 
 function ScriptPanel() {
+  const t = useT();
   const feed = useApp((s) => s.feed);
   const mode = useApp((s) => s.mode);
   const live = useApp(isLive);
@@ -159,17 +170,17 @@ function ScriptPanel() {
     <div className="glass flex min-h-0 flex-col overflow-hidden">
       <div className="flex items-center justify-between px-[18px] pt-4 pb-3.5" style={{ borderBottom: '1px solid rgba(255,255,255,.05)' }}>
         <div className="flex items-baseline gap-2.5">
-          <span style={{ font: fnt(400, 22, 'serif'), color: '#ece6dc' }}>Script</span>
-          <span style={{ font: fnt(400, 10.5, 'mono'), color: '#5a5650' }}>{feed.length ? `${feed.length} répliques` : ''}</span>
+          <span style={{ font: fnt(400, 22, 'serif'), color: '#ece6dc' }}>{t('dash.script')}</span>
+          <span style={{ font: fnt(400, 10.5, 'mono'), color: '#5a5650' }}>{feed.length ? t('dash.lines', { count: feed.length }) : ''}</span>
         </div>
-        <Seg options={MODES} value={mode} onChange={(v) => set({ mode: v })} item={{ padding: '4px 10px', font: fnt(500, 11) }} />
+        <Seg options={MODES.map(([id, k]) => [id, t(k)] as [FeedMode, string])} value={mode} onChange={(v) => set({ mode: v })} item={{ padding: '4px 10px', font: fnt(500, 11) }} />
       </div>
       <div className="flex-1 overflow-auto" data-testid="feed">
         {!feed.length && (
           <div className="flex h-full flex-col items-center justify-center gap-2.5 px-[30px] py-10 text-center">
-            <div style={{ font: fnt(400, 22, 'serif'), fontStyle: 'italic', color: '#bdb6ab' }}>{live ? 'En écoute…' : 'Rien à l’écran.'}</div>
+            <div style={{ font: fnt(400, 22, 'serif'), fontStyle: 'italic', color: '#bdb6ab' }}>{live ? t('dash.listening') : t('dash.nothing')}</div>
             <div style={{ font: fnt(400, 12, 'sans', 1.6), color: '#6e6961' }}>
-              {live ? (native ? 'Chaque phrase transcrite s’inscrit ici, dans sa langue d’origine.' : 'Chaque réplique traduite s’inscrit ici.') : 'Ctrl+Alt+F9 met en pause, Ctrl+Alt+F10 coupe toutes les captures.'}
+              {live ? (native ? t('dash.hint.native') : t('dash.hint.demo')) : t('dash.hint.idle')}
             </div>
           </div>
         )}
@@ -206,13 +217,14 @@ function ScriptPanel() {
       </div>
       <div className="flex items-center gap-2.5 px-[18px] py-3" style={{ borderTop: '1px solid rgba(255,255,255,.05)', font: fnt(400, 11, 'sans', 1.45), color: '#8f8a83' }}>
         <span style={{ font: fnt(600, 9.5, 'mono'), letterSpacing: '.14em', color: '#7fe0a8' }}>LOCAL</span>
-        <span>Aucune voix transmise. Aucun audio conservé. Micro coupé.</span>
+        <span>{t('dash.local')}</span>
       </div>
     </div>
   );
 }
 
 export function Dashboard() {
+  const t = useT();
   const live = useApp(isLive);
   const session = useApp((s) => s.session);
   const speaking = useApp((s) => s.speaking);
@@ -221,25 +233,23 @@ export function Dashboard() {
   const capturing = isCapturing(audio.status);
   const scene = audio.native
     ? capturing
-      ? `SCÈNE EN DIRECT · ${captureSummary(audio.status).short.toUpperCase()}`
+      ? t('dash.scene.live', { src: captureSummary(audio.status).short.toUpperCase() })
       : session === 'PAUSED'
-        ? 'SCÈNE EN PAUSE'
-        : 'AUCUNE SCÈNE'
+        ? t('dash.scene.paused')
+        : t('dash.scene.none')
     : live
-      ? fb
-        ? 'SCÈNE EN DIRECT · CAPTURE DE REPLI'
-        : 'SCÈNE EN DIRECT · CS2.EXE'
+      ? t('dash.scene.live', { src: fb ? t('dash.scene.fallback') : 'CS2.EXE' })
       : session === 'PAUSED'
-        ? 'SCÈNE EN PAUSE'
-        : 'AUCUNE SCÈNE';
+        ? t('dash.scene.paused')
+        : t('dash.scene.none');
   // In the desktop app: real voice detection (Silero), else real signal presence.
   const activity = useSpeech((x) => x.activity);
   const signal = capturing && audio.level !== null && audio.level.rmsDb > SIGNAL_THRESHOLD_DB;
   const indicator = audio.native
     ? capturing && activity.speaking
-      ? { text: '● PAROLE DÉTECTÉE', color: '#ffa24a' }
-      : { text: capturing ? (signal ? '● SIGNAL AUDIO' : 'silence') : '', color: signal ? '#7fe0a8' : '#4a4640' }
-    : { text: !live ? '' : speaking ? '● PAROLE DÉTECTÉE' : 'bruit ignoré', color: speaking ? '#ffa24a' : '#4a4640' };
+      ? { text: t('dash.speech'), color: '#ffa24a' }
+      : { text: capturing ? (signal ? t('dash.signal') : t('dash.silence')) : '', color: signal ? '#7fe0a8' : '#4a4640' }
+    : { text: !live ? '' : speaking ? t('dash.speech') : t('dash.noise'), color: speaking ? '#ffa24a' : '#4a4640' };
   return (
     <div className="grid h-full gap-5" style={{ gridTemplateColumns: 'minmax(0,1fr) 372px' }}>
       <div className="flex min-w-0 flex-col">

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { overlayWindow } from '../backend';
+import { useLocale } from '../i18n';
 import type { OverlayPayload } from '../native';
 import { OverlayStack } from '../pages/OverlayPage';
 import type { FeedEntry } from '../state/store';
@@ -24,6 +25,11 @@ export function OverlayWindow({ initial }: { initial?: OverlayPayload }) {
       clearInterval(iv);
     };
   }, []);
+
+  // Labels in the main window's language (this window has its own copy of the store).
+  useEffect(() => {
+    if (s?.locale && useLocale.getState().locale !== s.locale) useLocale.setState({ locale: s.locale });
+  }, [s?.locale]);
 
   if (!s) return null;
   // While repositioning, show sample lines so the area is visible; otherwise only fresh lines.

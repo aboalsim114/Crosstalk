@@ -2,6 +2,7 @@
 // A transcript is shown in the speaker's language until its real French
 // translation arrives (`translation://result`, see state/translation.ts).
 
+import { t } from '../i18n';
 import { create } from 'zustand';
 import { isTauri, speech, type ModelInfo, type RejectReason, type SpeechConfig, type SpeechStats, type SpeechStatus, type Transcript, type VoiceActivity } from '../backend';
 import type { GlossEntry } from './data';
@@ -64,19 +65,23 @@ export interface EngineSummary {
 }
 
 export function engineSummary(st: SpeechStatus | null): EngineSummary {
-  if (!st) return { value: '…', detail: 'Moteur de transcription en cours de démarrage', color: '#8f8a83' };
+  if (!st) return { value: '…', detail: t('eng.starting'), color: '#8f8a83' };
   const model = `whisper ${st.config.model}`;
   switch (st.state) {
     case 'ready':
-      return { value: `Whisper ${st.config.model}`, detail: `${st.backend} · ${st.threads} threads${st.loadMs != null ? ` · chargé en ${formatMs(st.loadMs)}` : ''}`, color: '#7fe0a8' };
+      return {
+        value: `Whisper ${st.config.model}`,
+        detail: st.loadMs != null ? t('eng.loaded', { backend: st.backend, threads: st.threads, ms: formatMs(st.loadMs) }) : t('eng.threads', { backend: st.backend, threads: st.threads }),
+        color: '#7fe0a8',
+      };
     case 'loading':
-      return { value: 'Chargement…', detail: `${model} · ${st.backend}`, color: '#ffa24a' };
+      return { value: t('eng.loading'), detail: `${model} · ${st.backend}`, color: '#ffa24a' };
     case 'error':
-      return { value: 'Erreur', detail: st.error ?? 'Moteur indisponible', color: '#ff8a7a' };
+      return { value: t('eng.error'), detail: st.error ?? t('eng.unavailable'), color: '#ff8a7a' };
     case 'missing':
       return {
-        value: !st.vadReady ? 'VAD absente' : 'Modèle absent',
-        detail: !st.vadReady ? 'ggml-silero-v5.1.2.bin manquant' : `${model} non installé`,
+        value: !st.vadReady ? t('eng.noVad') : t('eng.noModel'),
+        detail: !st.vadReady ? t('eng.noVadDetail') : t('eng.notInstalled', { model }),
         color: '#ffa24a',
       };
   }

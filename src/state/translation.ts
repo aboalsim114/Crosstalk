@@ -1,6 +1,7 @@
 // Local French translation (Opus-MT on the CPU, no API key), mirrored from the
 // Rust core (`translation://*` events).
 
+import { t } from '../i18n';
 import { create } from 'zustand';
 import { isTauri, translation, type PairStatus, type Translation, type TranslationConfig, type TranslationStatus } from '../backend';
 import type { GlossEntry } from './data';
@@ -47,13 +48,14 @@ export function pairSummary(p: PairStatus): PairSummary {
 
 /** One line for the pipeline, the status cards and the diagnostics. */
 export function translationSummary(st: TranslationStatus | null): PairSummary {
-  if (!st) return { label: 'Traduction', value: '…', color: '#8f8a83' };
-  if (!st.config.enabled) return { label: 'Traduction', value: 'désactivée', color: '#8f8a83' };
+  const label = t('tr.label');
+  if (!st) return { label, value: '…', color: '#8f8a83' };
+  if (!st.config.enabled) return { label, value: t('tr.disabled'), color: '#8f8a83' };
   const ready = st.pairs.filter((p) => p.state === 'ready').map((p) => p.source.toUpperCase());
-  if (st.pairs.some((p) => p.state === 'loading')) return { label: 'Traduction', value: 'chargement…', color: '#ffa24a' };
-  if (st.pairs.some((p) => p.state === 'error')) return { label: 'Traduction', value: 'erreur', color: '#ff8a7a' };
-  if (!ready.length) return { label: 'Traduction', value: 'modèles absents', color: '#ffa24a' };
-  return { label: 'Traduction', value: `locale · ${ready.join(', ')} → FR`, color: '#7fe0a8' };
+  if (st.pairs.some((p) => p.state === 'loading')) return { label, value: t('tr.loading'), color: '#ffa24a' };
+  if (st.pairs.some((p) => p.state === 'error')) return { label, value: t('tr.error'), color: '#ff8a7a' };
+  if (!ready.length) return { label, value: t('tr.missing'), color: '#ffa24a' };
+  return { label, value: t('tr.ready', { langs: ready.join(', ') }), color: '#7fe0a8' };
 }
 
 export function percentile(times: number[], q: number): number | null {

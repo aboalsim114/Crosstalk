@@ -2,6 +2,7 @@
 // `audio://status`, `audio://level`, `cs2://status`). Nothing here is simulated:
 // outside the desktop app the store simply stays empty (`native: false`).
 
+import { t, useLocale } from '../i18n';
 import { create } from 'zustand';
 import {
   IDLE_CAPTURE,
@@ -88,35 +89,30 @@ export interface CaptureSummary {
 export function captureSummary(s: CaptureStatus): CaptureSummary {
   switch (s.state) {
     case 'capturing': {
-      const fmt = s.format ? ` · ${(s.format.sampleRate / 1000).toLocaleString('fr-FR')} kHz` : '';
+      const fmt = s.format ? ` · ${(s.format.sampleRate / 1000).toLocaleString(useLocale.getState().locale)} kHz` : '';
       if (s.source?.kind === 'process')
-        return { value: 'Process loopback', detail: `Son de ${s.source.processName} uniquement (PID ${s.source.pid})${fmt}`, color: '#7fe0a8', short: s.source.processName };
-      const name = s.source?.kind === 'device' ? s.source.name : 'périphérique';
+        return { value: t('cap.process'), detail: t('cap.processDetail', { name: s.source.processName, pid: s.source.pid, fmt }), color: '#7fe0a8', short: s.source.processName };
+      const name = s.source?.kind === 'device' ? s.source.name : t('cap.device');
       return s.fallbackReason
-        ? { value: 'Loopback système', detail: `Repli — tout le son de « ${name} »${fmt}`, color: '#ffa24a', short: 'loopback' }
-        : { value: 'Loopback système', detail: `Tout le son de « ${name} »${fmt}`, color: '#ffa24a', short: 'loopback' };
+        ? { value: t('cap.system'), detail: t('cap.fallbackDetail', { name, fmt }), color: '#ffa24a', short: 'loopback' }
+        : { value: t('cap.system'), detail: t('cap.deviceDetail', { name, fmt }), color: '#ffa24a', short: 'loopback' };
     }
     case 'starting':
-      return { value: 'Ouverture…', detail: 'Connexion à la source audio', color: '#7fd4ff', short: '…' };
+      return { value: t('cap.opening'), detail: t('cap.openingDetail'), color: '#7fd4ff', short: '…' };
     case 'error':
-      return { value: 'Indisponible', detail: s.error?.message ?? 'Erreur inconnue', color: '#ff8a7a', short: 'erreur' };
+      return { value: t('cap.unavailable'), detail: s.error?.message ?? t('cap.unknownError'), color: '#ff8a7a', short: t('cap.error') };
     default: {
-      const why =
-        s.stopReason === 'emergency'
-          ? 'Arrêt d’urgence · tampons purgés'
-          : s.stopReason === 'cs2Exited'
-            ? 'CS2 fermé · capture arrêtée'
-            : 'Démarre avec la session';
-      return { value: 'Inactive', detail: why, color: '#8f8a83', short: 'inactive' };
+      const why = s.stopReason === 'emergency' ? t('cap.emergency') : s.stopReason === 'cs2Exited' ? t('cap.cs2Exited') : t('cap.withSession');
+      return { value: t('cap.inactive'), detail: why, color: '#8f8a83', short: t('cap.inactiveShort') };
     }
   }
 }
 
 export function cs2Summary(c: Cs2Status | null): { value: string; detail: string; color: string } {
-  if (!c) return { value: '…', detail: 'Recherche de cs2.exe', color: '#5a5650' };
+  if (!c) return { value: '…', detail: t('cs2.searching'), color: '#5a5650' };
   return c.running && c.pid !== null
-    ? { value: 'Détecté', detail: `cs2.exe · PID ${c.pid}`, color: '#7fe0a8' }
-    : { value: 'Non détecté', detail: 'Lancez Counter-Strike 2', color: '#8f8a83' };
+    ? { value: t('cs2.detected'), detail: `cs2.exe · PID ${c.pid}`, color: '#7fe0a8' }
+    : { value: t('cs2.notDetected'), detail: t('cs2.launch'), color: '#8f8a83' };
 }
 
 export function testMessage(t: CaptureTest): string {
