@@ -394,15 +394,19 @@ mod whisper_impl {
             let p = self.params(lang, threads, samples.len(), opts);
             let full_started = std::time::Instant::now();
             let mut rec = self.decode(p, samples, lang, lang_prob)?;
-            // Greedy decoding can lock into a loop ("they are rotating mid,
-            // they are rotating mid, …") and the whole callout is then
-            // rejected. Like OpenAI's reference decoder, decode once more with
-            // sampling; only this rare case pays the second pass.
-            if super::super::filter::is_looping(&rec.text) {
+            // Greedy decoding can lock into a loop. When the loop is a whole
+            // sentence repeated, the filter keeps that sentence for free
+            // (`collapse_repeats`). Otherwise ("they are rotating mid, they
+            // are rotating mid, …" cut short), decode once more with sampling,
+            // the first fallback step of OpenAI's reference decoder. A retry
+            // over the full 30 s window was measured too slow on the CPU
+            // (+4 s, later lines then went stale).
+            use super::super::filter::{clean, collapse_repeats, is_looping};
+            if is_looping(&rec.text) && collapse_repeats(&clean(&rec.text)).is_none() {
                 let mut p = self.params(lang, threads, samples.len(), opts);
                 p.set_temperature(RETRY_TEMPERATURE);
                 let retry = self.decode(p, samples, lang, lang_prob)?;
-                if !super::super::filter::is_looping(&retry.text) {
+                if !is_looping(&retry.text) {
                     rec = retry;
                 }
             }
