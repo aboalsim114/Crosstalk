@@ -11,6 +11,11 @@ pub trait Engine: Send {
     fn translate_fast(&mut self, text: &str) -> Result<String, String> {
         self.translate(text)
     }
+    /// Engine that produced the last successful translation ("llm",
+    /// "opus-mt"), reported with each line.
+    fn last_engine(&self) -> Option<&'static str> {
+        None
+    }
 }
 
 pub trait EngineLoader: Send + Sync {
@@ -32,6 +37,9 @@ impl Engine for Chain {
             .iter_mut()
             .try_fold(text.to_string(), |t, e| e.translate_fast(&t))
     }
+    fn last_engine(&self) -> Option<&'static str> {
+        Some("opus-mt")
+    }
 }
 
 impl Engine for super::marian::Marian {
@@ -40,5 +48,8 @@ impl Engine for super::marian::Marian {
     }
     fn translate_fast(&mut self, text: &str) -> Result<String, String> {
         self.translate_with(text, 1)
+    }
+    fn last_engine(&self) -> Option<&'static str> {
+        Some("opus-mt")
     }
 }

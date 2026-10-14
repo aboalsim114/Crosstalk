@@ -120,4 +120,9 @@ pub struct Translation {
     /// Language of `translated` (the user's language when it was sent).
     #[serde(default)]
     pub target: String,
+    /// What produced `translated`: "llm", "opus-mt", or "lexicon" (built-in
+    /// Counter-Strike callouts); `None` when untranslated or already in the
+    /// user's language.
+    #[serde(default)]
+    pub engine: Option<String>,
 }

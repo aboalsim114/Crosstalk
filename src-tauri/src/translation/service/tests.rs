@@ -352,3 +352,52 @@ fn changing_the_target_reloads_and_never_mixes_cached_lines() {
     });
     assert_eq!(st.config.target, "fr");
 }
+
+#[test]
+fn each_line_reports_its_engine_and_a_new_llm_setup_clears_the_cache() {
+    struct Online(Arc<AtomicU64>);
+    impl Engine for Online {
+        fn translate(&mut self, text: &str) -> Result<String, String> {
+            self.0.fetch_add(1, Ordering::SeqCst);
+            Ok(format!("FR:{text}"))
+        }
+        fn last_engine(&self) -> Option<&'static str> {
+            Some("llm")
+        }
+    }
+    let calls = Arc::new(AtomicU64::new(0));
+    let mut engines: Engines = HashMap::new();
+    engines.insert(("en".into(), "fr".into()), Box::new(Online(calls.clone())));
+    let (svc, _rx, _) = service(vec![], 0);
+    let job = |id| Job {
+        id,
+        lang: "en".into(),
+        text: "they are stacking long".into(),
+        queued: Instant::now(),
+        generation: svc.inner.generation.load(Ordering::SeqCst),
+        reply: None,
+        partial: false,
+    };
+    let t = run(&svc.inner, &mut engines, &job(1)).unwrap();
+    assert_eq!(t.engine.as_deref(), Some("llm"));
+    assert!(!t.cached);
+    let hit = run(&svc.inner, &mut engines, &job(2)).unwrap();
+    assert!(hit.cached);
+    assert_eq!(
+        hit.engine.as_deref(),
+        Some("llm"),
+        "the cache keeps the engine"
+    );
+    assert_eq!(calls.load(Ordering::SeqCst), 1);
+    svc.engines_changed();
+    let again = run(&svc.inner, &mut engines, &job(3)).unwrap();
+    assert!(
+        !again.cached,
+        "translations of the previous setup are dropped"
+    );
+    assert_eq!(calls.load(Ordering::SeqCst), 2);
+    // Built-in callouts say so.
+    svc.submit(4, "en", "CT, go, go.");
+    let lex = next(&_rx);
+    assert_eq!(lex.engine.as_deref(), Some("lexicon"));
+}
