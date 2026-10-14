@@ -29,6 +29,8 @@ pub const TIMEOUT: Duration = Duration::from_millis(3500);
 /// Longest key accepted (real keys are well under 200 characters).
 const MAX_KEY_LEN: usize = 512;
 const ANTHROPIC_VERSION: &str = "2023-06-01";
+/// Room for the (short) thinking of recent Claude models before the answer.
+const ANTHROPIC_MAX_TOKENS: usize = 1024;
 
 // ---------- configuration ----------
 
@@ -511,10 +513,12 @@ pub fn request(
             if let Some(k) = key {
                 headers.push(("x-api-key", k.to_string()));
             }
+            // No `temperature`: current Claude models reject non-default
+            // sampling values (400). Thinking, on by default on recent models,
+            // counts against `max_tokens`: the cap is wider than for OpenAI.
             let body = json!({
                 "model": config.model,
-                "temperature": 0,
-                "max_tokens": max_tokens,
+                "max_tokens": ANTHROPIC_MAX_TOKENS,
                 "system": system,
                 "messages": [ { "role": "user", "content": text } ],
             });
@@ -557,6 +561,9 @@ fn extract(provider: Provider, v: &Value) -> Option<String> {
             .as_str()
             .map(String::from),
         Provider::Anthropic => {
+            if v["stop_reason"] == "refusal" {
+                return None;
+            }
             let parts: Vec<&str> = v["content"]
                 .as_array()?
                 .iter()

@@ -26,7 +26,7 @@ export function providerChange(next: LlmProvider, current: Pick<LlmConfig, 'prov
 
 export const MODEL_EXAMPLES: Record<LlmProvider, string> = {
   openai: 'gpt-4o-mini, mistral-small-latest, qwen2.5:7b…',
-  anthropic: 'claude-haiku-4-5…',
+  anthropic: 'claude-haiku-5-5, claude-haiku-4-5…',
 };
 
 export interface LlmSummary {

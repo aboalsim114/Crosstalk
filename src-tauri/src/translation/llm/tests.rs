@@ -179,7 +179,31 @@ fn anthropic_request_and_answer() {
     assert!(headers.contains(&("anthropic-version".into(), ANTHROPIC_VERSION.into())));
     assert!(body["system"].as_str().unwrap().contains("into French"));
     assert_eq!(body["messages"][0]["content"], "Сейвим, эко раунд");
-    assert!(body["max_tokens"].as_u64().unwrap() >= 64);
+    assert!(
+        body["max_tokens"].as_u64().unwrap() >= 1024,
+        "room for thinking"
+    );
+    assert!(
+        body.get("temperature").is_none(),
+        "recent Claude models reject it"
+    );
+    drop(sent);
+    // A refusal (HTTP 200, stop_reason "refusal") is not a translation.
+    let refusal = json!({ "stop_reason": "refusal", "content": [] });
+    let thinking_then_text = json!({ "stop_reason": "end_turn", "content": [ { "type": "thinking", "thinking": "" }, { "type": "text", "text": "gg, bonne partie." } ] });
+    let (c, _) = client(
+        anthropic(),
+        Some(TEST_KEY),
+        vec![Ok(refusal.to_string()), Ok(thinking_then_text.to_string())],
+    );
+    assert_eq!(
+        c.translate("гг", "ru", "fr").unwrap_err(),
+        "réponse illisible"
+    );
+    assert_eq!(
+        c.translate("гг, хорошая игра", "ru", "fr").unwrap(),
+        "gg, bonne partie."
+    );
 }
 
 #[test]
