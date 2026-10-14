@@ -35,6 +35,14 @@ describe('reply in the teammates’ language', () => {
     expect(teammatesLanguage([], ['de'])).toBe('de');
   });
 
+  it('guesses from the latest lines, not the oldest ones (the feed is newest first)', () => {
+    // 20 English lines just heard, then 15 older Russian ones.
+    const feed = [...Array.from({ length: 20 }, (_, i) => ({ src: 'en', tid: 100 - i })), ...Array.from({ length: 15 }, (_, i) => ({ src: 'ru', tid: 50 - i }))];
+    expect(recentLangs(feed)).toHaveLength(20);
+    expect(recentLangs(feed).every((l) => l === 'en')).toBe(true);
+    expect(teammatesLanguage(recentLangs(feed))).toBe('en');
+  });
+
   it('translates on Enter, copies the result and says how to paste it', async () => {
     const writeText = vi.fn().mockResolvedValue(undefined);
     Object.assign(navigator, { clipboard: { writeText } });
