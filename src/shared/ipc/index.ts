@@ -14,6 +14,7 @@ export * from './autostart';
 export * from './audio';
 export * from './speech';
 export * from './translation';
+export * from './llm';
 export * from './downloads';
 export * from './chat';
 export * from './settings';

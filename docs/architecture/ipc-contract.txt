@@ -27,6 +27,10 @@ history_clear
 history_count
 history_export
 history_list
+llm_clear_key
+llm_configure
+llm_set_key
+llm_status
 logs_open_folder
 logs_recent
 logs_write

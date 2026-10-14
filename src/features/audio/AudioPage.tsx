@@ -10,6 +10,8 @@ import { MODELS, type ModelId } from '../../app/state/data';
 import { engineSummary, formatMs, rescanModels, statsLine, useSpeech } from '../speech/speech';
 import { useApp, type Accel, type CaptureSource } from '../../app/state/store';
 import { pairSummary, percentile, rescanTranslation, useTranslation } from '../translation/translation';
+import { engineLabel } from '../translation/llm';
+import { LlmCard } from '../translation/LlmCard';
 
 const ACCELS: [Accel, string][] = [
   ['auto', 'AUTO'],
@@ -383,7 +385,7 @@ export function TranslationCard() {
         <span style={{ font: fnt(500, 9.5, 'mono'), letterSpacing: '.12em', color: '#6e6961' }}>CPU · SANS CLÉ API</span>
       </div>
       <div style={{ font: fnt(400, 11, 'sans', 1.5), color: '#8f8a83' }}>
-        Les voix et le chat des joueurs sont traduits dans votre langue sur ce PC (Langues › Mes langues). Aucune clé API, aucun abonnement, rien n’est envoyé en ligne.
+        Les voix et le chat des joueurs sont traduits dans votre langue sur ce PC (Langues › Mes langues). Aucune clé API, aucun abonnement : rien n’est envoyé en ligne, sauf si vous activez la traduction en ligne ci-dessous.
       </div>
       <ToggleRow title="Traduire les voix et le chat" sub="Sinon, la transcription reste en langue originale" on={on} onClick={() => toggle('translate')} />
       {tr.native ? (
@@ -426,7 +428,9 @@ export function TranslationCard() {
             </div>
             {result && (
               <div role="status" data-testid="translation-result" style={{ font: fnt(400, 12, 'sans', 1.5), color: result.translated ? '#ece6dc' : '#ff8a7a' }}>
-                {result.translated ? `« ${result.translated} » · ${formatMs(result.ms)}${result.cached ? ' · cache' : ''}` : `Non traduit : ${result.error}`}
+                {result.translated
+                  ? `« ${result.translated} » · ${formatMs(result.ms)}${engineLabel(result.engine) ? ` · ${engineLabel(result.engine)}` : ''}${result.cached ? ' · cache' : ''}`
+                  : `Non traduit : ${result.error}`}
               </div>
             )}
           </div>
@@ -460,6 +464,7 @@ export function AudioPage() {
       <div className="flex flex-col gap-4">
         <ModelCard />
         <TranslationCard />
+        <LlmCard />
       </div>
     </div>
   );

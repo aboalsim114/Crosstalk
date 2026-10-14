@@ -1,4 +1,5 @@
-// Local translation (Opus-MT, no API key).
+// Translation into the user's language: local Opus-MT, with the optional online
+// LLM in front (./llm.ts).
 
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
@@ -48,6 +49,8 @@ export interface Translation {
   partial?: boolean;
   /** Language of `translated` (the user's language when it was sent). */
   target?: string;
+  /** What produced `translated`: the online LLM, Opus-MT, or the built-in callouts. */
+  engine?: 'llm' | 'opus-mt' | 'lexicon' | null;
 }
 
 export const translation = {

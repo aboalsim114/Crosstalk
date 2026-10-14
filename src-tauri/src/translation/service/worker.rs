@@ -18,6 +18,9 @@ pub(super) fn worker_loop(inner: &Inner) {
     let mut engines: Engines = HashMap::new();
     while !inner.shutdown.load(Ordering::SeqCst) {
         if inner.reload.swap(false, Ordering::SeqCst) {
+            if inner.rebuild.swap(false, Ordering::SeqCst) {
+                engines.clear();
+            }
             load_installed(inner, &mut engines);
         }
         let job = {
@@ -133,6 +136,7 @@ pub(super) fn run(inner: &Inner, engines: &mut Engines, job: &Job) -> Option<Tra
             return Some(Translation {
                 translated: Some(text),
                 partial: job.partial,
+                engine: Some("lexicon".into()),
                 ..base()
             });
         }
@@ -183,17 +187,19 @@ pub(super) fn run(inner: &Inner, engines: &mut Engines, job: &Job) -> Option<Tra
                     ms: started.elapsed().as_millis() as u32,
                     glossary: protected,
                     partial: true,
+                    engine: engine.last_engine().map(String::from),
                     ..base()
                 })
             }
             _ => None,
         };
     }
-    if let Some(hit) = inner.cache.lock().unwrap().get(&key) {
+    if let Some((hit, used)) = inner.cache.lock().unwrap().get(&key) {
         return Some(Translation {
             translated: Some(hit),
             error: None,
             cached: true,
+            engine: used,
             ms: started.elapsed().as_millis() as u32,
             ..base()
         });
@@ -205,7 +211,12 @@ pub(super) fn run(inner: &Inner, engines: &mut Engines, job: &Job) -> Option<Tra
     }
     match outcome.map(|(t, p)| (callouts::clean_output(&t), p)) {
         Ok((text, protected)) if !text.trim().is_empty() => {
-            inner.cache.lock().unwrap().put(key, text.clone());
+            let used = engine.last_engine().map(String::from);
+            inner
+                .cache
+                .lock()
+                .unwrap()
+                .put(key, (text.clone(), used.clone()));
             Some(Translation {
                 id: job.id,
                 lang: job.lang.clone(),
@@ -218,6 +229,7 @@ pub(super) fn run(inner: &Inner, engines: &mut Engines, job: &Job) -> Option<Tra
                 glossary: protected,
                 partial: false,
                 target: target.clone(),
+                engine: used,
             })
         }
         Ok(_) => fail("traduction vide"),

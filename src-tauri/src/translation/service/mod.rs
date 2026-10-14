@@ -64,6 +64,8 @@ struct Inner {
     generation: AtomicU64,
     /// Asks the worker to (re)load the installed models.
     reload: AtomicBool,
+    /// Asks the worker to drop its engines before reloading (online LLM changed).
+    rebuild: AtomicBool,
     shutdown: AtomicBool,
 }
 
@@ -91,6 +93,7 @@ impl TranslationService {
             map_terms: Mutex::new(Vec::new()),
             generation: AtomicU64::new(0),
             reload: AtomicBool::new(true),
+            rebuild: AtomicBool::new(false),
             shutdown: AtomicBool::new(false),
         });
         let worker = inner.clone();
@@ -153,6 +156,15 @@ impl TranslationService {
             *current = terms;
             *self.inner.cache.lock().unwrap() = Cache::default();
         }
+    }
+
+    /// The online LLM was configured, enabled, disabled or got a new key:
+    /// translations made by the previous setup leave the cache and every route
+    /// is rebuilt (a route without a local model exists only while the LLM is active).
+    pub fn engines_changed(&self) -> TranslationStatus {
+        *self.inner.cache.lock().unwrap() = Cache::default();
+        self.inner.rebuild.store(true, Ordering::SeqCst);
+        self.rescan()
     }
 
     /// Looks for newly installed models (and loads them).
@@ -339,6 +351,7 @@ fn failure(id: u64, lang: &str, text: &str, why: &str, queue_ms: u32) -> Transla
         glossary: true,
         partial: false,
         target: String::new(),
+        engine: None,
     }
 }
 
