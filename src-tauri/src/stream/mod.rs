@@ -9,8 +9,8 @@
 
 use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
-use std::sync::mpsc::{channel, RecvTimeoutError, Sender};
+use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
+use std::sync::mpsc::{sync_channel, RecvTimeoutError, SyncSender, TrySendError};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
@@ -18,6 +18,13 @@ use serde::{Deserialize, Serialize};
 
 pub const PORT: u16 = 31983;
 const MAX_CLIENTS: usize = 8;
+/// Messages waiting for one page; a page that falls this far behind (OBS
+/// frozen, source hidden) is disconnected and reconnects by itself (`retry`).
+const CLIENT_QUEUE: usize = 64;
+/// Connections served at once (page, events, refused requests).
+const MAX_CONNECTIONS: usize = 32;
+/// A page that stops reading frees its thread after this long.
+const WRITE_TIMEOUT: Duration = Duration::from_secs(5);
 const PAGE: &str = include_str!("page.html");
 
 /// A final subtitle, as the main window sends it.
@@ -128,7 +135,8 @@ fn sse(event: &str, data: &str) -> String {
 
 pub struct StreamService {
     options: Mutex<StreamOptions>,
-    clients: Mutex<Vec<Sender<String>>>,
+    clients: Mutex<Vec<SyncSender<String>>>,
+    connections: AtomicUsize,
     started: AtomicBool,
     error: Mutex<Option<String>>,
     sent: AtomicU64,
@@ -144,6 +152,7 @@ impl StreamService {
         Arc::new(Self {
             options: Mutex::new(StreamOptions::default()),
             clients: Mutex::new(Vec::new()),
+            connections: AtomicUsize::new(0),
             started: AtomicBool::new(false),
             error: Mutex::new(None),
             sent: AtomicU64::new(0),
@@ -171,11 +180,16 @@ impl StreamService {
         sse("config", &serde_json::to_string(&o).unwrap_or_default())
     }
 
+    /// Queues a message for every page; a closed page, or one too far
+    /// behind, is dropped (memory stays bounded).
     fn broadcast(&self, msg: &str) {
         self.clients
             .lock()
             .unwrap()
-            .retain(|c| c.send(msg.to_string()).is_ok());
+            .retain(|c| match c.try_send(msg.to_string()) {
+                Ok(()) => true,
+                Err(TrySendError::Full(_) | TrySendError::Disconnected(_)) => false,
+            });
     }
 
     pub fn configure(self: &Arc<Self>, options: StreamOptions) -> StreamStatus {
@@ -218,10 +232,22 @@ impl StreamService {
                     .name("stream".into())
                     .spawn(move || {
                         for stream in listener.incoming().flatten() {
-                            let me = me.clone();
-                            let _ = std::thread::Builder::new()
+                            // Bounded threads: beyond the limit, the
+                            // connection is closed at once.
+                            if me.connections.fetch_add(1, Ordering::SeqCst) >= MAX_CONNECTIONS {
+                                me.connections.fetch_sub(1, Ordering::SeqCst);
+                                continue;
+                            }
+                            let worker = me.clone();
+                            let spawned = std::thread::Builder::new()
                                 .name("stream-client".into())
-                                .spawn(move || me.serve(stream));
+                                .spawn(move || {
+                                    worker.serve(stream);
+                                    worker.connections.fetch_sub(1, Ordering::SeqCst);
+                                });
+                            if spawned.is_err() {
+                                me.connections.fetch_sub(1, Ordering::SeqCst);
+                            }
                         }
                     })
                     .expect("stream thread");
@@ -238,6 +264,7 @@ impl StreamService {
 
     fn serve(&self, mut stream: TcpStream) {
         let _ = stream.set_read_timeout(Some(Duration::from_secs(3)));
+        let _ = stream.set_write_timeout(Some(WRITE_TIMEOUT));
         let Some((path, host)) = read_get(&mut stream) else {
             let _ = stream.write_all(
                 b"HTTP/1.1 400 Bad Request\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
@@ -273,7 +300,7 @@ impl StreamService {
     }
 
     fn events(&self, mut stream: TcpStream) {
-        let (tx, rx) = channel::<String>();
+        let (tx, rx) = sync_channel::<String>(CLIENT_QUEUE);
         {
             let mut clients = self.clients.lock().unwrap();
             if clients.len() >= MAX_CLIENTS {
@@ -446,6 +473,23 @@ mod tests {
         assert_eq!((o.size, o.max, o.duration), (72, 1, 20));
         let d = StreamOptions::default();
         assert!(!d.enabled && !d.names && !d.original && d.watermark);
+    }
+
+    #[test]
+    fn a_page_that_stops_reading_is_dropped_and_memory_stays_bounded() {
+        let svc = StreamService::with_port(0);
+        let (stuck, _never_read) = sync_channel::<String>(CLIENT_QUEUE);
+        let (live, inbox) = sync_channel::<String>(CLIENT_QUEUE);
+        svc.clients.lock().unwrap().extend([stuck, live]);
+        for i in 0..CLIENT_QUEUE {
+            svc.broadcast(&format!("{i}"));
+            // The live page keeps up.
+            assert_eq!(inbox.try_recv().unwrap(), format!("{i}"));
+        }
+        assert_eq!(svc.status().clients, 2, "both still within their queue");
+        svc.broadcast("one too many");
+        assert_eq!(svc.status().clients, 1, "the stuck page is disconnected");
+        assert_eq!(inbox.try_recv().unwrap(), "one too many");
     }
 
     #[test]
