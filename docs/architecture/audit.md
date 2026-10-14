@@ -249,24 +249,24 @@ Point décisif : `src-tauri/Cargo.toml:98` compile la release avec `panic = "abo
 - **Risque de régression** : —
 
 ### A16 — Défauts fonctionnels relevés (hors refactorisation)
-Ces points changent le comportement. Conformément à la règle « pas de changement fonctionnel dans une PR de refactorisation », ils sont **signalés, pas corrigés** ici :
+Ces points changent le comportement. Conformément à la règle « pas de changement fonctionnel dans une PR de refactorisation », ils ont été **signalés, pas corrigés** dans la refactorisation. Chacun est ensuite corrigé dans sa propre PR `fix/*`, avec un test (colonne « Correction ») :
 
-| # | Constat | Fichier |
-|---|---|---|
-| F1 | `recentLangs` prend `slice(-n)` sur un fil trié du plus récent au plus ancien (`store.ts:381,386`) : ce sont les **plus anciennes** lignes qui servent à deviner la langue de réponse. | `src/pages/ReplyCard.tsx:9-14` |
-| F2 | `runCaptureTest` arrête la capture à la fin du test, même si une session a démarré entre-temps. | `src/state/audio.ts:150-174` |
-| F3 | `ReplyWindow` déclenche des effets (`dictation.toggle`, `reply.hide`) dans un updater `setState`, qui peut s'exécuter deux fois en mode strict. | `src/reply/ReplyWindow.tsx:25-30` |
-| F4 | `install.rs:307` émet un événement de progression par bloc de 256 Ko, sans limitation de débit. | `src-installer/src/install.rs` |
-| F5 | Un `rename` qui échoue au milieu de la phase 2 laisse un mélange d'anciens et de nouveaux fichiers. | `src-installer/src/install.rs:334` |
-| F6 | `download-models.ps1` ne couvre que ru→fr et en→fr. | `scripts/download-models.ps1` |
-| F7 | `DiagPage` déduit l'état OK/ÉCHEC en comparant des couleurs hexadécimales. | `src/pages/DiagPage.tsx:83-93` |
-| F8 | **À vérifier sur Windows.** Si l'activation de la capture par processus dépasse le délai, l'événement est fermé alors que l'activation asynchrone peut encore se terminer et appeler `SetEvent` sur un handle fermé. Le code de capture n'est pas modifié ici (« aucun changement intrusif de la capture »). | `src-tauri/src/audio/wasapi.rs:340-395` |
-| F9 | `user_rules_file()` ignore `CROSSTALK_CONFIG_DIR`, contrairement à `settings::dir()`. | `src-tauri/src/chat/mod.rs:97` |
-| F10 | Le serveur du mode streaming crée un thread et une file non bornée par client SSE, sans délai d'écriture. Un client bloqué fait grossir sa file. | `src-tauri/src/stream/mod.rs` |
-| F11 | Le serveur GSI accepte les connexions une par une. Un client local lent le bloque. | `src-tauri/src/gsi/mod.rs:362-397` |
-| F12 | Le journal écrit sur disque sous un verrou global, y compris depuis les threads VAD et ASR. | `src-tauri/src/logs.rs:88-100` |
-| F13 | Une panique dans `Downloader::run` laisse `running = true` (aucun garde ne le remet à faux). En release, la panique termine le processus, donc l'effet est limité aux tests. | `src-tauri/src/downloads.rs:248,314` |
-| F14 | Le journal écrit toujours « ru→fr », « en→fr »… quelle que soit la langue de l'utilisateur (`{src}→fr` en dur). Le test de caractérisation `summarizes_the_real_status_types` fige ce comportement en français, sans le corriger. | `src-tauri/src/logs.rs:340` |
+| # | Constat | Fichier | Correction |
+|---|---|---|---|
+| F1 | `recentLangs` prend `slice(-n)` sur un fil trié du plus récent au plus ancien (`store.ts:381,386`) : ce sont les **plus anciennes** lignes qui servent à deviner la langue de réponse. | `src/pages/ReplyCard.tsx:9-14` | PR #66 (`fix/*`, en attente de fusion) |
+| F2 | `runCaptureTest` arrête la capture à la fin du test, même si une session a démarré entre-temps. | `src/state/audio.ts:150-174` | PR #67 (`fix/*`, en attente de fusion) |
+| F3 | `ReplyWindow` déclenche des effets (`dictation.toggle`, `reply.hide`) dans un updater `setState`, qui peut s'exécuter deux fois en mode strict. | `src/reply/ReplyWindow.tsx:25-30` | PR #68 (`fix/*`, en attente de fusion) |
+| F4 | `install.rs:307` émet un événement de progression par bloc de 256 Ko, sans limitation de débit. | `src-installer/src/install.rs` | PR #69 (`fix/*`, en attente de fusion) |
+| F5 | Un `rename` qui échoue au milieu de la phase 2 laisse un mélange d'anciens et de nouveaux fichiers. | `src-installer/src/install.rs:334` | PR #70 (`fix/*`, en attente de fusion) |
+| F6 | `download-models.ps1` ne couvre que ru→fr et en→fr. | `scripts/download-models.ps1` | PR #71 (`fix/*`, en attente de fusion) |
+| F7 | `DiagPage` déduit l'état OK/ÉCHEC en comparant des couleurs hexadécimales. | `src/pages/DiagPage.tsx:83-93` | PR #72 (`fix/*`, en attente de fusion) |
+| F8 | **À vérifier sur Windows.** Si l'activation de la capture par processus dépasse le délai, l'événement est fermé alors que l'activation asynchrone peut encore se terminer et appeler `SetEvent` sur un handle fermé. Le code de capture n'est pas modifié ici (« aucun changement intrusif de la capture »). | `src-tauri/src/audio/wasapi.rs:340-395` | PR #73 (`fix/*`, en attente de fusion) |
+| F9 | `user_rules_file()` ignore `CROSSTALK_CONFIG_DIR`, contrairement à `settings::dir()`. | `src-tauri/src/chat/mod.rs:97` | PR #74 (`fix/*`, en attente de fusion) |
+| F10 | Le serveur du mode streaming crée un thread et une file non bornée par client SSE, sans délai d'écriture. Un client bloqué fait grossir sa file. | `src-tauri/src/stream/mod.rs` | PR #75 (`fix/*`, en attente de fusion) |
+| F11 | Le serveur GSI accepte les connexions une par une. Un client local lent le bloque. | `src-tauri/src/gsi/mod.rs:362-397` | PR #76 (`fix/*`, en attente de fusion) |
+| F12 | Le journal écrit sur disque sous un verrou global, y compris depuis les threads VAD et ASR. | `src-tauri/src/logs.rs:88-100` | PR #77 (`fix/*`, en attente de fusion) |
+| F13 | Une panique dans `Downloader::run` laisse `running = true` (aucun garde ne le remet à faux). En release, la panique termine le processus, donc l'effet est limité aux tests. | `src-tauri/src/downloads.rs:248,314` | PR #78 (`fix/*`, en attente de fusion) |
+| F14 | Le journal écrit toujours « ru→fr », « en→fr »… quelle que soit la langue de l'utilisateur (`{src}→fr` en dur). Le test de caractérisation `summarizes_the_real_status_types` fige ce comportement en français, sans le corriger. | `src-tauri/src/logs.rs:340` | PR #79 (`fix/*`, en attente de fusion) |
 
 ## 3. Sécurité CS2 (inchangée)
 
