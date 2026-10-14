@@ -1,6 +1,6 @@
 # Rapport : traduction en ligne par un LLM (clé fournie par l'utilisateur)
 
-Branche `feat/llm-translation`, partie de `develop` (`7edd9a7`). Rapport rédigé le 14/10/2026.
+Branche `feat/llm-translation`, partie de `develop` (`7edd9a7`), puis mise à jour avec `develop` (`37d9d71`, PR #85). Rapport rédigé le 14/10/2026.
 
 ## Point de départ
 
@@ -117,17 +117,17 @@ La mission décrivait un code déjà écrit mais jamais compilé :
 
 ## Tests exécutés et résultats réels
 
-Tous exécutés le 14/10/2026 sur le commit `fbe1e02`, dans un conteneur Linux x64.
+Tous exécutés le 14/10/2026 dans un conteneur Linux x64, sur le résultat de la fusion de `develop` (`37d9d71`) dans la branche.
 
 | Contrôle | Commande | Résultat |
 | --- | --- | --- |
 | Format Rust | `cargo fmt --all -- --check` | OK |
 | Lint Rust (Linux) | `cargo clippy --all-targets -- -D warnings` | OK, 0 avertissement |
-| Tests Rust (Linux) | `cargo test --all-targets` | **256 réussis**, 0 échec (246 avant la branche) |
+| Tests Rust (Linux) | `cargo test --all-targets` | **259 réussis**, 0 échec (249 sur `develop`) |
 | Lint Rust (Windows) | `cargo clippy --target x86_64-pc-windows-gnu --no-default-features --lib --tests -- -D warnings` | OK. Compile `CredentialStore` avec windows 0.62 |
-| Tests Rust (Windows, sous Wine) | exécutable de test `x86_64-pc-windows-gnu` lancé avec Wine, filtre `translation` | **55 réussis**, 0 échec, dont `credential_manager_round_trip` |
+| Tests Rust (Windows, sous Wine) | exécutable de test `x86_64-pc-windows-gnu` lancé avec Wine, filtre `translation` | **56 réussis**, 0 échec, dont `credential_manager_round_trip` |
 | Types | `npx tsc --noEmit` | OK |
-| Tests interface | `npx vitest run` | **180 réussis**, 28 fichiers (170 avant la branche) |
+| Tests interface | `npx vitest run` | **183 réussis**, 29 fichiers (173 sur `develop`) |
 | Build interface | `npx vite build` | OK |
 | Architecture et contrat IPC | `npm run check:architecture` | OK, 4 commandes ajoutées au contrat |
 | Anti-triche | `npm run check:anticheat` | OK |
