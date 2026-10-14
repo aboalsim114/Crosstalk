@@ -37,6 +37,8 @@ pub const APP_EXE: &str = "crosstalk.exe";
 /// slow without a GPU, can still be fetched from the app.
 pub const WHISPER_MODELS: &[&str] = &["base", "small"];
 const STAGING: &str = ".crosstalk-setup";
+/// The installed files being replaced, kept until every new file is in place.
+const PREVIOUS: &str = ".crosstalk-previous";
 const MB: f64 = 1e6;
 /// Phase bounds in percent, as the interface shows them (`PH` in
 /// src/installer/model.ts, checked by a test).
@@ -398,15 +400,21 @@ impl Installer {
         let fail = |e: String| Stop::Failed(e);
         report(Progress::at(2, 64.0, "Mise en place des fichiers"));
         ensure_not_running(dir).map_err(fail)?;
-        for (i, f) in self.files.iter().enumerate() {
-            std::fs::rename(staging.join(f.name), dir.join(f.name))
-                .map_err(|e| fail(format!("Installation de {} impossible : {e}", f.name)))?;
-            report(Progress::at(
-                2,
-                64.0 + 16.0 * (i + 1) as f64 / self.files.len().max(1) as f64,
-                "Mise en place des fichiers",
-            ));
-        }
+        let names: Vec<&str> = self.files.iter().map(|f| f.name).collect();
+        swap_in(
+            staging,
+            dir,
+            &names,
+            &|a, b| std::fs::rename(a, b),
+            &mut |i| {
+                report(Progress::at(
+                    2,
+                    64.0 + 16.0 * (i + 1) as f64 / names.len().max(1) as f64,
+                    "Mise en place des fichiers",
+                ))
+            },
+        )
+        .map_err(fail)?;
         let _ = std::fs::remove_dir_all(staging);
         Ok(())
     }
@@ -447,6 +455,52 @@ impl Installer {
         }
         Err(Stop::Failed("téléchargement des modèles interrompu".into()))
     }
+}
+
+/// Moves the staged files over the installed ones, all or nothing: each file
+/// replaced is first set aside in `PREVIOUS`; if a move fails, the new files
+/// are removed and the previous ones put back, so the installed version still
+/// starts. `moved(i)` follows each file in place.
+fn swap_in(
+    staging: &Path,
+    dir: &Path,
+    names: &[&str],
+    rename: &dyn Fn(&Path, &Path) -> std::io::Result<()>,
+    moved: &mut dyn FnMut(usize),
+) -> Result<(), String> {
+    let previous = dir.join(PREVIOUS);
+    let _ = std::fs::remove_dir_all(&previous);
+    std::fs::create_dir_all(&previous)
+        .map_err(|e| format!("Impossible d’écrire dans {} : {e}", dir.display()))?;
+    let mut saved: Vec<&str> = Vec::new();
+    let mut placed: Vec<&str> = Vec::new();
+    for (i, name) in names.iter().enumerate() {
+        let target = dir.join(name);
+        let mut step = || -> std::io::Result<()> {
+            if target.exists() {
+                rename(&target, &previous.join(name))?;
+                saved.push(name);
+            }
+            rename(&staging.join(name), &target)?;
+            placed.push(name);
+            Ok(())
+        };
+        if let Err(e) = step() {
+            for n in &placed {
+                let _ = std::fs::remove_file(dir.join(n));
+            }
+            for n in &saved {
+                let _ = std::fs::rename(previous.join(n), dir.join(n));
+            }
+            let _ = std::fs::remove_dir_all(&previous);
+            return Err(format!(
+                "Installation de {name} impossible : {e}. La version précédente a été conservée."
+            ));
+        }
+        moved(i);
+    }
+    let _ = std::fs::remove_dir_all(&previous);
+    Ok(())
 }
 
 /// In-app update: Crosstalk quits right after starting the installer; wait
@@ -802,5 +856,66 @@ mod tests {
         );
         assert_eq!(default_plan(None), downloads::TranslationPlan::default());
         assert_eq!(default_plan(Some("fr-CA")).target, "fr");
+    }
+
+    #[test]
+    fn a_failed_move_puts_the_previous_version_back() {
+        let root = tmp("swap");
+        let (staging, dir) = (root.join("staging"), root.join("Crosstalk"));
+        std::fs::create_dir_all(&staging).unwrap();
+        std::fs::create_dir_all(&dir).unwrap();
+        for (name, old, new) in [
+            ("a.exe", "old a", "new a"),
+            ("b.dll", "old b", "new b"),
+            ("c.dat", "", "new c"),
+        ] {
+            std::fs::write(staging.join(name), new).unwrap();
+            if !old.is_empty() {
+                std::fs::write(dir.join(name), old).unwrap();
+            }
+        }
+        // The move of the third file (c.dat, a new one) fails.
+        let fail_on = |a: &Path, b: &Path| {
+            if a.ends_with("c.dat") {
+                Err(std::io::Error::other("disque plein"))
+            } else {
+                std::fs::rename(a, b)
+            }
+        };
+        let mut moved = Vec::new();
+        let err = swap_in(
+            &staging,
+            &dir,
+            &["a.exe", "b.dll", "c.dat"],
+            &fail_on,
+            &mut |i| moved.push(i),
+        )
+        .unwrap_err();
+        assert!(
+            err.contains("c.dat") && err.contains("version précédente"),
+            "{err}"
+        );
+        assert_eq!(moved, [0, 1]);
+        assert_eq!(std::fs::read_to_string(dir.join("a.exe")).unwrap(), "old a");
+        assert_eq!(std::fs::read_to_string(dir.join("b.dll")).unwrap(), "old b");
+        assert!(!dir.join("c.dat").exists());
+        assert!(!dir.join(PREVIOUS).exists());
+
+        // Without failure: every new file in place, nothing left aside.
+        for (name, new) in [("a.exe", "new a"), ("b.dll", "new b")] {
+            std::fs::write(staging.join(name), new).unwrap();
+        }
+        let ok = swap_in(
+            &staging,
+            &dir,
+            &["a.exe", "b.dll", "c.dat"],
+            &|a, b| std::fs::rename(a, b),
+            &mut |_| {},
+        );
+        assert_eq!(ok, Ok(()));
+        assert_eq!(std::fs::read_to_string(dir.join("a.exe")).unwrap(), "new a");
+        assert_eq!(std::fs::read_to_string(dir.join("c.dat")).unwrap(), "new c");
+        assert!(!dir.join(PREVIOUS).exists());
+        std::fs::remove_dir_all(&root).unwrap();
     }
 }
