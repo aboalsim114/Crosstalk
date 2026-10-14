@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import type { Translation } from '../backend';
 import { config } from '../config';
 import { isCapturing, useAudio } from './audio';
+import type { UiLang } from '../i18n';
 import { EVENTS, GLOSSARY, type GlossEntry, type ModelId, type PageId, type SimEvent } from './data';
 
 export type Session = 'IDLE' | 'INITIALIZING' | 'LISTENING' | 'DEGRADED' | 'PAUSED' | 'STOPPING' | 'STOPPED';
@@ -79,6 +80,8 @@ export interface AppState {
   chatPath: string;
   /** The player's own name, to leave out their chat messages. */
   ownName: string;
+  /** Interface language ("auto": the language of Windows). */
+  uiLang: UiLang;
   stream: StreamOpts;
   speaker: SpeakerOpts;
   capture: CaptureSource;
@@ -158,6 +161,8 @@ const initial: AppState = {
   tg: { click: true, noise: false, translate: true, hist: false, skipFr: true, ignoreOwn: true },
   chatPath: '',
   ownName: '',
+  // French until every screen is translated, then "auto".
+  uiLang: 'fr',
   stream: STREAM_DEFAULTS,
   speaker: SPEAKER_DEFAULTS,
   capture: 'process',

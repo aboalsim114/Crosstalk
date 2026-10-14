@@ -4,6 +4,7 @@ import { useApp, type SourceLang } from '../state/store';
 import { ChatCard } from './ChatCard';
 import { GsiCard } from './GsiCard';
 import { ReplyCard } from './ReplyCard';
+import { UiLangCard } from './UiLangCard';
 
 const COLS = '140px 110px minmax(0,1fr) 24px';
 
@@ -12,6 +13,7 @@ export function LangPage() {
   return (
     <div className="grid items-start gap-4" style={{ gridTemplateColumns: '310px minmax(0,1fr)' }}>
       <div className="flex flex-col gap-4">
+        <UiLangCard />
         <div className="glass flex flex-col gap-[18px] p-5">
           <div className="flex flex-col gap-1.5">
             <span className="lbl">LANGUE CIBLE</span>

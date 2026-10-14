@@ -4,6 +4,7 @@
 // invalid values are ignored (the default stays).
 
 import { isTauri, settingsStore } from '../backend';
+import { isUiLang } from '../i18n';
 import { useAudio } from './audio';
 import type { GlossEntry, ModelId } from './data';
 import { useApp, type AppState } from './store';
@@ -13,7 +14,7 @@ const LOCAL_KEY = 'crosstalk.settings';
 
 type Persisted = Pick<
   AppState,
-  'mode' | 'fmt' | 'corner' | 'opacity' | 'textSize' | 'duration' | 'maxBlocks' | 'overlayOn' | 'tg' | 'chatPath' | 'ownName' | 'capture' | 'vad' | 'model' | 'accel' | 'src' | 'stream' | 'speaker' | 'voiceFocus'
+  'mode' | 'fmt' | 'corner' | 'opacity' | 'textSize' | 'duration' | 'maxBlocks' | 'overlayOn' | 'tg' | 'chatPath' | 'ownName' | 'capture' | 'vad' | 'model' | 'accel' | 'src' | 'stream' | 'speaker' | 'voiceFocus' | 'uiLang'
 >;
 
 const oneOf =
@@ -44,6 +45,7 @@ const CHECKS: { [K in keyof Persisted]: (v: unknown) => boolean } = {
   stream: (v) => typeof v === 'object' && v !== null,
   speaker: (v) => typeof v === 'object' && v !== null,
   voiceFocus: isBool,
+  uiLang: isUiLang,
 };
 
 export function snapshot(s: AppState, deviceId: string | null) {
