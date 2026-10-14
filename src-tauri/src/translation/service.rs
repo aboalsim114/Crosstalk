@@ -1041,8 +1041,18 @@ mod tests {
             ["en", "fr", "ru"],
             "unknown language dropped"
         );
-        settle(&svc);
-        let st = svc.status();
+        // Both models are installed: a pair still Missing has not been
+        // looked at yet by the worker (it clears `reload` before the first
+        // pair is marked Loading), so wait for it too.
+        let end = Instant::now() + Duration::from_secs(5);
+        let st = loop {
+            settle(&svc);
+            let st = svc.status();
+            if st.pairs.iter().all(|p| p.state != PairState::Missing) || Instant::now() > end {
+                break st;
+            }
+            std::thread::sleep(Duration::from_millis(5));
+        };
         let pairs: Vec<_> = st
             .pairs
             .iter()
