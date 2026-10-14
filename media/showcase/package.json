@@ -1,0 +1,23 @@
+{
+  "name": "crosstalk-showcase",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Projet de rendu de la vidéo de présentation de Crosstalk (Three.js + Playwright + FFmpeg).",
+  "scripts": {
+    "dev": "vite",
+    "capture": "node scripts/capture-app.mjs",
+    "score": "python3 scripts/score.py",
+    "render": "node scripts/render.mjs",
+    "deliver": "bash scripts/deliver.sh",
+    "all": "npm run capture && npm run score && npm run render && npm run deliver"
+  },
+  "devDependencies": {
+    "@fontsource/geist-sans": "^5.3.0",
+    "@fontsource/instrument-serif": "^5.3.0",
+    "@fontsource/jetbrains-mono": "^5.3.0",
+    "playwright-core": "^1.56.1",
+    "three": "^0.186.1",
+    "vite": "^8.3.4"
+  }
+}
