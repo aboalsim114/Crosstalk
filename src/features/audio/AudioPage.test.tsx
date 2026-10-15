@@ -1,5 +1,5 @@
-import { beforeEach, describe, expect, it } from 'vitest';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { IDLE_CAPTURE } from '../../shared/ipc';
 import { useAudio } from './audio';
 import { useSpeech } from '../speech/speech';
@@ -122,6 +122,23 @@ describe('local translation card', () => {
     expect(screen.queryByText(/DeepL|Azure|cloud/i)).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('switch', { name: 'Traduire les voix et le chat' }));
     expect(useApp.getState().tg.translate).toBe(false);
+  });
+});
+
+describe('translation test', () => {
+  it('says which engine translated the sentence', async () => {
+    const { useTranslation } = await import('../translation/translation');
+    const ipc = await import('../../shared/ipc');
+    useTranslation.setState({ native: true, status: { config: { enabled: true, glossary: [] }, pairs: [], modelsDir: '', queued: 0 }, times: [] });
+    const result = { id: 0, lang: 'ru', original: 'Двое идут на B', translated: 'Deux joueurs arrivent sur B.', error: null, ms: 640, queueMs: 0, cached: false, glossary: true, target: 'fr' };
+    const spy = vi.spyOn(ipc.translation, 'test').mockResolvedValueOnce({ ...result, engine: 'llm' }).mockResolvedValueOnce({ ...result, ms: 210, engine: 'opus-mt' });
+    render(<AudioPage />);
+    await act(async () => fireEvent.click(screen.getByText('Traduire')));
+    expect(await screen.findByTestId('translation-result')).toHaveTextContent('« Deux joueurs arrivent sur B. » · 640 ms · LLM en ligne');
+    await act(async () => fireEvent.click(screen.getByText('Traduire')));
+    await waitFor(() => expect(screen.getByTestId('translation-result')).toHaveTextContent('210 ms · Opus-MT local'));
+    expect(spy).toHaveBeenCalledTimes(2);
+    spy.mockRestore();
   });
 });
 

@@ -2,9 +2,10 @@
 // in-game overlay window out. Only active inside the Tauri app.
 
 import { resolveLocale, type Locale } from '../shared/i18n';
-import { audioCapture, chat, cs2, dictation, isTauri, modelDownload, onNativeAction, overlayWindow, reply, speech, translation, type CaptureStatus, type NativeAction, type OverlayWindowConfig } from '../shared/ipc';
+import { audioCapture, chat, cs2, dictation, isTauri, llm, modelDownload, onNativeAction, overlayWindow, reply, speech, translation, type CaptureStatus, type NativeAction, type OverlayWindowConfig } from '../shared/ipc';
 import { refreshModels, speechConfigFrom, transcriptEntry, useSpeech } from '../features/speech/speech';
 import { recordTime, translationConfigFrom, useTranslation } from '../features/translation/translation';
+import { llmConfigFrom, refreshLlm, useLlm } from '../features/translation/llm';
 import { setupNeeds, startSetup, useSetup } from '../features/setup/setup';
 import { chatConfigFrom, chatEntry, useChat } from '../features/chat/chat';
 import { captureModeFor, levelToUnit, recordTestLevel, refreshDevices, useAudio } from '../features/audio/audio';
@@ -49,6 +50,33 @@ export function overlayConfig(s: AppState, prev?: AppState): OverlayWindowConfig
     visible: s.overlayOn && (isRunning(s) || s.repos),
     clickThrough: s.tg.click && !s.repos,
     corner: !prev || prev.corner !== s.corner ? s.corner : null,
+  };
+}
+
+/**
+ * Sends the overlay window's flags to the Rust core when they change. The
+ * first call can come before the core has created the overlay window (the
+ * main window loads while the core is still starting): a failed call is
+ * retried at the next change, and the overlay's "ready" resends everything,
+ * including the corner saved in the settings.
+ */
+export function overlayFlagsSync(configure: (cfg: OverlayWindowConfig) => Promise<unknown>) {
+  let lastCfg = '';
+  const send = (cfg: OverlayWindowConfig) => {
+    const key = JSON.stringify(cfg);
+    if (key === lastCfg) return;
+    lastCfg = key;
+    configure(cfg).catch((e) => {
+      if (lastCfg === key) lastCfg = '';
+      console.warn('overlay_configure failed', e);
+    });
+  };
+  return {
+    sync: (s: AppState, prev?: AppState) => send(overlayConfig(s, prev)),
+    ready: (s: AppState) => {
+      lastCfg = '';
+      send(overlayConfig(s));
+    },
   };
 }
 
@@ -211,6 +239,24 @@ function startTranslationBridge(): Promise<() => void>[] {
   return unlisten;
 }
 
+/** Online LLM: settings follow the UI (the key is sent only from its card); counters refreshed every 3 s. */
+function startLlmBridge(): Promise<() => void>[] {
+  const unlisten: Promise<() => void>[] = [];
+  const sync = debouncedSync(
+    (s) => JSON.stringify(llmConfigFrom(s)),
+    (s) => llm.configure(llmConfigFrom(s)).then((status) => status && useLlm.setState({ status })),
+    400,
+  );
+  sync.push(useApp.getState());
+  unlisten.push(Promise.resolve(useApp.subscribe((s) => sync.push(s))));
+  unlisten.push(Promise.resolve(sync.stop));
+  const timer = setInterval(() => {
+    if (useApp.getState().llm.enabled) refreshLlm();
+  }, 3000);
+  unlisten.push(Promise.resolve(() => clearInterval(timer)));
+  return unlisten;
+}
+
 /** Mirrors the Rust speech recognition: status, real transcripts, voice activity. */
 function startSpeechBridge(): Promise<() => void>[] {
   const unlisten: Promise<() => void>[] = [];
@@ -252,20 +298,21 @@ export function startNativeBridge(): () => void {
   unlisten.push(...startAudioBridge());
   unlisten.push(...startSpeechBridge());
   unlisten.push(...startTranslationBridge());
+  unlisten.push(...startLlmBridge());
   unlisten.push(...startChatBridge());
   unlisten.push(...startSetupBridge());
 
   const push = () => overlayWindow.pushState(overlayPayload(useApp.getState()));
-  unlisten.push(overlayWindow.onReady(push));
+  const windowFlags = overlayFlagsSync((cfg) => overlayWindow.configure(cfg));
+  unlisten.push(
+    overlayWindow.onReady(() => {
+      push();
+      windowFlags.ready(useApp.getState());
+    }),
+  );
 
-  let lastCfg = '';
   const sync = (s: AppState, prev?: AppState) => {
-    const cfg = overlayConfig(s, prev);
-    const key = JSON.stringify(cfg);
-    if (key !== lastCfg) {
-      lastCfg = key;
-      overlayWindow.configure(cfg).catch((e) => console.warn('overlay_configure failed', e));
-    }
+    windowFlags.sync(s, prev);
     if (!prev || prev.feed !== s.feed || prev.fmt !== s.fmt || prev.opacity !== s.opacity || prev.textSize !== s.textSize || prev.maxBlocks !== s.maxBlocks || prev.duration !== s.duration || prev.corner !== s.corner || prev.repos !== s.repos || prev.uiLang !== s.uiLang || prev.target !== s.target) push();
   };
   sync(useApp.getState());

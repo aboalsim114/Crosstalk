@@ -1,6 +1,8 @@
 <div align="center">
 
-<img src="docs/assets/crosstalk-readme-cover.svg" alt="Crosstalk — Comprenez le call. Restez dans le jeu." width="100%" />
+<a href="https://cdn.jsdelivr.net/gh/aboalsim114/Crosstalk@media/showcase/crosstalk-showcase.mp4" title="Regarder la vidéo de présentation (50 s)"><img src="docs/assets/crosstalk-showcase-cover.jpg" alt="Crosstalk — Comprenez le call. Restez dans le jeu. Cliquez pour voir la vidéo de présentation (50 s)." width="100%" /></a>
+
+<sub>▶ <a href="https://cdn.jsdelivr.net/gh/aboalsim114/Crosstalk@media/showcase/crosstalk-showcase.mp4"><b>Voir la vidéo de présentation</b></a> · 50 s · 1080p · avec le son · <a href="https://github.com/aboalsim114/Crosstalk/raw/media/showcase/crosstalk-showcase.mp4">télécharger le MP4</a></sub>
 
 <br />
 
@@ -25,6 +27,8 @@ Une application Windows pensée pour rendre les annonces vocales de **Counter-St
 Une annonce en russe. Un *callout* en anglais. Une information décisive que vous n'avez pas comprise.
 
 **Crosstalk transforme la parole détectée dans l'audio de CS2 en sous-titres français**, affichés dans un overlay discret. L'objectif : réduire la barrière de la langue, préserver votre attention et vous laisser jouer.
+
+<p align="center"><a href="https://cdn.jsdelivr.net/gh/aboalsim114/Crosstalk@media/showcase/crosstalk-showcase.mp4"><img src="https://github.com/aboalsim114/Crosstalk/raw/media/showcase/crosstalk-showcase.gif" alt="Une annonce russe traduite dans l'overlay de Crosstalk : ligne provisoire, traduction finale, puis un message de chat anglais traduit." width="720" /></a></p>
 
 <table>
 <tr>
@@ -66,6 +70,7 @@ Un overlay transparent conçu pour afficher les sous-titres sans prendre le cont
 | **Contrôle immédiat** | Affichez ou masquez l'overlay, mettez en pause ou déclenchez l'arrêt d'urgence via des raccourcis globaux. |
 | **Discret par conception** | Crosstalk peut continuer à fonctionner dans la zone de notification lorsque sa fenêtre principale est masquée. |
 | **Reconnaissance et traduction locales** | Pipeline WASAPI → Silero VAD → whisper.cpp → Opus-MT. Whisper tourne sur la **carte graphique** (Vulkan : NVIDIA, AMD, Intel) quand elle est compatible, sinon sur le processeur. Aucun compte, aucune clé API ni abonnement requis pour ce traitement. |
+| **Traduction en ligne (facultative)** | Désactivée par défaut. Vous pouvez confier les phrases au LLM de votre choix, avec votre propre clé : API compatibles OpenAI (OpenAI, OpenRouter, Mistral, Groq, Ollama, LM Studio…) ou Anthropic. Seul le texte des phrases est envoyé, jamais l'audio ni les pseudos. La clé reste dans le Gestionnaire d'identifiants Windows. Opus-MT prend le relais à la moindre erreur ([détails](docs/translation-llm.md)). |
 | **Vraie application Windows** | Interface React + TypeScript intégrée dans Tauri v2, cœur natif Rust, rendu via WebView2. Ce n'est pas un site web. |
 
 ### Le respect du jeu fait partie du produit
@@ -116,6 +121,7 @@ Ces raccourcis utilisent `RegisterHotKey`, sans hook clavier. Un éventuel confl
 | Détection de `cs2.exe` et capture audio de processus | **Implémenté · en test** | WASAPI process loopback, Windows compatibles. |
 | Détection de parole et transcription RU / EN | **Implémenté · en test** | Silero VAD et whisper.cpp ; séparation parole / sons du jeu encore imparfaite. |
 | Traduction vocale vers le français | **Implémenté · en test** | Opus-MT local ; qualité et délais à mesurer sur des matchs réels. |
+| Traduction en ligne par un LLM (votre clé) | **Implémenté · à valider** | Désactivée par défaut. Testée avec un fournisseur simulé uniquement ; à essayer avec une vraie clé sous Windows. |
 | Overlay Windows et commandes rapides | **Implémenté** | Fenêtre transparente et raccourcis globaux. |
 | Identification fiable du joueur qui parle | **Expérimental / à valider** | Approche HUD et OCR prévue ; ne pas présumer qu'un pseudo est correctement identifié. |
 | Chat écrit de CS2 et traduction | **Implémenté · en test** | Lecture de `console.log` (option de lancement `-condebug`, vérifiée dans Steam) ; format des lignes à confirmer en partie réelle, règles modifiables sans nouvelle version. |
