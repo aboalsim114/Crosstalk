@@ -257,6 +257,33 @@ impl Downloader {
         self.start_all(dir, &[whisper_model], translation)
     }
 
+    /// Downloads exactly these files (other catalogues: the AI voices).
+    pub fn start_files(self: &Arc<Self>, files: Vec<FileSpec>) -> bool {
+        if files.is_empty() || self.running.swap(true, Ordering::SeqCst) {
+            return false;
+        }
+        self.cancel.store(false, Ordering::SeqCst);
+        let me = self.clone();
+        let spawned = std::thread::Builder::new()
+            .name("files-download".into())
+            .spawn(move || me.run(files));
+        if spawned.is_err() {
+            self.running.store(false, Ordering::SeqCst);
+            return false;
+        }
+        true
+    }
+
+    /// The last published state, with `missing` as the files still to fetch.
+    pub fn snapshot(&self, missing: &[FileSpec]) -> DownloadStatus {
+        let mut st = self.status.lock().unwrap().clone();
+        if !self.running.load(Ordering::SeqCst) {
+            st.missing_files = missing.len();
+            st.missing_bytes = missing.iter().map(|f| f.bytes).sum();
+        }
+        st
+    }
+
     /// [`Downloader::start`] for several Whisper models.
     pub fn start_all(
         self: &Arc<Self>,

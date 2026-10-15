@@ -40,6 +40,8 @@ ureq = "2.12"
 sha1_smol = "1"
 # Fingerprint of the update installer (in-app update).
 sha2 = "0.10"
+# The Piper voice engine is downloaded as a zip (src/voice/catalog.rs).
+zip = { version = "8", default-features = false, features = ["deflate-flate2-zlib-rs"] }
 # Chat lines of console.log, matched by the rules file (src/chat/rules.json).
 regex = "1"
 
