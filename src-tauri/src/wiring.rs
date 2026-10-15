@@ -23,7 +23,7 @@ use crate::speech::{
     self, SpeechConfig, SpeechEvents, SpeechService, SpeechStats, SpeechStatus, Transcript,
     VoiceActivity,
 };
-use crate::translation::{models, TranslationConfig, TranslationService, TranslationStatus};
+use crate::translation::{languages, TranslationConfig, TranslationService, TranslationStatus};
 
 /// Where transcripts and chat lines go to be translated.
 trait Translate {
@@ -82,7 +82,11 @@ fn route_chat(
 ) {
     show(message);
     sender(&message.sender);
-    if let Some(lang) = message.lang.as_deref().filter(|l| models::is_language(l)) {
+    if let Some(lang) = message
+        .lang
+        .as_deref()
+        .filter(|l| languages::is_language(l))
+    {
         if let Some(t) = translation {
             t.submit(message.id, lang, &message.message);
         }

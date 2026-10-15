@@ -1,18 +1,16 @@
-//! "Réponds dans leur langue": the user types in their own language (Langues ›
-//! Ma langue), Crosstalk translates into the teammates' language on the CPU
-//! and the window copies it to the clipboard, ready to paste in CS2's chat
-//! (Y / U, Ctrl+V). Nothing is typed into the game: the user pastes and sends
-//! it themselves.
+//! "Réponds dans leur langue": the user types (or dictates) in their own
+//! language (Langues › Ma langue); Crosstalk translates into the teammates'
+//! language with the same LLM as every other translation, and the window
+//! copies it to the clipboard, ready to paste in CS2's chat (Y / U, Ctrl+V).
+//! Nothing is typed into the game: the user pastes and sends it themselves.
 //!
 //! Usual calls come from a hand-written phrasebook (`phrases.rs`, French into
-//! English or Russian, exact and instant); free text goes to Opus-MT
-//! (Apache-2.0, through English when there is no direct model), loaded the
-//! first time it is needed. CS terms and the current map's callouts are kept.
+//! English or Russian, exact and instant, no API call); any other sentence
+//! goes to the LLM (Audio & IA › Traduction IA). Without a connected LLM, the
+//! reason is shown: there is no other engine.
 
 pub mod phrases;
 
-use std::collections::HashMap;
-use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
@@ -21,9 +19,8 @@ use tauri::{
     AppHandle, Emitter, LogicalSize, Manager, PhysicalPosition, WebviewUrl, WebviewWindowBuilder,
 };
 
-use crate::translation::engine::Engine;
-use crate::translation::glossary::{self, Term};
-use crate::translation::models;
+use crate::translation::engine::Translator;
+use crate::translation::languages;
 
 pub const LABEL: &str = "reply";
 pub const OPEN_EVENT: &str = "reply://open";
@@ -31,37 +28,28 @@ const MAX_CHARS: usize = 300;
 const WIDTH: f64 = 560.0;
 const HEIGHT: f64 = 340.0;
 
-/// CS words kept as typed (the map's callouts are added while a map is known).
-const KEEP: &[&str] = &[
-    "smoke", "flash", "molly", "molotov", "AWP", "eco", "rush", "deagle", "AK", "M4", "nade",
-    "lurk",
-];
-
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ReplyResult {
     pub text: String,
     pub target: String,
-    /// `phrasebook` (exact, hand-written) or `model` (Opus-MT).
+    /// `phrasebook` (exact, hand-written) or `llm`.
     pub via: &'static str,
     pub ms: u32,
 }
 
-#[derive(Debug, Clone, Serialize)]
+/// A language the reply can be written in, and whether free text works now.
+#[derive(Debug, Clone, Serialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
-pub struct ReplyModel {
+pub struct ReplyTarget {
     /// The user's language.
     pub source: String,
     pub target: String,
-    /// Repositories of the route ("A + B" through English).
-    pub repo: String,
-    pub size_mb: u32,
-    pub installed: bool,
-    pub loaded: bool,
+    /// The LLM is connected: any sentence can be translated.
+    pub ready: bool,
+    /// Why free text is unavailable (the phrasebook still works).
+    pub problem: Option<String>,
 }
-
-/// Loads the engine `from` → `to`.
-pub type Loader = Box<dyn Fn(&str, &str) -> Result<Box<dyn Engine>, String> + Send + Sync>;
 
 /// The user's language and the players' (from the translation settings).
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -73,8 +61,8 @@ pub struct Languages {
 impl Default for Languages {
     fn default() -> Self {
         Self {
-            me: models::DEFAULT_TARGET.into(),
-            players: models::DEFAULT_SOURCES
+            me: languages::DEFAULT_TARGET.into(),
+            players: languages::DEFAULT_SOURCES
                 .iter()
                 .map(|s| s.to_string())
                 .collect(),
@@ -83,54 +71,24 @@ impl Default for Languages {
 }
 
 pub struct ReplyService {
-    models_dir: PathBuf,
-    loader: Loader,
-    engines: Mutex<HashMap<String, Box<dyn Engine>>>,
-    map_terms: Mutex<Vec<String>>,
+    translator: Arc<dyn Translator>,
     langs: Mutex<Languages>,
 }
 
 impl ReplyService {
-    pub fn new(models_dir: PathBuf) -> Arc<Self> {
-        let dir = models_dir.clone();
-        Self::with_loader(
-            models_dir,
-            Box::new(move |from, to| {
-                use crate::translation::{engine::EngineLoader, opus::OpusLoader};
-                let route = models::route(from, to).ok_or("langue non gérée")?;
-                if let Some((p, f)) = route
-                    .iter()
-                    .find_map(|p| models::missing_file(&dir, p).map(|f| (p, f)))
-                {
-                    return Err(format!("modèle {} absent ({f}) : téléchargez-le", p.dir));
-                }
-                OpusLoader.load(&dir, from, to)
-            }),
-        )
-    }
-
-    pub fn with_loader(models_dir: PathBuf, loader: Loader) -> Arc<Self> {
+    pub fn new(translator: Arc<dyn Translator>) -> Arc<Self> {
         Arc::new(Self {
-            models_dir,
-            loader,
-            engines: Mutex::new(HashMap::new()),
-            map_terms: Mutex::new(Vec::new()),
+            translator,
             langs: Mutex::new(Languages::default()),
         })
     }
 
     /// Follows Langues › Ma langue and the players' languages.
     pub fn set_languages(&self, me: &str, players: &[String]) {
-        let next = Languages {
+        *self.langs.lock().unwrap() = Languages {
             me: me.to_string(),
             players: players.to_vec(),
         };
-        let mut l = self.langs.lock().unwrap();
-        if *l != next {
-            *l = next;
-            // Engines from the old language are no use any more.
-            self.engines.lock().unwrap().clear();
-        }
     }
 
     pub fn languages(&self) -> Languages {
@@ -140,32 +98,25 @@ impl ReplyService {
     /// Languages the reply can be written in.
     pub fn targets(&self) -> Vec<String> {
         let l = self.languages();
-        models::reply_targets(&l.me, &l.players)
+        languages::reply_targets(&l.me, &l.players)
     }
 
-    pub fn models(&self) -> Vec<ReplyModel> {
+    pub fn models(&self) -> Vec<ReplyTarget> {
         let me = self.languages().me;
-        let engines = self.engines.lock().unwrap();
+        let problem = self.translator.problem();
         self.targets()
             .into_iter()
-            .filter_map(|t| {
-                let r = models::route(&me, &t)?;
-                Some(ReplyModel {
-                    source: me.clone(),
-                    repo: r.iter().map(|p| p.repo).collect::<Vec<_>>().join(" + "),
-                    size_mb: models::size_mb(&r),
-                    installed: models::route_installed(&self.models_dir, &me, &t),
-                    loaded: engines.contains_key(&t),
-                    target: t,
-                })
+            .map(|target| ReplyTarget {
+                source: me.clone(),
+                target,
+                ready: problem.is_none(),
+                problem: problem.clone(),
             })
             .collect()
     }
 
-    /// Callouts of the map being played, kept as typed.
-    pub fn set_map_terms(&self, callouts: Vec<String>) {
-        *self.map_terms.lock().unwrap() = callouts;
-    }
+    /// Kept for the map changes (the LLM keeps map callouts by its instructions).
+    pub fn set_map_terms(&self, _callouts: Vec<String>) {}
 
     pub fn translate(&self, text: &str, target: &str) -> Result<ReplyResult, String> {
         let started = Instant::now();
@@ -194,27 +145,15 @@ impl ReplyService {
                 return Ok(done(t, "phrasebook"));
             }
         }
-        let mut engines = self.engines.lock().unwrap();
-        if !engines.contains_key(target) {
-            let e = (self.loader)(&me, target)?;
-            engines.insert(target.to_string(), e);
+        if let Some(p) = self.translator.problem() {
+            return Err(p);
         }
-        let engine = engines.get_mut(target).expect("loaded");
-        let terms: Vec<Term> = KEEP
-            .iter()
-            .map(|s| s.to_string())
-            .chain(self.map_terms.lock().unwrap().iter().cloned())
-            .map(|source| Term {
-                source,
-                target: None,
-            })
-            .collect();
-        let (out, _) = glossary::translate(text, &terms, |t| engine.translate(t))?;
+        let out = self.translator.translate(text, &me, target)?;
         let out = crate::translation::callouts::clean_output(&out);
         if out.is_empty() {
             return Err("traduction vide".into());
         }
-        Ok(done(out, "model"))
+        Ok(done(out, self.translator.name()))
     }
 }
 
@@ -301,7 +240,7 @@ pub async fn reply_translate(
 }
 
 #[tauri::command]
-pub fn reply_models(reply: tauri::State<'_, Arc<ReplyService>>) -> Vec<ReplyModel> {
+pub fn reply_models(reply: tauri::State<'_, Arc<ReplyService>>) -> Vec<ReplyTarget> {
     reply.models()
 }
 
@@ -328,92 +267,105 @@ mod tests {
     use super::*;
     use std::sync::atomic::{AtomicUsize, Ordering};
 
-    struct Echo(&'static str);
-    impl Engine for Echo {
-        fn translate(&mut self, text: &str) -> Result<String, String> {
-            Ok(format!("{}:{text}", self.0))
+    /// "<TARGET>:<text>" like an LLM would translate; can be disconnected.
+    struct FakeLlm {
+        calls: AtomicUsize,
+        connected: bool,
+    }
+    impl Translator for FakeLlm {
+        fn problem(&self) -> Option<String> {
+            (!self.connected)
+                .then(|| "aucun moteur de traduction connecté (Audio & IA › Traduction IA)".into())
+        }
+        fn translate(&self, text: &str, source: &str, target: &str) -> Result<String, String> {
+            self.calls.fetch_add(1, Ordering::SeqCst);
+            Ok(format!(
+                "{}>{}:{text}",
+                source.to_uppercase(),
+                target.to_uppercase()
+            ))
+        }
+        fn translate_partial(&self, _: &str, _: &str, _: &str) -> Result<String, String> {
+            Err("non".into())
         }
     }
 
-    fn service(loads: Arc<AtomicUsize>) -> Arc<ReplyService> {
-        ReplyService::with_loader(
-            PathBuf::from("nowhere"),
-            Box::new(move |_from, target| {
-                loads.fetch_add(1, Ordering::SeqCst);
-                Ok(Box::new(Echo(match target {
-                    "ru" => "RU",
-                    "de" => "DE",
-                    _ => "EN",
-                })) as Box<dyn Engine>)
-            }),
-        )
+    fn service(connected: bool) -> (Arc<ReplyService>, Arc<FakeLlm>) {
+        let llm = Arc::new(FakeLlm {
+            calls: AtomicUsize::new(0),
+            connected,
+        });
+        (ReplyService::new(llm.clone()), llm)
     }
 
     #[test]
-    fn usual_calls_skip_the_model() {
-        let loads = Arc::new(AtomicUsize::new(0));
-        let svc = service(loads.clone());
+    fn usual_calls_skip_the_llm() {
+        let (svc, llm) = service(true);
         let r = svc.translate("Drop-moi une arme stp", "ru").unwrap();
         assert_eq!(
             (r.text.as_str(), r.via),
             ("Скинь мне оружие, пожалуйста", "phrasebook")
         );
-        assert_eq!(loads.load(Ordering::SeqCst), 0);
+        assert_eq!(llm.calls.load(Ordering::SeqCst), 0);
     }
 
     #[test]
-    fn free_text_goes_to_the_model_once_loaded_and_keeps_cs_terms() {
-        let loads = Arc::new(AtomicUsize::new(0));
-        let svc = service(loads.clone());
-        svc.set_map_terms(vec!["Palace".into()]);
-        let r = svc.translate("attention, smoke au palace", "en").unwrap();
-        assert_eq!(r.via, "model");
-        assert_eq!(r.text, "EN:attention, smoke au palace");
-        svc.translate("ils arrivent par le haut", "en").unwrap();
-        assert_eq!(loads.load(Ordering::SeqCst), 1, "the model is loaded once");
-        assert!(svc
-            .translate("ils arrivent", "ru")
-            .unwrap()
-            .text
-            .starts_with("RU:"));
-        assert_eq!(loads.load(Ordering::SeqCst), 2);
+    fn any_sentence_goes_to_the_llm_from_the_users_language() {
+        let (svc, llm) = service(true);
+        let r = svc
+            .translate("Mon équipe ne sait pas jouer.", "ru")
+            .unwrap();
+        assert_eq!(
+            (r.via, r.text.as_str()),
+            ("llm", "FR>RU:Mon équipe ne sait pas jouer.")
+        );
+        assert_eq!(
+            svc.translate("ils arrivent par le haut", "en")
+                .unwrap()
+                .text,
+            "FR>EN:ils arrivent par le haut"
+        );
+        assert_eq!(llm.calls.load(Ordering::SeqCst), 2);
+        assert!(svc.models().iter().all(|m| m.ready && m.problem.is_none()));
     }
 
     #[test]
-    fn refuses_bad_input_and_reports_missing_models() {
-        let svc = service(Arc::new(AtomicUsize::new(0)));
+    fn without_a_connected_llm_free_text_says_why_but_phrases_still_work() {
+        let (svc, llm) = service(false);
+        let e = svc
+            .translate("on se retrouve après le round", "ru")
+            .unwrap_err();
+        assert!(e.contains("aucun moteur"), "{e}");
+        assert_eq!(svc.translate("éco", "en").unwrap().via, "phrasebook");
+        assert_eq!(llm.calls.load(Ordering::SeqCst), 0);
+        let m = svc.models();
+        assert_eq!(m.len(), 2);
+        assert!(m.iter().all(|t| !t.ready && t.problem.is_some()));
+    }
+
+    #[test]
+    fn refuses_bad_input() {
+        let (svc, _) = service(true);
         assert!(svc.translate("   ", "en").is_err());
         assert!(svc.translate("salut", "de").is_err());
         assert!(svc.translate(&"a".repeat(301), "en").is_err());
-        let real = ReplyService::new(std::env::temp_dir().join("crosstalk-reply-none"));
-        let e = real
-            .translate("on se retrouve après le round", "ru")
-            .unwrap_err();
-        assert!(e.contains("absent"), "{e}");
-        assert!(real.models().iter().all(|m| !m.installed && !m.loaded));
-        assert_eq!(real.models().len(), 2);
     }
 
     #[test]
-    fn a_russian_user_replies_from_russian() {
-        let loads = Arc::new(AtomicUsize::new(0));
-        let svc = service(loads.clone());
+    fn a_russian_user_replies_from_russian_into_every_players_language() {
+        let (svc, _) = service(true);
         let l = |v: &[&str]| v.iter().map(|s| s.to_string()).collect::<Vec<_>>();
-        svc.set_languages("ru", &l(&["en", "de", "pl"]));
-        // Polish: no model writes into it; their own language: nothing to do.
-        assert_eq!(svc.targets(), ["en", "de"]);
+        svc.set_languages("ru", &l(&["en", "de", "pl", "ru"]));
+        // Polish too: the LLM writes every language; their own: nothing to do.
+        assert_eq!(svc.targets(), ["en", "de", "pl"]);
         // The French phrasebook does not apply to Russian input.
         let r = svc.translate("gg", "en").unwrap();
-        assert_eq!((r.via, r.text.as_str()), ("model", "EN:gg"));
-        assert_eq!(svc.translate("иду на Б", "de").unwrap().text, "DE:иду на Б");
-        assert!(svc.translate("да", "ru").is_err());
-        assert!(svc.translate("да", "pl").is_err());
-        let m = svc.models();
-        assert_eq!(m.len(), 2);
+        assert_eq!((r.via, r.text.as_str()), ("llm", "RU>EN:gg"));
         assert_eq!(
-            m[1].repo,
-            "Helsinki-NLP/opus-mt-ru-en + Helsinki-NLP/opus-mt-en-de"
+            svc.translate("иду на Б", "pl").unwrap().text,
+            "RU>PL:иду на Б"
         );
+        assert!(svc.translate("да", "ru").is_err());
     }
 
     #[test]

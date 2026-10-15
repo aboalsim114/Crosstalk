@@ -91,13 +91,17 @@ pub fn run() {
             translation::translation_status,
             wiring::translation_configure,
             translation::translation_rescan,
-            translation::translation_models,
+            translation::translation_legacy_models,
+            translation::translation_legacy_cleanup,
             translation::translation_test,
             translation::llm_status,
             translation::llm_configure,
             translation::llm_set_key,
             translation::llm_clear_key,
             translation::llm_test,
+            translation::llm_translate_test,
+            translation::llm_models,
+            translation::llm_local_servers,
             translation::llm_ollama_local,
             translation::llm_open_key_page,
             download_commands::models_download_status,
@@ -170,18 +174,13 @@ pub fn run() {
             );
             logs::watch(handle);
 
-            // Translation decodes one token at a time: one thread is nearly as
-            // fast as four and leaves the CPU to CS2 and Whisper (read by candle).
-            if std::env::var_os("RAYON_NUM_THREADS").is_none() {
-                std::env::set_var("RAYON_NUM_THREADS", "1");
-            }
             app.manage(downloads::Downloader::new(
                 Arc::new(downloads::HttpFetcher),
                 Arc::new(download_commands::TauriDownloadEvents(handle.clone())),
             ));
             let (translation, llm) = translation::start(handle);
             app.manage(translation.clone());
-            app.manage(llm);
+            app.manage(llm.clone());
             let speech = wiring::start_speech(handle);
             app.manage(speech.clone());
             let history = history::History::new(history::default_path());
@@ -198,7 +197,7 @@ pub fn run() {
                 chat::user_rules_file(),
             );
             app.manage(chat.clone());
-            let reply = reply::ReplyService::new(paths::models_dir());
+            let reply = reply::ReplyService::new(llm);
             app.manage(reply.clone());
             app.manage(Arc::new(dictation::Dictation::default()));
             app.manage(voice::start(handle));

@@ -1,9 +1,9 @@
 //! Lexicon of Counter-Strike callouts (cahier des charges F-36).
 //!
-//! Opus-MT learnt on film subtitles: on two-word callouts ("CT, go, go") it
-//! invents dialogue ("- T'es pas un bon ami."). A message made only of known
-//! callouts is therefore translated from this table, instantly and exactly;
-//! anything else goes to the model. Nothing absent from the original is added.
+//! A message made only of known callouts ("CT, go, go", "rush", "eco") is
+//! translated from this table into French, instantly and exactly, without
+//! asking the LLM (no latency, no API cost); anything else goes to the LLM.
+//! Nothing absent from the original is added.
 
 /// Exact segments (lowercase, without punctuation) → French.
 const PHRASES: &[(&str, &str)] = &[
@@ -282,7 +282,7 @@ pub fn translate(lang: &str, text: &str) -> Option<String> {
     Some(out.join(", "))
 }
 
-/// Removes the subtitle conventions Opus-MT learnt (leading dialogue dash).
+/// Removes a leading dialogue dash some models add ("- Deux sur B.").
 pub fn clean_output(text: &str) -> String {
     let t = text.trim();
     let t = t.trim_start_matches(['-', '–', '—']).trim_start();
