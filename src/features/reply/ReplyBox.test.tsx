@@ -3,6 +3,8 @@ import { act, fireEvent, render, screen } from '@testing-library/react';
 import { recentLangs } from '../languages/langs';
 
 const translate = vi.fn();
+const voiceStatus = vi.fn(() => Promise.resolve(null as unknown));
+const say = vi.fn();
 vi.mock('../../shared/ipc', async (orig) => {
   const real = await orig<typeof import('../../shared/ipc')>();
   return {
@@ -13,6 +15,7 @@ vi.mock('../../shared/ipc', async (orig) => {
       phraseText: (id: string, target: string) => Promise.resolve(id === 'eco' ? (target === 'ru' ? 'Эко раунд' : 'Eco round') : null),
       translate: (text: string, target: string) => translate(text, target),
     },
+    voice: { ...real.voice, status: () => voiceStatus(), say: (text: string, lang: string) => say(text, lang) },
   };
 });
 
@@ -78,5 +81,19 @@ describe('reply in the teammates’ language', () => {
       fireEvent.keyDown(input, { key: 'Enter' });
     });
     expect(screen.getByText(/téléchargez-le/)).toBeTruthy();
+  });
+
+  it('says the translation in the game when the AI voice is ready', async () => {
+    voiceStatus.mockResolvedValueOnce({ options: { enabled: true }, routing: true });
+    translate.mockResolvedValueOnce({ text: 'Двое на B', via: 'phrasebook', ms: 1 });
+    say.mockResolvedValueOnce(1500);
+    Object.assign(navigator, { clipboard: { writeText: () => Promise.resolve() } });
+    render(<ReplyBox target="ru" onTarget={() => {}} />);
+    const box = await screen.findByLabelText(/Message/);
+    fireEvent.change(box, { target: { value: 'deux en B' } });
+    await act(async () => fireEvent.keyDown(box, { key: 'Enter' }));
+    await act(async () => fireEvent.click(await screen.findByText('🔊 Dire en jeu')));
+    expect(say).toHaveBeenCalledWith('Двое на B', 'ru');
+    expect(await screen.findByText('Dit en jeu par la voix IA (1,5 s)')).toBeInTheDocument();
   });
 });

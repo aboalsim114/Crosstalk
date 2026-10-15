@@ -100,6 +100,8 @@ pub struct DictationState {
     /// `phrasebook` or `model`.
     pub via: Option<&'static str>,
     pub copied: bool,
+    /// Said in the game by the AI voice.
+    pub spoken: bool,
     pub error: Option<String>,
 }
 
@@ -167,7 +169,12 @@ fn run(app: &AppHandle, d: &Dictation, target: &str) -> DictationState {
         ..Default::default()
     };
     emit(app, &listening(0.0, 0.0));
-    let samples = match record(d, |level, secs| emit(app, &listening(level, secs))) {
+    let mic = app
+        .try_state::<Arc<crate::voice::VoiceService>>()
+        .and_then(|v| v.options().mic);
+    let samples = match record(d, mic.as_deref(), |level, secs| {
+        emit(app, &listening(level, secs))
+    }) {
         Ok(s) => s,
         Err(e) => return fail(target, e),
     };
@@ -210,6 +217,8 @@ fn run(app: &AppHandle, d: &Dictation, target: &str) -> DictationState {
         }
     };
     let copied = crate::clipboard::set_text(&r.text).is_ok();
+    // AI voice on: the translation is also said in the game.
+    let spoken = crate::voice::speak_reply(app, &r.text, target);
     crate::logs::info(
         "dictation",
         &format!("réponse dictée traduite ({}, {})", target, r.via),
@@ -221,13 +230,20 @@ fn run(app: &AppHandle, d: &Dictation, target: &str) -> DictationState {
         target: target.into(),
         via: Some(r.via),
         copied,
+        spoken,
         ..Default::default()
     }
 }
 
 /// Records the microphone until the end of the sentence; 16 kHz mono.
-fn record(d: &Dictation, mut on_level: impl FnMut(f32, f32)) -> Result<Vec<f32>, String> {
-    let mut stream = crate::audio::open_microphone().map_err(|e| e.to_string())?;
+/// `mic`: the real microphone chosen for the AI voice (Windows' default
+/// microphone may then be the virtual cable), else the default one.
+fn record(
+    d: &Dictation,
+    mic: Option<&str>,
+    mut on_level: impl FnMut(f32, f32),
+) -> Result<Vec<f32>, String> {
+    let mut stream = crate::audio::open_microphone(mic).map_err(|e| e.to_string())?;
     let format = stream.format();
     let mut conditioner = Conditioner::new(format.sample_rate);
     let mut samples: Vec<f32> = Vec::with_capacity(SAMPLE_RATE as usize * 4);

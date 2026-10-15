@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { dictation, isTauri, reply, type ReplyPhrase, type ReplyTarget } from '../../shared/ipc';
+import { dictation, isTauri, reply, voice, type ReplyPhrase, type ReplyTarget } from '../../shared/ipc';
 import { fnt } from '../../shared/ui/atoms';
 import { NATIVE_NAME, isPlayerLang } from '../languages/langs';
 
@@ -62,9 +62,12 @@ export function ReplyBox({ target, onTarget, onCopied, autoFocusKey }: Props) {
   const [busy, setBusy] = useState(false);
   const [out, setOut] = useState<{ text: string; note: string; error?: boolean } | null>(null);
   const input = useRef<HTMLInputElement>(null);
+  // AI voice ready (on, cable fed): the translation can be said in the game.
+  const [voiceReady, setVoiceReady] = useState(false);
 
   useEffect(() => {
     reply.phrases().then(setPhrases);
+    voice.status().then((st) => setVoiceReady(!!st?.options.enabled && st.routing));
   }, []);
   useEffect(() => {
     input.current?.focus();
@@ -88,6 +91,14 @@ export function ReplyBox({ target, onTarget, onCopied, autoFocusKey }: Props) {
       setOut({ text: '', note: String(e), error: true });
     } finally {
       setBusy(false);
+    }
+  };
+  const say = async (t: string) => {
+    try {
+      const ms = await voice.say(t, target);
+      setOut((o) => o && { ...o, note: `Dit en jeu par la voix IA (${(ms / 1000).toFixed(1).replace('.', ',')} s)` });
+    } catch (e) {
+      setOut((o) => o && { ...o, note: String(e), error: true });
     }
   };
   const quick = async (p: ReplyPhrase) => {
@@ -149,6 +160,11 @@ export function ReplyBox({ target, onTarget, onCopied, autoFocusKey }: Props) {
             </span>
           )}
           <span style={{ font: fnt(400, 11, 'sans', 1.45), color: out.error ? '#ff8a7a' : '#7fe0a8' }}>{out.note}</span>
+          {voiceReady && out.text && out.text !== '…' && (
+            <div className="pill self-start px-3 py-1" role="button" onClick={() => say(out.text)} style={{ font: fnt(500, 11.5) }}>
+              🔊 Dire en jeu
+            </div>
+          )}
         </div>
       )}
     </div>

@@ -42,6 +42,7 @@ pub mod translation;
 mod tray;
 mod updater;
 mod version;
+mod voice;
 mod wiring;
 
 use std::sync::Arc;
@@ -143,7 +144,14 @@ pub fn run() {
             speaker::speaker_test,
             recap::recap_save,
             recap::recap_reveal,
-            tray::ui_set_tray_labels
+            tray::ui_set_tray_labels,
+            voice::voice_status,
+            voice::voice_configure,
+            voice::voice_download,
+            voice::voice_download_cancel,
+            voice::voice_say,
+            voice::voice_preview,
+            voice::voice_open_cable_page
         ])
         .setup(|app| {
             let handle = app.handle();
@@ -193,6 +201,7 @@ pub fn run() {
             let reply = reply::ReplyService::new(paths::models_dir());
             app.manage(reply.clone());
             app.manage(Arc::new(dictation::Dictation::default()));
+            app.manage(voice::start(handle));
             app.manage(stream::StreamService::new());
             let speaker = speaker::SpeakerService::new();
             speaker::start(handle, speaker.clone());

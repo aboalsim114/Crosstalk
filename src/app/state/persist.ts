@@ -16,7 +16,7 @@ const LOCAL_KEY = 'crosstalk.settings';
 
 type Persisted = Pick<
   AppState,
-  'mode' | 'fmt' | 'corner' | 'opacity' | 'textSize' | 'duration' | 'maxBlocks' | 'overlayOn' | 'tg' | 'chatPath' | 'ownName' | 'capture' | 'vad' | 'model' | 'accel' | 'src' | 'stream' | 'speaker' | 'llm' | 'voiceFocus' | 'radar' | 'uiLang' | 'target' | 'langSetupDone'
+  'mode' | 'fmt' | 'corner' | 'opacity' | 'textSize' | 'duration' | 'maxBlocks' | 'overlayOn' | 'tg' | 'chatPath' | 'ownName' | 'capture' | 'vad' | 'model' | 'accel' | 'src' | 'stream' | 'speaker' | 'llm' | 'voiceFocus' | 'radar' | 'voice' | 'uiLang' | 'target' | 'langSetupDone'
 >;
 
 const oneOf =
@@ -49,6 +49,7 @@ const CHECKS: { [K in keyof Persisted]: (v: unknown) => boolean } = {
   llm: (v) => typeof v === 'object' && v !== null,
   voiceFocus: isBool,
   radar: (v) => typeof v === 'object' && v !== null,
+  voice: (v) => typeof v === 'object' && v !== null,
   uiLang: isUiLang,
   target: isTargetLang,
   langSetupDone: isBool,
@@ -88,6 +89,8 @@ export function restore(raw: unknown, defaults: AppState): { app: Partial<AppSta
       app.stream = merged as unknown as AppState['stream'];
     } else if (k === 'speaker') {
       app.speaker = restoreSpeaker(v as Record<string, unknown>, defaults.speaker);
+    } else if (k === 'voice') {
+      app.voice = restoreVoice(v as Record<string, unknown>, defaults.voice);
     } else if (k === 'radar') {
       const r = v as Record<string, unknown>;
       app.radar = { on: isBool(r.on) ? r.on : defaults.radar.on, hold: inRange(...HOLD_RANGE)(r.hold) ? r.hold : defaults.radar.hold };
@@ -104,6 +107,21 @@ export function restore(raw: unknown, defaults: AppState): { app: Partial<AppSta
   }
   const deviceId = s.deviceId === null || isString(s.deviceId) ? (s.deviceId as string | null) : undefined;
   return { app, deviceId };
+}
+
+/** AI voice settings: each field checked, voice ids kept as short strings. */
+function restoreVoice(v: Record<string, unknown>, base: AppState['voice']): AppState['voice'] {
+  const voices: Record<string, string> = {};
+  if (typeof v.voices === 'object' && v.voices !== null)
+    for (const [lang, id] of Object.entries(v.voices as Record<string, unknown>)) if (/^[a-z]{2}$/.test(lang) && typeof id === 'string' && id.length <= 80) voices[lang] = id;
+  return {
+    enabled: isBool(v.enabled) ? v.enabled : base.enabled,
+    mic: v.mic === null || isString(v.mic) ? (v.mic as string | null) : base.mic,
+    voices,
+    monitor: isBool(v.monitor) ? v.monitor : base.monitor,
+    volume: inRange(0, 150)(v.volume) ? v.volume : base.volume,
+    micVolume: inRange(0, 150)(v.micVolume) ? v.micVolume : base.micVolume,
+  };
 }
 
 /** Online LLM settings (provider, address, model). The API key is never in this file. */

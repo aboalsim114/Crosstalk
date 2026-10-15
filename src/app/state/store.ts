@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { LLM_DEFAULT_URL, type LlmConfig, type LlmService, type StreamOpts, type Translation } from '../../shared/ipc';
+import { LLM_DEFAULT_URL, type LlmConfig, type LlmService, type StreamOpts, type Translation, type VoiceOptions } from '../../shared/ipc';
 import { config } from '../config';
 import { isCapturing, useAudio } from '../../features/audio/audio';
 import type { UiLang } from '../../shared/i18n';
@@ -28,6 +28,8 @@ export interface SpeakerOpts {
 }
 export const SPEAKER_DEFAULTS: SpeakerOpts = { enabled: false, region: { x: 0, y: 0.5, w: 0.25, h: 0.3 } };
 /** Online translation by an LLM (Audio & IA): the user's provider, off by default. The key is not here. */
+export const VOICE_DEFAULTS: VoiceOptions = { enabled: false, mic: null, voices: {}, monitor: true, volume: 100, micVolume: 100 };
+
 export type LlmOpts = LlmConfig & { service: LlmService };
 export const LLM_DEFAULTS: LlmOpts = { enabled: false, service: 'openai', provider: 'openai', baseUrl: LLM_DEFAULT_URL.openai, model: 'gpt-4o-mini' };
 export const STREAM_DEFAULTS: StreamOpts = { enabled: false, names: false, original: false, watermark: true, size: 34, max: 3, duration: 8 };
@@ -91,6 +93,8 @@ export interface AppState {
   voiceFocus: boolean;
   /** Callout radar in the overlay. */
   radar: RadarOpts;
+  /** AI voice in the game (Langues › Voix IA). */
+  voice: VoiceOptions;
   /** "Essayer": time the sample radar was asked for (not saved). */
   radarDemo: number | null;
   /** The players' languages (Langues › Mes langues). */
@@ -181,6 +185,7 @@ const initial: AppState = {
   accel: 'auto',
   voiceFocus: false,
   radar: RADAR_DEFAULTS,
+  voice: VOICE_DEFAULTS,
   radarDemo: null,
   src: { fr: false, en: true, ru: true, de: false, es: false, uk: false, pl: false, tr: false },
   target: 'fr',

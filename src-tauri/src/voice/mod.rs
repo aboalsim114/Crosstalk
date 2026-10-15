@@ -1,0 +1,449 @@
+//! "Voix IA": the user dictates a sentence in their language (Ctrl+Alt+F6),
+//! Crosstalk transcribes and translates it (src/dictation.rs) and a local
+//! neural voice (Piper) says it in the teammates' language, in CS2's voice
+//! chat, through a virtual cable (VB-CABLE). Off by default; everything runs
+//! on the PC, no key, no account, nothing sent anywhere.
+
+pub mod catalog;
+pub mod mix;
+pub mod piper;
+pub mod router;
+pub mod wav;
+
+use std::collections::HashMap;
+use std::path::PathBuf;
+use std::sync::{Arc, Mutex};
+
+use serde::{Deserialize, Serialize};
+use tauri::{AppHandle, Emitter, Manager};
+
+use crate::downloads::{DownloadEvents, DownloadStatus, Downloader};
+
+pub const DOWNLOAD_EVENT: &str = "voice://download";
+pub const STATE_EVENT: &str = "voice://state";
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct VoiceOptions {
+    pub enabled: bool,
+    /// The user's real microphone (its id), passed through to the cable.
+    pub mic: Option<String>,
+    /// Chosen voice per language (`ru` → `ru_RU-dmitri-medium`).
+    pub voices: HashMap<String, String>,
+    /// Also hear the AI voice in the headset.
+    pub monitor: bool,
+    /// Volumes in percent (0–150).
+    pub volume: u32,
+    pub mic_volume: u32,
+}
+
+impl Default for VoiceOptions {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            mic: None,
+            voices: HashMap::new(),
+            monitor: true,
+            volume: 100,
+            mic_volume: 100,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct VoiceInfo {
+    #[serde(flatten)]
+    pub voice: catalog::Voice,
+    pub installed: bool,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct VoiceStatus {
+    pub options: VoiceOptions,
+    pub engine_ready: bool,
+    pub voices: Vec<VoiceInfo>,
+    /// VB-CABLE's input, when installed.
+    pub cable: Option<crate::audio::AudioDevice>,
+    pub mics: Vec<crate::audio::AudioDevice>,
+    /// The cable is fed (microphone passthrough running).
+    pub routing: bool,
+    pub speaking: bool,
+    pub error: Option<String>,
+    pub download: DownloadStatus,
+}
+
+/// What the overlay and the reply window show while the voice speaks.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SpeakState {
+    pub text: String,
+    pub lang: String,
+    pub ms: u32,
+}
+
+/// Test sentence per language (the preview button).
+pub fn sample_sentence(lang: &str) -> &'static str {
+    match lang {
+        "ru" => "Двое на B, осторожно, флешка.",
+        "en" => "Two on B, watch out for the flash.",
+        "fr" => "Deux en B, attention au flash.",
+        "de" => "Zwei auf B, Vorsicht, Blendgranate.",
+        "es" => "Dos en B, cuidado con la flash.",
+        "pl" => "Dwóch na B, uwaga na flasha.",
+        "tr" => "B'de iki kişi, flaşa dikkat.",
+        "uk" => "Двоє на B, обережно, флешка.",
+        _ => "Two on B.",
+    }
+}
+
+pub struct VoiceService {
+    models: PathBuf,
+    options: Mutex<VoiceOptions>,
+    piper: Mutex<Option<Arc<piper::Piper>>>,
+    router: Mutex<Option<router::Router>>,
+    error: Arc<Mutex<Option<String>>>,
+    downloader: Arc<Downloader>,
+}
+
+impl VoiceService {
+    pub fn new(models: PathBuf, downloader: Arc<Downloader>) -> Arc<Self> {
+        Arc::new(Self {
+            models,
+            options: Mutex::new(VoiceOptions::default()),
+            piper: Mutex::new(None),
+            router: Mutex::new(None),
+            error: Arc::new(Mutex::new(None)),
+            downloader,
+        })
+    }
+
+    pub fn options(&self) -> VoiceOptions {
+        self.options.lock().unwrap().clone()
+    }
+
+    /// The voice for a language: the chosen one, else the first of the catalogue.
+    pub fn voice_for(&self, lang: &str) -> Option<&'static catalog::Voice> {
+        let chosen = self.options.lock().unwrap().voices.get(lang).cloned();
+        chosen
+            .and_then(|id| catalog::voice(&id).filter(|v| v.lang == lang))
+            .or_else(|| catalog::default_voice(lang))
+    }
+
+    pub fn status(&self) -> VoiceStatus {
+        let outputs = crate::audio::list_endpoints(false).unwrap_or_default();
+        let mics = crate::audio::list_endpoints(true).unwrap_or_default();
+        let cable = router::find_cable(&outputs).cloned();
+        let options = self.options();
+        let wanted: Vec<String> = options.voices.values().cloned().collect();
+        let missing = catalog::missing(&self.models, &wanted);
+        let (routing, speaking) = self
+            .router
+            .lock()
+            .unwrap()
+            .as_ref()
+            .map_or((false, false), |r| (true, r.feed.speaking()));
+        VoiceStatus {
+            engine_ready: catalog::engine_ready(&self.models),
+            voices: catalog::VOICES
+                .iter()
+                .map(|v| VoiceInfo {
+                    voice: *v,
+                    installed: catalog::voice_installed(&self.models, v),
+                })
+                .collect(),
+            cable,
+            // The cable's recording side is not a real microphone.
+            mics: mics
+                .into_iter()
+                .filter(|m| !m.name.to_lowercase().contains("cable output"))
+                .collect(),
+            routing,
+            speaking,
+            error: self.error.lock().unwrap().clone(),
+            download: self.downloader.snapshot(&missing),
+            options,
+        }
+    }
+
+    /// Applies new settings: starts, restarts or stops the cable feed.
+    pub fn configure(&self, opts: VoiceOptions) {
+        let route = if opts.enabled {
+            let outputs = crate::audio::list_endpoints(false).unwrap_or_default();
+            router::find_cable(&outputs).map(|c| router::RouteConfig {
+                mic: opts.mic.clone(),
+                cable: c.id.clone(),
+                monitor: opts.monitor,
+            })
+        } else {
+            None
+        };
+        *self.options.lock().unwrap() = opts.clone();
+        let mut r = self.router.lock().unwrap();
+        let same = matches!((&*r, &route), (Some(cur), Some(want)) if cur.config == *want);
+        if !same {
+            if let Some(old) = r.take() {
+                old.stop();
+            }
+            *self.error.lock().unwrap() = None;
+            if let Some(cfg) = route {
+                let err = self.error.clone();
+                match router::start(cfg, move |e| *err.lock().unwrap() = Some(e)) {
+                    Ok(router) => *r = Some(router),
+                    Err(e) => *self.error.lock().unwrap() = Some(e),
+                }
+            } else if opts.enabled {
+                *self.error.lock().unwrap() =
+                    Some("VB-CABLE introuvable : installez-le, puis relancez la détection.".into());
+            }
+        }
+        if let Some(router) = r.as_ref() {
+            *router.feed.mic_gain.lock().unwrap() = mix::gain(opts.mic_volume);
+            *router.feed.voice_gain.lock().unwrap() = mix::gain(opts.volume);
+        }
+        if !opts.enabled {
+            if let Some(p) = self.piper.lock().unwrap().as_ref() {
+                p.stop();
+            }
+        }
+    }
+
+    fn engine(&self) -> Result<Arc<piper::Piper>, String> {
+        let mut p = self.piper.lock().unwrap();
+        if let Some(p) = p.as_ref() {
+            return Ok(p.clone());
+        }
+        let exe = catalog::extract_engine(&self.models)?;
+        let engine = Arc::new(piper::Piper::new(
+            exe,
+            catalog::dir(&self.models).join("tmp"),
+        ));
+        *p = Some(engine.clone());
+        Ok(engine)
+    }
+
+    /// Synthesises `text` with the language's voice.
+    pub fn synthesize(&self, text: &str, lang: &str) -> Result<wav::Pcm, String> {
+        let v = self
+            .voice_for(lang)
+            .ok_or_else(|| format!("aucune voix pour la langue « {lang} »"))?;
+        if !catalog::voice_installed(&self.models, v) {
+            return Err(format!("voix {} non téléchargée", v.name));
+        }
+        self.engine()?
+            .say(&catalog::model_path(&self.models, v), text)
+    }
+
+    /// Says `text` in the game (through the cable). Returns its length in ms.
+    pub fn say(&self, text: &str, lang: &str) -> Result<u32, String> {
+        let pcm = self.synthesize(text, lang)?;
+        let r = self.router.lock().unwrap();
+        let router = r.as_ref().ok_or_else(|| {
+            self.error
+                .lock()
+                .unwrap()
+                .clone()
+                .unwrap_or_else(|| "voix IA désactivée".into())
+        })?;
+        router.feed.speak(&pcm.samples, pcm.rate);
+        Ok((pcm.samples.len() as u64 * 1000 / pcm.rate.max(1) as u64) as u32)
+    }
+
+    /// Plays the test sentence of a voice in the headset only.
+    pub fn preview(&self, voice_id: &str) -> Result<u32, String> {
+        let v = catalog::voice(voice_id).ok_or("voix inconnue")?;
+        if !catalog::voice_installed(&self.models, v) {
+            return Err(format!("voix {} non téléchargée", v.name));
+        }
+        let pcm = self.engine()?.say(
+            &catalog::model_path(&self.models, v),
+            sample_sentence(v.lang),
+        )?;
+        let ms = (pcm.samples.len() as u64 * 1000 / pcm.rate.max(1) as u64) as u32;
+        router::preview(pcm.samples, pcm.rate)?;
+        Ok(ms)
+    }
+
+    pub fn download(&self, voice_ids: &[String]) -> DownloadStatus {
+        let files = catalog::missing(&self.models, voice_ids);
+        self.downloader.start_files(files.clone());
+        self.downloader.snapshot(&files)
+    }
+
+    pub fn cancel_download(&self) {
+        self.downloader.cancel();
+    }
+}
+
+/// Download progress to the windows; the engine is unpacked once complete.
+pub struct VoiceDownloadEvents(pub AppHandle);
+
+impl DownloadEvents for VoiceDownloadEvents {
+    fn progress(&self, status: &DownloadStatus) {
+        let _ = self.0.emit(DOWNLOAD_EVENT, status);
+    }
+    fn finished(&self) {
+        if let Err(e) = catalog::extract_engine(&crate::paths::models_dir()) {
+            crate::logs::warn("voice", &format!("moteur de voix : {e}"));
+        }
+    }
+}
+
+/// Builds the service and its own downloader (separate from the models').
+pub fn start(app: &AppHandle) -> Arc<VoiceService> {
+    let downloader = Downloader::new(
+        Arc::new(crate::downloads::HttpFetcher),
+        Arc::new(VoiceDownloadEvents(app.clone())),
+    );
+    VoiceService::new(crate::paths::models_dir(), downloader)
+}
+
+/// After a dictated reply: say it in the game when the AI voice is on.
+/// Returns true when the sentence was queued.
+pub fn speak_reply(app: &AppHandle, text: &str, lang: &str) -> bool {
+    let Some(v) = app.try_state::<Arc<VoiceService>>() else {
+        return false;
+    };
+    if !v.options().enabled {
+        return false;
+    }
+    match v.say(text, lang) {
+        Ok(ms) => {
+            let _ = app.emit(
+                STATE_EVENT,
+                SpeakState {
+                    text: text.into(),
+                    lang: lang.into(),
+                    ms,
+                },
+            );
+            crate::logs::info("voice", &format!("réponse dite en jeu ({lang}, {ms} ms)"));
+            true
+        }
+        Err(e) => {
+            crate::logs::warn("voice", &format!("voix IA : {e}"));
+            false
+        }
+    }
+}
+
+// ---------- commands (async: device listing and synthesis are slow) ----------
+
+#[tauri::command(async)]
+pub fn voice_status(v: tauri::State<'_, Arc<VoiceService>>) -> VoiceStatus {
+    v.status()
+}
+
+#[tauri::command(async)]
+pub fn voice_configure(
+    v: tauri::State<'_, Arc<VoiceService>>,
+    options: VoiceOptions,
+) -> VoiceStatus {
+    v.configure(options);
+    v.status()
+}
+
+#[tauri::command(async)]
+pub fn voice_download(
+    v: tauri::State<'_, Arc<VoiceService>>,
+    voices: Vec<String>,
+) -> DownloadStatus {
+    v.download(&voices)
+}
+
+#[tauri::command]
+pub fn voice_download_cancel(v: tauri::State<'_, Arc<VoiceService>>) {
+    v.cancel_download();
+}
+
+#[tauri::command(async)]
+pub fn voice_say(
+    app: AppHandle,
+    v: tauri::State<'_, Arc<VoiceService>>,
+    text: String,
+    lang: String,
+) -> Result<u32, String> {
+    let ms = v.say(&text, &lang)?;
+    let _ = app.emit(STATE_EVENT, SpeakState { text, lang, ms });
+    Ok(ms)
+}
+
+#[tauri::command(async)]
+pub fn voice_preview(v: tauri::State<'_, Arc<VoiceService>>, voice: String) -> Result<u32, String> {
+    v.preview(&voice)
+}
+
+/// VB-CABLE's download page (fixed address), in the browser.
+pub const CABLE_PAGE: &str = "https://vb-audio.com/Cable/";
+
+#[tauri::command(async)]
+pub fn voice_open_cable_page() -> Result<(), String> {
+    crate::logs::shell_open(CABLE_PAGE)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn service(dir: &std::path::Path) -> Arc<VoiceService> {
+        struct Quiet;
+        impl DownloadEvents for Quiet {
+            fn progress(&self, _: &DownloadStatus) {}
+            fn finished(&self) {}
+        }
+        VoiceService::new(
+            dir.to_path_buf(),
+            Downloader::new(Arc::new(crate::downloads::HttpFetcher), Arc::new(Quiet)),
+        )
+    }
+
+    #[test]
+    fn off_by_default_with_a_voice_for_each_language_and_a_test_sentence() {
+        let d = std::env::temp_dir().join(format!("crosstalk-voice-svc-{}", std::process::id()));
+        let s = service(&d);
+        assert!(!s.options().enabled);
+        assert_eq!(s.voice_for("ru").unwrap().id, "ru_RU-irina-medium");
+        let mut o = s.options();
+        o.voices.insert("ru".into(), "ru_RU-dmitri-medium".into());
+        // A voice of another language is ignored.
+        o.voices.insert("en".into(), "ru_RU-dmitri-medium".into());
+        *s.options.lock().unwrap() = o;
+        assert_eq!(s.voice_for("ru").unwrap().id, "ru_RU-dmitri-medium");
+        assert_eq!(s.voice_for("en").unwrap().id, "en_US-amy-medium");
+        for lang in ["ru", "en", "fr", "de", "es", "pl", "tr", "uk"] {
+            assert_ne!(sample_sentence(lang), "Two on B.", "{lang}");
+        }
+    }
+
+    #[test]
+    fn saying_needs_the_voice_then_the_cable() {
+        let d = std::env::temp_dir().join(format!("crosstalk-voice-say-{}", std::process::id()));
+        let s = service(&d);
+        assert!(s
+            .say("Двое на B", "ru")
+            .unwrap_err()
+            .contains("non téléchargée"));
+        assert!(s.say("x", "xx").unwrap_err().contains("aucune voix"));
+        // Turned on without VB-CABLE: a clear error, nothing routed.
+        s.configure(VoiceOptions {
+            enabled: true,
+            ..Default::default()
+        });
+        let st = s.status();
+        assert!(!st.routing);
+        assert!(st.error.is_some());
+        assert_eq!(st.voices.len(), catalog::VOICES.len());
+        s.configure(VoiceOptions::default());
+        assert!(s.status().error.is_none());
+    }
+
+    #[test]
+    fn options_from_the_interface_fill_in_defaults() {
+        let o: VoiceOptions =
+            serde_json::from_str(r#"{"enabled":true,"voices":{"ru":"ru_RU-dmitri-medium"}}"#)
+                .unwrap();
+        assert!(o.enabled && o.monitor);
+        assert_eq!((o.volume, o.mic_volume), (100, 100));
+    }
+}
