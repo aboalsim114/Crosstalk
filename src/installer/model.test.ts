@@ -12,7 +12,7 @@ describe('installer phases', () => {
   });
 
   it('show what the installer reports, else the phase text', () => {
-    expect(phaseSub(1, 'Traduction RU → français · 120 / 776 Mo', true)).toBe('Traduction RU → français · 120 / 776 Mo');
+    expect(phaseSub(1, 'Transcription (Whisper small) · 120 / 488 Mo', true)).toBe('Transcription (Whisper small) · 120 / 488 Mo');
     expect(phaseSub(1, '', true)).toBe(PHASES[1][2]);
     expect(phaseSub(3, '', false)).toBe('Création des raccourcis (menu Démarrer uniquement)');
     expect(phaseSub(3, '', true)).toBe('Création des raccourcis');
