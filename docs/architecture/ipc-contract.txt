@@ -29,8 +29,11 @@ history_export
 history_list
 llm_clear_key
 llm_configure
+llm_ollama_local
+llm_open_key_page
 llm_set_key
 llm_status
+llm_test
 logs_open_folder
 logs_recent
 logs_write

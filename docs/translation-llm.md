@@ -47,58 +47,56 @@ Les traductions sont gardées en cache. Le cache est vidé quand vous changez de
 - Les erreurs affichées viennent uniquement du code HTTP. Le corps des réponses d'erreur est ignoré, car certains fournisseurs y recopient une partie de la clé.
 - Une adresse en `http://` n'est acceptée que pour un serveur local : une clé ne circule jamais en clair sur Internet.
 
-## Choisir un fournisseur
+## Mise en route (Audio & IA › Traduction en ligne)
 
-| Fournisseur | Type | Adresse de base | Clé |
+Aucune connaissance technique n'est nécessaire : l'adresse et le modèle sont remplis pour vous.
+
+1. **Choisissez un service** dans la liste.
+2. **Créez votre clé** : le bouton « Obtenir ma clé … ↗ » ouvre la bonne page du service dans votre navigateur. Connectez-vous (ou créez un compte), créez une clé et copiez-la.
+3. **Collez-la** dans le champ « Clé API », puis cliquez sur « Enregistrer » (ou appuyez sur Entrée).
+4. Cliquez sur **« Tester la connexion »**. Une phrase d'exemple (« Двое идут на B, двое на B ») est traduite avec vos réglages. Vous voyez la traduction et le temps de réponse, ou l'erreur avec ce qu'il faut faire (clé refusée, crédit épuisé, quota atteint, modèle introuvable, réseau, délai dépassé…). Le test marche même avant d'activer l'interrupteur.
+5. Activez **« Traduire avec un LLM en ligne »**.
+
+Une seule clé est gardée. En changeant de service, collez la clé du nouveau service.
+
+### Services proposés
+
+| Service | Adresse de base (remplie automatiquement) | Modèle proposé | Clé |
 | --- | --- | --- | --- |
-| OpenAI | Compatible OpenAI | `https://api.openai.com/v1` | oui |
-| OpenRouter (accès à de nombreux modèles) | Compatible OpenAI | `https://openrouter.ai/api/v1` | oui |
-| Mistral | Compatible OpenAI | `https://api.mistral.ai/v1` | oui |
-| Groq | Compatible OpenAI | `https://api.groq.com/openai/v1` | oui |
-| Anthropic | Anthropic | `https://api.anthropic.com/v1` | oui |
-| Ollama (local) | Compatible OpenAI | `http://localhost:11434/v1` | non |
-| LM Studio (local) | Compatible OpenAI | `http://localhost:1234/v1` | non |
+| OpenAI | `https://api.openai.com/v1` | `gpt-4o-mini` | oui · platform.openai.com/api-keys |
+| OpenRouter (de nombreux modèles) | `https://openrouter.ai/api/v1` | `openai/gpt-4o-mini` | oui · openrouter.ai/keys |
+| Mistral AI | `https://api.mistral.ai/v1` | `mistral-small-latest` | oui · console.mistral.ai/api-keys |
+| Groq | `https://api.groq.com/openai/v1` | `llama-3.1-8b-instant` | oui · console.groq.com/keys |
+| Anthropic (Claude) | `https://api.anthropic.com/v1` | `claude-haiku-5-5` | oui · console.anthropic.com/settings/keys |
+| Ollama Cloud | `https://ollama.com/v1` | `gemma4:31b` | oui · ollama.com/settings/keys |
+| Ollama sur ce PC | `http://localhost:11434/v1` | un modèle installé (détecté) | non |
+| LM Studio sur ce PC | `http://localhost:1234/v1` | le modèle chargé, à saisir | non |
+| Autre | à saisir | à saisir | selon le service |
 
-Conseils :
+Les modèles proposés sont des suggestions : les catalogues changent souvent. « Réglages avancés » permet de saisir un autre modèle, une autre adresse ou le format d'API (compatible OpenAI ou Anthropic). Modifier l'adresse resélectionne le service correspondant, ou « Autre ».
+
+Les pages de clé ouvertes par l'application viennent d'une liste fixe dans le code (`KEY_PAGES` dans `llm.rs`) : l'interface ne peut pas faire ouvrir une adresse arbitraire.
+
+### Ollama Cloud (avec clé)
+
+Ollama Cloud fait tourner des modèles ouverts sur les serveurs d'Ollama, sans carte graphique de votre côté. Crosstalk l'utilise par son API compatible OpenAI : `https://ollama.com/v1/chat/completions`, avec l'en-tête `Authorization: Bearer <clé>`. La clé se crée sur ollama.com/settings/keys. Les modèles disponibles sont listés sur ollama.com (onglet Cloud) ; recopiez le nom exact dans « Réglages avancés » si vous voulez en changer.
+
+### Ollama sur ce PC (sans clé)
+
+Quand vous choisissez « Ollama sur ce PC », Crosstalk interroge `http://localhost:11434/api/tags` (délai 1,5 s), c'est-à-dire seulement votre propre machine :
+
+- **Ollama détecté avec des modèles** : la liste des modèles installés s'affiche, le premier est choisi. Rien d'autre à faire.
+- **Ollama détecté sans modèle** : tapez dans PowerShell `ollama pull qwen2.5:7b`, puis « Vérifier à nouveau ».
+- **Ollama absent** : le bouton « Télécharger Ollama ↗ » ouvre ollama.com/download. Installez-le, téléchargez un modèle, puis « Vérifier à nouveau ».
+
+Un modèle local tourne sur votre carte graphique, en même temps que CS2 et Whisper. Vérifiez avec « Tester la connexion » que la latence reste sous 3,5 s, et que vos FPS ne chutent pas.
+
+### Conseils
 
 - **Prenez un petit modèle rapide.** Une phrase de jeu est courte ; un gros modèle ajoute surtout de la latence. Au-delà de 3,5 s, Opus-MT prend le relais.
 - **Évitez les modèles de raisonnement** (séries « o » et GPT-5 d'OpenAI, par exemple). Ils sont lents pour cet usage, et certains refusent les paramètres `temperature` ou `max_tokens` envoyés en mode compatible OpenAI. L'erreur 400 qui en résulte fait passer chaque ligne par Opus-MT.
-- La latence dépend de votre connexion et de la charge du fournisseur. Elle est affichée dans la carte (« dernière latence »).
-- Les noms de modèles changent souvent : recopiez l'identifiant exact donné par votre fournisseur.
-- Le coût dépend du fournisseur. Une phrase pèse quelques dizaines de jetons, plus la consigne.
-
-## Exemples de configuration
-
-Les noms de modèles ci-dessous sont des exemples ; vérifiez ceux que propose votre compte.
-
-**OpenAI**
-- Fournisseur : Compatible OpenAI
-- Adresse : `https://api.openai.com/v1`
-- Modèle : `gpt-4o-mini`
-- Clé : votre clé `sk-…` (platform.openai.com › API keys)
-
-**OpenRouter**
-- Fournisseur : Compatible OpenAI
-- Adresse : `https://openrouter.ai/api/v1`
-- Modèle : l'identifiant affiché sur openrouter.ai/models, au format `fournisseur/modèle` (par exemple `openai/gpt-4o-mini`)
-- Clé : votre clé `sk-or-…` (openrouter.ai › Keys)
-
-**Anthropic**
-- Fournisseur : Anthropic
-- Adresse : `https://api.anthropic.com/v1`
-- Modèle : un petit modèle rapide, `claude-haiku-5-5` (Haiku actuel) ou `claude-haiku-4-5`
-- Clé : votre clé `sk-ant-…` (console.anthropic.com › API Keys)
-
-Sur les modèles Claude récents, la réflexion (« thinking ») est activée par défaut. Elle peut allonger un peu la réponse : surveillez la dernière latence dans la carte.
-
-**Ollama (sur votre PC, sans clé)**
-1. Installez Ollama, puis téléchargez un modèle : `ollama pull qwen2.5:7b`.
-2. Fournisseur : Compatible OpenAI
-3. Adresse : `http://localhost:11434/v1`
-4. Modèle : `qwen2.5:7b`
-5. Clé : aucune
-
-Un modèle local tourne sur votre carte graphique, en même temps que CS2 et Whisper. Vérifiez que la latence reste sous 3,5 s et que vos FPS ne chutent pas.
+- Sur les modèles Claude récents, la réflexion (« thinking ») est activée par défaut. Elle peut allonger un peu la réponse : surveillez la latence.
+- Le coût dépend du service. Une phrase pèse quelques dizaines de jetons, plus la consigne. OpenAI et Anthropic demandent un moyen de paiement ; d'autres services proposent un quota gratuit limité (erreur 429 une fois épuisé).
 
 ## Requêtes envoyées
 

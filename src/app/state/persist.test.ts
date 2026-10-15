@@ -29,9 +29,15 @@ describe('settings kept between launches', () => {
 
   it('keeps the online LLM settings, off by default, without any key', () => {
     expect(app0.llm.enabled).toBe(false);
-    const llm = { enabled: true, provider: 'anthropic' as const, baseUrl: 'https://api.anthropic.com/v1', model: 'claude-haiku-4-5' };
+    const llm = { enabled: true, service: 'anthropic' as const, provider: 'anthropic' as const, baseUrl: 'https://api.anthropic.com/v1', model: 'claude-haiku-4-5' };
     const snap = snapshot({ ...app0, llm }, null);
     expect(restore(JSON.parse(JSON.stringify(snap.config)), app0).app.llm).toEqual(llm);
+    // Settings saved before the service list: the service is found from the address.
+    const old = (baseUrl: string) => restore({ version: 1, settings: { llm: { enabled: true, provider: 'openai', baseUrl, model: 'm' } } }, app0).app.llm?.service;
+    expect(old('https://ollama.com/v1')).toBe('ollama-cloud');
+    expect(old('http://localhost:11434/v1/')).toBe('ollama');
+    expect(old('https://llm.example.org/v1')).toBe('custom');
+    expect(restore({ version: 1, settings: { llm: { ...llm, service: 'skynet' } } }, app0).app.llm?.service).toBe('anthropic');
     expect(JSON.stringify(snap)).not.toMatch(/key/i);
     const bad = restore({ version: 1, settings: { llm: { enabled: 'yes', provider: 'gemini', baseUrl: 42, model: 'x'.repeat(600) } } }, app0).app.llm;
     expect(bad).toEqual(app0.llm);

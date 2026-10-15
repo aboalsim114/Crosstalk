@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { LLM_DEFAULT_URL, type LlmConfig, type StreamOpts, type Translation } from '../../shared/ipc';
+import { LLM_DEFAULT_URL, type LlmConfig, type LlmService, type StreamOpts, type Translation } from '../../shared/ipc';
 import { config } from '../config';
 import { isCapturing, useAudio } from '../../features/audio/audio';
 import type { UiLang } from '../../shared/i18n';
@@ -27,8 +27,8 @@ export interface SpeakerOpts {
 }
 export const SPEAKER_DEFAULTS: SpeakerOpts = { enabled: false, region: { x: 0, y: 0.5, w: 0.25, h: 0.3 } };
 /** Online translation by an LLM (Audio & IA): the user's provider, off by default. The key is not here. */
-export type LlmOpts = LlmConfig;
-export const LLM_DEFAULTS: LlmOpts = { enabled: false, provider: 'openai', baseUrl: LLM_DEFAULT_URL.openai, model: '' };
+export type LlmOpts = LlmConfig & { service: LlmService };
+export const LLM_DEFAULTS: LlmOpts = { enabled: false, service: 'openai', provider: 'openai', baseUrl: LLM_DEFAULT_URL.openai, model: 'gpt-4o-mini' };
 export const STREAM_DEFAULTS: StreamOpts = { enabled: false, names: false, original: false, watermark: true, size: 34, max: 3, duration: 8 };
 
 export type SourceLang = PlayerLang;

@@ -230,3 +230,42 @@ Prérequis : une version de cette branche construite sous Windows (`scripts\vali
     - Désactiver l'interrupteur et relancer l'application. Attendu : la fonction reste désactivée, et le fournisseur, l'adresse et le modèle sont conservés.
 
 Reporter dans la PR les résultats, les latences observées par fournisseur et toute erreur affichée, sans jamais copier la clé.
+
+## Mise en route simplifiée (feat/llm-simple-setup)
+
+Demande : un joueur qui ne connaît pas les clés API doit pouvoir activer la traduction en ligne, et Ollama doit être utilisable avec une clé (Ollama Cloud).
+
+### Ce qui a changé
+
+- **Services prêts à l'emploi** : OpenAI, OpenRouter, Mistral AI, Groq, Anthropic, Ollama Cloud, Ollama sur ce PC, LM Studio sur ce PC, Autre. Choisir un service remplit l'adresse, le format d'API et un modèle proposé. L'adresse, le modèle et le format passent dans « Réglages avancés ».
+- **Parcours en 3 étapes** : choisir le service ; « Obtenir ma clé … ↗ » ouvre la page de création de clé du service ; coller la clé.
+  - Les pages viennent d'une liste fixe côté Rust (`KEY_PAGES`, commande `llm_open_key_page`) : l'interface ne transmet qu'un identifiant de service.
+- **Ollama Cloud** : `https://ollama.com/v1`, compatible OpenAI, clé Bearer créée sur ollama.com/settings/keys. Aucun code de transport nouveau : c'est le client compatible OpenAI existant.
+- **Ollama sur ce PC** : la commande `llm_ollama_local` lit `http://localhost:11434/api/tags` (connexion 0,8 s, total 1,5 s).
+  - Si Ollama répond avec des modèles, la liste s'affiche et le premier modèle est choisi.
+  - Sinon, l'interface propose « Télécharger Ollama ↗ », la commande `ollama pull qwen2.5:7b`, et « Vérifier à nouveau ».
+- **« Tester la connexion »** (`llm_test`) :
+  - les réglages affichés sont d'abord envoyés au cœur ;
+  - la phrase d'exemple « Двое идут на B, двое на B » est ensuite traduite vers la langue cible ;
+  - le résultat affiche la traduction et le temps, ou l'erreur avec un conseil en clair ;
+  - le test fonctionne même interrupteur coupé, et la clé est retirée de tout message.
+- Les trois nouvelles commandes sont `async`, donc hors du fil principal (leçon du blocage au démarrage corrigé en 0.4.1).
+- Réglages : un champ `service` est ajouté. Pour les réglages enregistrés avant, il est déduit de l'adresse ; une adresse inconnue donne « Autre ». La clé n'est toujours stockée que dans le Gestionnaire d'identifiants.
+- Le modèle Anthropic proposé est `claude-haiku-5-5`.
+
+### Ce qui n'a pas été testé
+
+- **Toujours aucun appel réel** : ni à Ollama Cloud, ni aux autres services, ni à un Ollama local réel.
+  - Les tests utilisent un transport simulé et des réponses `/api/tags` écrites à la main, sur le format de la documentation d'Ollama.
+  - Le nom de modèle `gemma4:31b` vient de l'exemple de la documentation Ollama Cloud ; la liste réelle peut différer.
+- L'ouverture des pages dans le navigateur (`explorer <url>`) n'a pas été lancée sous un vrai Windows.
+
+### Test manuel complémentaire sous Windows
+
+1. **Ollama Cloud**
+   - Choisir « Ollama Cloud », puis « Obtenir ma clé Ollama Cloud ↗ ». Attendu : ollama.com/settings/keys s'ouvre dans le navigateur.
+   - Créer et coller la clé, puis « Tester la connexion ». Attendu : « ✓ Connexion réussie » et une traduction.
+2. **Ollama sur ce PC**
+   - Sans Ollama : choisir le service. Attendu : « Ollama n'est pas détecté » et le bouton de téléchargement.
+   - Installer Ollama, puis `ollama pull qwen2.5:7b`, puis « Vérifier à nouveau ». Attendu : « Ollama détecté · 1 modèle installé », le modèle est choisi, aucun champ de clé.
+3. **Mauvaise clé** : coller `sk-faux` et tester. Attendu : « ✗ clé refusée par le fournisseur » et un conseil pour recréer la clé.

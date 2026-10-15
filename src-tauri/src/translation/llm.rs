@@ -660,6 +660,118 @@ pub fn plausible(input: &str, output: &str) -> Result<String, String> {
     Ok(out)
 }
 
+// ---------- simple setup (Audio & IA) ----------
+
+/// Pages where each service creates an API key, opened from the app. A fixed
+/// list: the interface names a service, never a URL.
+pub const KEY_PAGES: [(&str, &str); 7] = [
+    ("openai", "https://platform.openai.com/api-keys"),
+    ("openrouter", "https://openrouter.ai/keys"),
+    ("mistral", "https://console.mistral.ai/api-keys"),
+    ("groq", "https://console.groq.com/keys"),
+    ("anthropic", "https://console.anthropic.com/settings/keys"),
+    ("ollama-cloud", "https://ollama.com/settings/keys"),
+    ("ollama-download", "https://ollama.com/download"),
+];
+
+pub fn key_page(service: &str) -> Option<&'static str> {
+    KEY_PAGES
+        .iter()
+        .find(|(s, _)| *s == service)
+        .map(|(_, url)| *url)
+}
+
+/// Sentence translated by "Tester la connexion".
+pub const TEST_SENTENCE: &str = "Двое идут на B, двое на B";
+
+/// Result of "Tester la connexion".
+#[derive(Debug, Clone, Serialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct LlmTest {
+    pub ok: bool,
+    pub ms: u32,
+    pub original: String,
+    pub translated: Option<String>,
+    pub error: Option<String>,
+}
+
+impl LlmClient {
+    /// Translates the test sentence with the current settings (even while the
+    /// switch is off, so the setup can be checked before turning it on).
+    pub fn test(&self, target: &str) -> LlmTest {
+        let started = Instant::now();
+        let out = {
+            let config = self.config.lock().unwrap().clone();
+            let key = self.keys.get();
+            match Self::problem(&config, key.is_some()) {
+                Some(p) => Err(p),
+                None => {
+                    let r = self.call(&config, key.as_deref(), TEST_SENTENCE, "ru", target);
+                    r.map_err(|e| redact(&e, key.as_deref()))
+                }
+            }
+        };
+        let ms = started.elapsed().as_millis() as u32;
+        LlmTest {
+            ok: out.is_ok(),
+            ms,
+            original: TEST_SENTENCE.into(),
+            translated: out.as_ref().ok().cloned(),
+            error: out.err(),
+        }
+    }
+}
+
+/// Ollama running on this PC and the models it has.
+#[derive(Debug, Clone, Serialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct OllamaLocal {
+    pub running: bool,
+    pub models: Vec<String>,
+}
+
+pub const OLLAMA_LOCAL: &str = "http://localhost:11434";
+
+/// Names in Ollama's `GET /api/tags` answer.
+pub fn parse_ollama_tags(json: &str) -> Vec<String> {
+    let v: Value = serde_json::from_str(json).unwrap_or(Value::Null);
+    let mut names: Vec<String> = v["models"]
+        .as_array()
+        .map(|a| {
+            a.iter()
+                .filter_map(|m| m["name"].as_str().or_else(|| m["model"].as_str()))
+                .map(String::from)
+                .collect()
+        })
+        .unwrap_or_default();
+    names.sort();
+    names.dedup();
+    names
+}
+
+/// Asks the local Ollama for its models (short timeout: it runs on this PC).
+pub fn detect_ollama() -> OllamaLocal {
+    let agent = ureq::AgentBuilder::new()
+        .timeout_connect(Duration::from_millis(800))
+        .timeout(Duration::from_millis(1500))
+        .build();
+    match agent
+        .get(&format!("{OLLAMA_LOCAL}/api/tags"))
+        .call()
+        .ok()
+        .and_then(|r| r.into_string().ok())
+    {
+        Some(body) => OllamaLocal {
+            running: true,
+            models: parse_ollama_tags(&body),
+        },
+        None => OllamaLocal {
+            running: false,
+            models: Vec::new(),
+        },
+    }
+}
+
 // ---------- engines ----------
 
 /// Loads Opus-MT as usual and puts the LLM in front of it. A route without a
