@@ -155,6 +155,8 @@ pub fn run() {
             voice::voice_download_cancel,
             voice::voice_say,
             voice::voice_preview,
+            voice::voice_cancel,
+            voice::voice_ptt_test,
             voice::voice_open_cable_page
         ])
         .setup(|app| {
@@ -272,8 +274,12 @@ pub fn run() {
         })
         .build(tauri::generate_context!())
         .expect("error while running Crosstalk")
-        .run(|_, event| {
+        .run(|app, event| {
             if let tauri::RunEvent::Exit = event {
+                // Never leave CS2's voice key held (automatic push-to-talk).
+                if let Some(v) = app.try_state::<Arc<voice::VoiceService>>() {
+                    v.shutdown();
+                }
                 speech::gpu_guard::clean_exit();
             }
         });

@@ -281,6 +281,7 @@ function startVoiceBridge(): Promise<() => void>[] {
     }),
   );
   unlisten.push(voice.onSpeak((spoken) => useVoice.setState({ spoken })));
+  unlisten.push(voice.onPtt((ptt) => useVoice.setState({ ptt })));
   // "La voix parle…" and the cable state.
   const timer = setInterval(() => {
     if (useApp.getState().voice.enabled) refreshVoice();

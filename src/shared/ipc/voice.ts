@@ -1,5 +1,6 @@
 // "Voix IA" (src-tauri/src/voice): dictated replies said in the game by a
-// local Piper voice, through VB-CABLE.
+// local Piper voice, through VB-CABLE, CS2's voice key held automatically
+// when "PTT automatique" is on (src-tauri/src/voice/ptt.rs).
 
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
@@ -15,6 +16,24 @@ export interface VoiceOptions {
   monitor: boolean;
   volume: number;
   micVolume: number;
+  /** Hold CS2's voice key while the AI voice plays. */
+  autoPtt: boolean;
+  /** CS2's voice bind ("K", "V", "Mouse4"…). */
+  pttKey: string;
+  /** Key held before the first sample / after the last one (ms). */
+  pttLeadMs: number;
+  pttTailMs: number;
+}
+
+/** Where an automatic push-to-talk transmission is. */
+export type PttPhase = 'idle' | 'preparing' | 'synthesized' | 'held' | 'playing' | 'releasing' | 'done' | 'cancelled' | 'error';
+
+export interface PttStatus {
+  phase: PttPhase;
+  /** Why the key was not pressed, or what went wrong. */
+  detail: string | null;
+  /** Crosstalk pressed the key for this sentence. */
+  pressed: boolean;
 }
 
 export interface VoiceInfo {
@@ -43,6 +62,7 @@ export interface VoiceStatus {
   speaking: boolean;
   error: string | null;
   download: DownloadStatus;
+  ptt: PttStatus;
 }
 
 export interface SpeakState {
@@ -63,6 +83,11 @@ export const voice = {
   say: (text: string, lang: string): Promise<number> => (isTauri ? invoke<number>('voice_say', { text, lang }) : Promise.reject(new Error('application Windows requise'))),
   /** Plays a voice's test sentence in the headset. */
   preview: (voiceId: string): Promise<number> => (isTauri ? invoke<number>('voice_preview', { voice: voiceId }) : Promise.reject(new Error('application Windows requise'))),
+  /** Stops the AI voice now; the voice key is released at once. */
+  cancel: (): Promise<void> => (isTauri ? invoke<void>('voice_cancel') : Promise.resolve()),
+  /** Waits `delayS` (switch to CS2), then says the test sentence of `lang` with the current settings. */
+  pttTest: (lang: string, delayS: number): Promise<number> => (isTauri ? invoke<number>('voice_ptt_test', { lang, delayS }) : Promise.reject(new Error('application Windows requise'))),
+  onPtt: (cb: (s: PttStatus) => void) => (isTauri ? listen<PttStatus>('voice://ptt', (e) => cb(e.payload)) : Promise.resolve(noop)),
   openCablePage: (): Promise<void> => (isTauri ? invoke<void>('voice_open_cable_page') : Promise.resolve()),
   onDownload: (cb: (s: DownloadStatus) => void) => (isTauri ? listen<DownloadStatus>('voice://download', (e) => cb(e.payload)) : Promise.resolve(noop)),
   onSpeak: (cb: (s: SpeakState) => void) => (isTauri ? listen<SpeakState>('voice://state', (e) => cb(e.payload)) : Promise.resolve(noop)),

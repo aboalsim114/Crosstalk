@@ -38,7 +38,8 @@ describe('settings kept between launches', () => {
     expect(old('http://localhost:11434/v1/')).toBe('ollama');
     expect(old('https://llm.example.org/v1')).toBe('custom');
     expect(restore({ version: 1, settings: { llm: { ...llm, service: 'skynet' } } }, app0).app.llm?.service).toBe('anthropic');
-    expect(JSON.stringify(snap)).not.toMatch(/key/i);
+    // No API key in the file (the AI voice's push-to-talk key name aside).
+    expect(JSON.stringify(snap).replace(/"pttKey":"[^"]*"/, '')).not.toMatch(/key/i);
     const bad = restore({ version: 1, settings: { llm: { enabled: 'yes', provider: 'gemini', baseUrl: 42, model: 'x'.repeat(600) } } }, app0).app.llm;
     expect(bad).toEqual(app0.llm);
   });

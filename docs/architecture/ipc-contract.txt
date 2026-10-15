@@ -78,11 +78,13 @@ update_check
 update_download
 update_install
 update_status
+voice_cancel
 voice_configure
 voice_download
 voice_download_cancel
 voice_open_cable_page
 voice_preview
+voice_ptt_test
 voice_say
 voice_status
 
@@ -119,4 +121,5 @@ translation://result
 translation://status
 update://status
 voice://download
+voice://ptt
 voice://state

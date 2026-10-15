@@ -610,6 +610,8 @@ pub struct RenderStream {
     format: StreamFormat,
     frames: u32,
     name: String,
+    /// Frames still waiting in the device buffer after the last write.
+    queued: u32,
     /// Declared last: COM is uninitialised after the interfaces are released.
     _com: Com,
 }
@@ -679,6 +681,7 @@ pub fn open_render(id: Option<&str>) -> Result<RenderStream, AudioError> {
             format,
             frames,
             name,
+            queued: 0,
             _com: com,
         })
     }
@@ -691,6 +694,11 @@ impl RenderStream {
 
     pub fn name(&self) -> &str {
         &self.name
+    }
+
+    /// Frames waiting in the device buffer just after the last write (not yet heard).
+    pub fn queued(&self) -> u32 {
+        self.queued
     }
 
     /// Waits up to `timeout_ms` for room, then asks `fill` for that many mono
@@ -706,6 +714,7 @@ impl RenderStream {
             WaitForSingleObject(self.event, timeout_ms);
             let padding = self.client.GetCurrentPadding().map_err(os)?;
             let n = self.frames.saturating_sub(padding) as usize;
+            self.queued = padding;
             if n == 0 {
                 return Ok(());
             }
@@ -728,6 +737,7 @@ impl RenderStream {
                 }
             }
             self.render.ReleaseBuffer(n as u32, 0).map_err(os)?;
+            self.queued = padding + n as u32;
             Ok(())
         }
     }

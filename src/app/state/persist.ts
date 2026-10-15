@@ -122,6 +122,10 @@ function restoreVoice(v: Record<string, unknown>, base: AppState['voice']): AppS
     monitor: isBool(v.monitor) ? v.monitor : base.monitor,
     volume: inRange(0, 150)(v.volume) ? v.volume : base.volume,
     micVolume: inRange(0, 150)(v.micVolume) ? v.micVolume : base.micVolume,
+    autoPtt: isBool(v.autoPtt) ? v.autoPtt : base.autoPtt,
+    pttKey: typeof v.pttKey === 'string' && /^[A-Za-z0-9]{1,8}$/.test(v.pttKey) ? v.pttKey : base.pttKey,
+    pttLeadMs: inRange(50, 1000)(v.pttLeadMs) ? v.pttLeadMs : base.pttLeadMs,
+    pttTailMs: inRange(100, 1500)(v.pttTailMs) ? v.pttTailMs : base.pttTailMs,
   };
 }
 
