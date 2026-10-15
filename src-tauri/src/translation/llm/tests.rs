@@ -430,3 +430,95 @@ fn configuring_the_same_settings_twice_does_not_deadlock() {
         .expect("configure() deadlocked when the settings did not change");
     assert_eq!(model, "gpt-4o-mini");
 }
+
+#[test]
+fn key_pages_come_from_a_fixed_list() {
+    assert_eq!(
+        key_page("ollama-cloud"),
+        Some("https://ollama.com/settings/keys")
+    );
+    assert_eq!(
+        key_page("anthropic"),
+        Some("https://console.anthropic.com/settings/keys")
+    );
+    assert!(KEY_PAGES.iter().all(|(_, u)| u.starts_with("https://")));
+    assert_eq!(key_page("https://evil.example"), None);
+    assert_eq!(key_page(""), None);
+}
+
+#[test]
+fn ollama_model_list_is_read_from_api_tags() {
+    let body = r#"{"models":[{"name":"qwen2.5:7b","size":4683087332},{"name":"llama3.2:3b"},{"model":"gemma3:4b"},{"name":"qwen2.5:7b"}]}"#;
+    assert_eq!(
+        parse_ollama_tags(body),
+        vec!["gemma3:4b", "llama3.2:3b", "qwen2.5:7b"]
+    );
+    assert!(parse_ollama_tags("{}").is_empty());
+    assert!(parse_ollama_tags("not json").is_empty());
+}
+
+#[test]
+fn connection_test_reports_success_or_a_clear_error() {
+    // Works with the switch still off: the setup is checked before turning it on.
+    let (c, sent) = client(
+        LlmConfig {
+            enabled: false,
+            ..openai()
+        },
+        Some(TEST_KEY),
+        vec![
+            openai_reply("Deux joueurs arrivent sur B, deux sur B."),
+            Err(HttpError::Status(401)),
+        ],
+    );
+    let ok = c.test("fr");
+    assert!(ok.ok, "{ok:?}");
+    assert_eq!(
+        ok.translated.as_deref(),
+        Some("Deux joueurs arrivent sur B, deux sur B.")
+    );
+    assert_eq!(ok.original, TEST_SENTENCE);
+    assert!(sent.lock().unwrap()[0].2["messages"][0]["content"]
+        .as_str()
+        .unwrap()
+        .contains("from Russian into French"));
+    let refused = c.test("fr");
+    assert!(!refused.ok);
+    assert_eq!(
+        refused.error.as_deref(),
+        Some("clé refusée par le fournisseur")
+    );
+    assert!(!format!("{refused:?}").contains(TEST_KEY));
+    // Nothing to send without a key (non-local address): no request.
+    let (no_key, sent2) = client(openai(), None, vec![]);
+    assert_eq!(
+        no_key.test("fr").error.as_deref(),
+        Some("clé API non enregistrée")
+    );
+    assert!(sent2.lock().unwrap().is_empty());
+}
+
+#[test]
+fn ollama_cloud_is_an_openai_compatible_service_with_a_key() {
+    let cloud = LlmConfig {
+        enabled: true,
+        provider: Provider::Openai,
+        base_url: "https://ollama.com/v1".into(),
+        model: "gemma4:31b".into(),
+    };
+    let (c, sent) = client(
+        cloud,
+        Some(TEST_KEY),
+        vec![openai_reply("gg, bonne partie.")],
+    );
+    assert!(c.active());
+    assert_eq!(
+        c.translate("гг, хорошая игра", "ru", "fr").unwrap(),
+        "gg, bonne partie."
+    );
+    let sent = sent.lock().unwrap();
+    assert_eq!(sent[0].0, "https://ollama.com/v1/chat/completions");
+    assert!(sent[0]
+        .1
+        .contains(&("Authorization".into(), format!("Bearer {TEST_KEY}"))));
+}

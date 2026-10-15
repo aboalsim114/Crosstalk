@@ -128,6 +128,30 @@ pub fn llm_clear_key(
     Ok(st)
 }
 
+/// "Tester la connexion": translates a sample sentence into the user's
+/// language with the current settings. Async: never on the main thread.
+#[tauri::command(async)]
+pub fn llm_test(
+    llm: State<'_, Arc<llm::LlmClient>>,
+    t: State<'_, Arc<TranslationService>>,
+) -> llm::LlmTest {
+    let target = t.status().config.target;
+    llm.test(&target)
+}
+
+/// Ollama running on this PC and its installed models (no key needed).
+#[tauri::command(async)]
+pub fn llm_ollama_local() -> llm::OllamaLocal {
+    llm::detect_ollama()
+}
+
+/// Opens the page where a service creates API keys (fixed list, see llm::KEY_PAGES).
+#[tauri::command(async)]
+pub fn llm_open_key_page(service: String) -> Result<(), String> {
+    let url = llm::key_page(&service).ok_or("service inconnu")?;
+    crate::logs::shell_open(url)
+}
+
 #[cfg(test)]
 mod fixture_tests {
     //! Equivalence with Hugging Face transformers on `tests/fixtures/marian-tiny`
