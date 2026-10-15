@@ -173,6 +173,12 @@ Ce que couvrent les tests (tous avec moteur ou serveur simulé) :
 
 | Commit | Contenu |
 | --- | --- |
-| COMMITS_TABLE |
+| `08ee76e` | feat(translation): module LLM modulaire, seul moteur de traduction |
+| `aabd842` | feat: Répondre, téléchargements et journal sur le LLM, sans Opus-MT |
+| `fb9cd36` | feat(installer): plus aucun modèle de traduction |
+| `7a26da0` | feat(ui): espace « Traduction IA » Cloud / Local, premier lancement, sans Opus-MT |
+| `6421f8c` | chore(scripts): plus de modèle de traduction à télécharger ni d'exemple translate |
+| `aafdcb4` | docs: traduction 100 % LLM (README, architecture, protocoles, rapport) et corpus FR/RU/EN |
+| (ce commit) | docs: commits et lien de la PR dans le rapport |
 
-Pull Request : PR_LINK (vers `develop`, non fusionnée, `main` non modifiée, pas de GitHub Actions).
+Pull Request : [#101](https://github.com/aboalsim114/Crosstalk/pull/101) (vers `develop`, non fusionnée, `main` non modifiée, pas de GitHub Actions).
