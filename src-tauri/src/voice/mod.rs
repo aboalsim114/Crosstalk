@@ -1,17 +1,20 @@
 //! "Voix IA": the user dictates a sentence in their language (Ctrl+Alt+F6),
 //! Crosstalk transcribes and translates it (src/dictation.rs) and a local
 //! neural voice (Piper) says it in the teammates' language, in CS2's voice
-//! chat, through a virtual cable (VB-CABLE). Off by default; everything runs
-//! on the PC, no key, no account, nothing sent anywhere.
+//! chat, through a virtual cable (VB-CABLE). Off by default; synthesis runs on
+//! the PC, no key, no account. With "PTT automatique" (ptt.rs) Crosstalk holds
+//! CS2's voice key while the sentence plays.
 
 pub mod catalog;
 pub mod mix;
 pub mod piper;
+pub mod ptt;
 pub mod router;
 pub mod wav;
 
 use std::collections::HashMap;
 use std::path::PathBuf;
+use std::sync::mpsc;
 use std::sync::{Arc, Mutex};
 
 use serde::{Deserialize, Serialize};
@@ -21,6 +24,7 @@ use crate::downloads::{DownloadEvents, DownloadStatus, Downloader};
 
 pub const DOWNLOAD_EVENT: &str = "voice://download";
 pub const STATE_EVENT: &str = "voice://state";
+pub const PTT_EVENT: &str = "voice://ptt";
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
@@ -35,6 +39,13 @@ pub struct VoiceOptions {
     /// Volumes in percent (0–150).
     pub volume: u32,
     pub mic_volume: u32,
+    /// Hold CS2's voice key while the AI voice plays (off by default).
+    pub auto_ptt: bool,
+    /// The key bound to voice chat in CS2 ("K", "V", "Mouse4"…).
+    pub ptt_key: String,
+    /// Key held before the first sample, and after the last one (ms).
+    pub ptt_lead_ms: u32,
+    pub ptt_tail_ms: u32,
 }
 
 impl Default for VoiceOptions {
@@ -46,7 +57,23 @@ impl Default for VoiceOptions {
             monitor: true,
             volume: 100,
             mic_volume: 100,
+            auto_ptt: false,
+            ptt_key: "K".into(),
+            ptt_lead_ms: ptt::DEFAULT_LEAD_MS,
+            ptt_tail_ms: ptt::DEFAULT_TAIL_MS,
         }
+    }
+}
+
+impl VoiceOptions {
+    /// What a transmission does with these settings (an unknown key is an error).
+    pub fn plan(&self) -> Result<ptt::Plan, String> {
+        ptt::Plan::new(
+            self.auto_ptt,
+            &self.ptt_key,
+            self.ptt_lead_ms,
+            self.ptt_tail_ms,
+        )
     }
 }
 
@@ -72,6 +99,8 @@ pub struct VoiceStatus {
     pub speaking: bool,
     pub error: Option<String>,
     pub download: DownloadStatus,
+    /// Last automatic push-to-talk state.
+    pub ptt: ptt::PttStatus,
 }
 
 /// What the overlay and the reply window show while the voice speaks.
@@ -98,6 +127,55 @@ pub fn sample_sentence(lang: &str) -> &'static str {
     }
 }
 
+/// One sentence waiting for the push-to-talk worker.
+struct Job {
+    samples: Vec<f32>,
+    rate: u32,
+    plan: ptt::Plan,
+    feed: Arc<router::Feed>,
+    generation: u64,
+}
+
+type PttListener = Box<dyn Fn(&ptt::PttStatus) + Send + Sync>;
+
+/// Shared with the worker thread.
+struct Ptt {
+    keys: Arc<dyn ptt::Keys>,
+    held: Arc<Mutex<Option<ptt::PttKey>>>,
+    generation: ptt::Generation,
+    status: Mutex<ptt::PttStatus>,
+    listener: Mutex<Option<PttListener>>,
+}
+
+impl Ptt {
+    fn report(&self, s: ptt::PttStatus) {
+        *self.status.lock().unwrap() = s.clone();
+        if let Some(l) = self.listener.lock().unwrap().as_ref() {
+            l(&s);
+        }
+    }
+
+    fn run(&self, job: Job) {
+        if job.generation != self.generation.current() {
+            return self.report(ptt::PttStatus::at(ptt::Phase::Cancelled));
+        }
+        let cancelled = || self.generation.current() != job.generation;
+        let end = ptt::transmit(
+            job.plan,
+            &job.samples,
+            job.rate,
+            &self.keys,
+            &*job.feed,
+            &self.held,
+            &cancelled,
+            &mut |s| self.report(s),
+        );
+        if let Some(d) = &end.detail {
+            crate::logs::warn("voice", &format!("PTT automatique : {d}"));
+        }
+    }
+}
+
 pub struct VoiceService {
     models: PathBuf,
     options: Mutex<VoiceOptions>,
@@ -105,10 +183,21 @@ pub struct VoiceService {
     router: Mutex<Option<router::Router>>,
     error: Arc<Mutex<Option<String>>>,
     downloader: Arc<Downloader>,
+    ptt: Arc<Ptt>,
+    /// Sentences played one after the other, never on top of each other.
+    jobs: Mutex<Option<mpsc::Sender<Job>>>,
 }
 
 impl VoiceService {
     pub fn new(models: PathBuf, downloader: Arc<Downloader>) -> Arc<Self> {
+        Self::with_keys(models, downloader, Arc::new(ptt::WindowsKeys::new()))
+    }
+
+    pub fn with_keys(
+        models: PathBuf,
+        downloader: Arc<Downloader>,
+        keys: Arc<dyn ptt::Keys>,
+    ) -> Arc<Self> {
         Arc::new(Self {
             models,
             options: Mutex::new(VoiceOptions::default()),
@@ -116,7 +205,59 @@ impl VoiceService {
             router: Mutex::new(None),
             error: Arc::new(Mutex::new(None)),
             downloader,
+            ptt: Arc::new(Ptt {
+                keys,
+                held: Arc::new(Mutex::new(None)),
+                generation: ptt::Generation::default(),
+                status: Mutex::new(ptt::PttStatus::at(ptt::Phase::Idle)),
+                listener: Mutex::new(None),
+            }),
+            jobs: Mutex::new(None),
         })
+    }
+
+    /// Called with each push-to-talk state (the windows).
+    pub fn on_ptt(&self, f: impl Fn(&ptt::PttStatus) + Send + Sync + 'static) {
+        *self.ptt.listener.lock().unwrap() = Some(Box::new(f));
+    }
+
+    pub fn ptt_status(&self) -> ptt::PttStatus {
+        self.ptt.status.lock().unwrap().clone()
+    }
+
+    /// Stops the sentence playing and the queued ones; the key is released at once.
+    pub fn cancel(&self) {
+        self.ptt.generation.bump();
+        ptt::release_held(self.ptt.keys.as_ref(), &self.ptt.held);
+        if let Some(r) = self.router.lock().unwrap().as_ref() {
+            r.feed.stop_voice();
+        }
+    }
+
+    /// Crosstalk closing: never leave CS2's voice key held.
+    pub fn shutdown(&self) {
+        self.cancel();
+    }
+
+    fn enqueue(&self, job: Job) -> Result<(), String> {
+        let mut jobs = self.jobs.lock().unwrap();
+        if jobs.is_none() {
+            let (tx, rx) = mpsc::channel::<Job>();
+            let ptt = self.ptt.clone();
+            std::thread::Builder::new()
+                .name("voice-ptt".into())
+                .spawn(move || {
+                    for job in rx {
+                        ptt.run(job);
+                    }
+                })
+                .map_err(|e| e.to_string())?;
+            *jobs = Some(tx);
+        }
+        jobs.as_ref()
+            .unwrap()
+            .send(job)
+            .map_err(|_| "file de la voix IA fermée".to_string())
     }
 
     pub fn options(&self) -> VoiceOptions {
@@ -163,6 +304,7 @@ impl VoiceService {
             speaking,
             error: self.error.lock().unwrap().clone(),
             download: self.downloader.snapshot(&missing),
+            ptt: self.ptt_status(),
             options,
         }
     }
@@ -179,7 +321,24 @@ impl VoiceService {
         } else {
             None
         };
-        *self.options.lock().unwrap() = opts.clone();
+        let before = std::mem::replace(&mut *self.options.lock().unwrap(), opts.clone());
+        // Any change to what the key or the cable does stops a transmission (key released).
+        let ptt_changed = (
+            before.enabled,
+            before.auto_ptt,
+            &before.ptt_key,
+            &before.mic,
+            before.monitor,
+        ) != (
+            opts.enabled,
+            opts.auto_ptt,
+            &opts.ptt_key,
+            &opts.mic,
+            opts.monitor,
+        );
+        if ptt_changed {
+            self.cancel();
+        }
         let mut r = self.router.lock().unwrap();
         let same = matches!((&*r, &route), (Some(cur), Some(want)) if cur.config == *want);
         if !same {
@@ -236,18 +395,53 @@ impl VoiceService {
     }
 
     /// Says `text` in the game (through the cable). Returns its length in ms.
+    /// The sentence is fully synthesised before anything is pressed; with
+    /// "PTT automatique" it is then played by the worker, key held.
     pub fn say(&self, text: &str, lang: &str) -> Result<u32, String> {
-        let pcm = self.synthesize(text, lang)?;
-        let r = self.router.lock().unwrap();
-        let router = r.as_ref().ok_or_else(|| {
-            self.error
-                .lock()
-                .unwrap()
-                .clone()
-                .unwrap_or_else(|| "voix IA désactivée".into())
+        let opts = self.options();
+        let fail = |e: String| {
+            if opts.auto_ptt {
+                self.ptt.report(ptt::PttStatus {
+                    phase: ptt::Phase::Error,
+                    detail: Some(e.clone()),
+                    pressed: false,
+                });
+            }
+            e
+        };
+        // Checked before the synthesis: a wrong key is said at once.
+        let plan = opts.plan().map_err(fail)?;
+        if opts.auto_ptt {
+            self.ptt.report(ptt::PttStatus::at(ptt::Phase::Preparing));
+        }
+        let generation = self.ptt.generation.current();
+        let pcm = self.synthesize(text, lang).map_err(fail)?;
+        let feed = {
+            let r = self.router.lock().unwrap();
+            let router = r.as_ref().ok_or_else(|| {
+                fail(
+                    self.error
+                        .lock()
+                        .unwrap()
+                        .clone()
+                        .unwrap_or_else(|| "voix IA désactivée".into()),
+                )
+            })?;
+            router.feed.clone()
+        };
+        let ms = (pcm.samples.len() as u64 * 1000 / pcm.rate.max(1) as u64) as u32;
+        if plan.key.is_none() {
+            feed.speak(&pcm.samples, pcm.rate);
+            return Ok(ms);
+        }
+        self.enqueue(Job {
+            samples: pcm.samples,
+            rate: pcm.rate,
+            plan,
+            feed,
+            generation,
         })?;
-        router.feed.speak(&pcm.samples, pcm.rate);
-        Ok((pcm.samples.len() as u64 * 1000 / pcm.rate.max(1) as u64) as u32)
+        Ok(ms)
     }
 
     /// Plays the test sentence of a voice in the headset only.
@@ -296,7 +490,12 @@ pub fn start(app: &AppHandle) -> Arc<VoiceService> {
         Arc::new(crate::downloads::HttpFetcher),
         Arc::new(VoiceDownloadEvents(app.clone())),
     );
-    VoiceService::new(crate::paths::models_dir(), downloader)
+    let v = VoiceService::new(crate::paths::models_dir(), downloader);
+    let handle = app.clone();
+    v.on_ptt(move |s| {
+        let _ = handle.emit(PTT_EVENT, s);
+    });
+    v
 }
 
 /// After a dictated reply: say it in the game when the AI voice is on.
@@ -369,6 +568,48 @@ pub fn voice_say(
     Ok(ms)
 }
 
+/// Stops the AI voice now (the push-to-talk key is released at once).
+#[tauri::command]
+pub fn voice_cancel(v: tauri::State<'_, Arc<VoiceService>>) {
+    v.cancel();
+}
+
+/// Reproducible test: waits `delay_s` (time to switch to CS2), then says the
+/// test sentence of `lang` in the game with the current settings.
+#[tauri::command(async)]
+pub fn voice_ptt_test(
+    app: AppHandle,
+    v: tauri::State<'_, Arc<VoiceService>>,
+    lang: String,
+    delay_s: u32,
+) -> Result<u32, String> {
+    let generation = v.ptt.generation.current();
+    v.ptt.report(ptt::PttStatus {
+        phase: ptt::Phase::Preparing,
+        detail: Some(format!("test dans {} s : passez sur CS2", delay_s.min(10))),
+        pressed: false,
+    });
+    let until = std::time::Instant::now() + std::time::Duration::from_secs(delay_s.min(10) as u64);
+    while std::time::Instant::now() < until {
+        if v.ptt.generation.current() != generation {
+            v.ptt.report(ptt::PttStatus::at(ptt::Phase::Cancelled));
+            return Err("test annulé".into());
+        }
+        std::thread::sleep(std::time::Duration::from_millis(50));
+    }
+    let text = sample_sentence(&lang);
+    let ms = v.say(text, &lang)?;
+    let _ = app.emit(
+        STATE_EVENT,
+        SpeakState {
+            text: text.into(),
+            lang,
+            ms,
+        },
+    );
+    Ok(ms)
+}
+
 #[tauri::command(async)]
 pub fn voice_preview(v: tauri::State<'_, Arc<VoiceService>>, voice: String) -> Result<u32, String> {
     v.preview(&voice)
@@ -438,6 +679,156 @@ mod tests {
         assert!(s.status().error.is_none());
     }
 
+    /// The router thread as on Windows: blocks of 10 ms, a 20 ms device buffer.
+    fn fake_router(
+        feed: Arc<router::Feed>,
+        stop: Arc<std::sync::atomic::AtomicBool>,
+    ) -> std::thread::JoinHandle<()> {
+        std::thread::spawn(move || {
+            let mut device = 0u64;
+            while !stop.load(std::sync::atomic::Ordering::SeqCst) {
+                let room = 960u64.saturating_sub(device) as usize;
+                feed.take_voice(room);
+                device += room as u64;
+                feed.wrote(room, device as u32);
+                std::thread::sleep(std::time::Duration::from_millis(10));
+                device = device.saturating_sub(480);
+            }
+        })
+    }
+
+    #[test]
+    fn consecutive_sentences_are_serialised_one_key_press_each() {
+        use ptt::tests::{Ev, FakeKeys};
+        let d = std::env::temp_dir().join(format!("crosstalk-voice-ptt-{}", std::process::id()));
+        let keys = Arc::new(FakeKeys::default());
+        let s = VoiceService::with_keys(
+            d,
+            Downloader::new(Arc::new(crate::downloads::HttpFetcher), Arc::new(QuietDl)),
+            keys.clone(),
+        );
+        let phases = Arc::new(Mutex::new(Vec::new()));
+        let p2 = phases.clone();
+        s.on_ptt(move |st| p2.lock().unwrap().push(st.phase));
+        let feed = Arc::new(router::Feed::new(48_000));
+        let stop = Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let r = fake_router(feed.clone(), stop.clone());
+        let plan = ptt::Plan::new(true, "K", 60, 100).unwrap();
+        for _ in 0..3 {
+            s.enqueue(Job {
+                samples: vec![0.1; 4_800],
+                rate: 48_000,
+                plan,
+                feed: feed.clone(),
+                generation: s.ptt.generation.current(),
+            })
+            .unwrap();
+        }
+        let started = std::time::Instant::now();
+        while phases
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|p| **p == ptt::Phase::Done)
+            .count()
+            < 3
+        {
+            assert!(started.elapsed() < std::time::Duration::from_secs(10));
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+        stop.store(true, std::sync::atomic::Ordering::SeqCst);
+        r.join().unwrap();
+        // Down, play, up — three times, never overlapping.
+        let k = ptt::PttKey::Key(0x4B);
+        let ev: Vec<Ev> = keys.events();
+        assert_eq!(
+            ev,
+            [
+                Ev::Down(k),
+                Ev::Up(k),
+                Ev::Down(k),
+                Ev::Up(k),
+                Ev::Down(k),
+                Ev::Up(k)
+            ]
+        );
+        assert!(s.ptt.held.lock().unwrap().is_none());
+    }
+
+    #[test]
+    fn cancel_drops_the_queued_sentences_and_releases_the_key() {
+        use ptt::tests::{Ev, FakeKeys};
+        let d = std::env::temp_dir().join(format!("crosstalk-voice-cancel-{}", std::process::id()));
+        let keys = Arc::new(FakeKeys::default());
+        let s = VoiceService::with_keys(
+            d,
+            Downloader::new(Arc::new(crate::downloads::HttpFetcher), Arc::new(QuietDl)),
+            keys.clone(),
+        );
+        let phases = Arc::new(Mutex::new(Vec::new()));
+        let p2 = phases.clone();
+        s.on_ptt(move |st| p2.lock().unwrap().push(st.phase));
+        let feed = Arc::new(router::Feed::new(48_000));
+        let stop = Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let r = fake_router(feed.clone(), stop.clone());
+        let plan = ptt::Plan::new(true, "K", 60, 100).unwrap();
+        for _ in 0..2 {
+            s.enqueue(Job {
+                samples: vec![0.1; 96_000],
+                rate: 48_000,
+                plan,
+                feed: feed.clone(),
+                generation: s.ptt.generation.current(),
+            })
+            .unwrap();
+        }
+        std::thread::sleep(std::time::Duration::from_millis(300));
+        s.cancel();
+        let started = std::time::Instant::now();
+        while phases
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|p| **p == ptt::Phase::Cancelled)
+            .count()
+            < 2
+        {
+            assert!(started.elapsed() < std::time::Duration::from_secs(5));
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+        stop.store(true, std::sync::atomic::Ordering::SeqCst);
+        r.join().unwrap();
+        let k = ptt::PttKey::Key(0x4B);
+        assert_eq!(keys.events(), [Ev::Down(k), Ev::Up(k)]);
+        assert!(feed.voice.is_empty());
+        assert_eq!(s.ptt_status().phase, ptt::Phase::Cancelled);
+    }
+
+    #[test]
+    fn a_wrong_key_is_reported_before_any_synthesis() {
+        let d = std::env::temp_dir().join(format!("crosstalk-voice-key-{}", std::process::id()));
+        let s = service(&d);
+        *s.options.lock().unwrap() = VoiceOptions {
+            enabled: true,
+            auto_ptt: true,
+            ptt_key: "Échap".into(),
+            ..Default::default()
+        };
+        assert!(s
+            .say("Двое на B", "ru")
+            .unwrap_err()
+            .contains("touche inconnue"));
+        let st = s.ptt_status();
+        assert_eq!(st.phase, ptt::Phase::Error);
+        assert!(st.detail.unwrap().contains("touche inconnue"));
+    }
+
+    struct QuietDl;
+    impl DownloadEvents for QuietDl {
+        fn progress(&self, _: &DownloadStatus) {}
+        fn finished(&self) {}
+    }
+
     #[test]
     fn options_from_the_interface_fill_in_defaults() {
         let o: VoiceOptions =
@@ -445,5 +836,13 @@ mod tests {
                 .unwrap();
         assert!(o.enabled && o.monitor);
         assert_eq!((o.volume, o.mic_volume), (100, 100));
+        // Automatic push-to-talk: off, K, default delays (settings of earlier versions).
+        assert!(!o.auto_ptt);
+        assert_eq!(o.ptt_key, "K");
+        assert_eq!(
+            (o.ptt_lead_ms, o.ptt_tail_ms),
+            (ptt::DEFAULT_LEAD_MS, ptt::DEFAULT_TAIL_MS)
+        );
+        assert_eq!(o.plan().unwrap().key, None);
     }
 }
