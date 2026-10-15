@@ -383,10 +383,17 @@ impl LlmClient {
 
     pub fn configure(&self, config: LlmConfig) -> LlmStatus {
         let config = config.sanitized();
-        let mut c = self.config.lock().unwrap();
-        if *c != config {
-            *c = config;
-            drop(c);
+        // The settings lock is released before status() takes it again, also
+        // when nothing changed (the case at every launch).
+        let changed = {
+            let mut c = self.config.lock().unwrap();
+            let changed = *c != config;
+            if changed {
+                *c = config;
+            }
+            changed
+        };
+        if changed {
             // Counters of another provider or model would mislead.
             *self.stats.lock().unwrap() = LlmStats::default();
         }
