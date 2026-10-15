@@ -27,11 +27,15 @@ export interface SpeakerOpts {
   region: { x: number; y: number; w: number; h: number };
 }
 export const SPEAKER_DEFAULTS: SpeakerOpts = { enabled: false, region: { x: 0, y: 0.5, w: 0.25, h: 0.3 } };
-/** Online translation by an LLM (Audio & IA): the user's provider, off by default. The key is not here. */
 export const VOICE_DEFAULTS: VoiceOptions = { enabled: false, mic: null, voices: {}, monitor: true, volume: 100, micVolume: 100 };
 
-export type LlmOpts = LlmConfig & { service: LlmService };
-export const LLM_DEFAULTS: LlmOpts = { enabled: false, service: 'openai', provider: 'openai', baseUrl: LLM_DEFAULT_URL.openai, model: 'gpt-4o-mini' };
+/**
+ * Translation engine (Audio & IA › Traduction IA): a cloud provider or a server on this PC,
+ * not connected until the user chooses. `cloudConsent`: the user accepted that texts are
+ * sent to the cloud provider. The key is not here.
+ */
+export type LlmOpts = LlmConfig & { service: LlmService; cloudConsent: boolean };
+export const LLM_DEFAULTS: LlmOpts = { enabled: false, service: 'openai', provider: 'openai', baseUrl: LLM_DEFAULT_URL.openai, model: 'gpt-4o-mini', cloudConsent: false };
 export const STREAM_DEFAULTS: StreamOpts = { enabled: false, names: false, original: false, watermark: true, size: 34, max: 3, duration: 8 };
 
 export type SourceLang = PlayerLang;
@@ -103,6 +107,8 @@ export interface AppState {
   target: TargetLang;
   /** Languages chosen once (first launch asks before anything else). */
   langSetupDone: boolean;
+  /** Translation engine chosen, or "Configurer plus tard" (first launch asks once). */
+  engineSetupDone: boolean;
   gloss: GlossEntry[];
   newTerm: string;
   test: number;
@@ -190,6 +196,7 @@ const initial: AppState = {
   src: { fr: false, en: true, ru: true, de: false, es: false, uk: false, pl: false, tr: false },
   target: 'fr',
   langSetupDone: false,
+  engineSetupDone: false,
   gloss: GLOSSARY,
   newTerm: '',
   test: 0,
@@ -437,8 +444,8 @@ export function startMeter(): () => void {
   return () => clearInterval(iv);
 }
 
-/** Untranslated on purpose: the original stays, with the reason, not as an error. */
-const QUIET_FAILURES = ['traduction désactivée', 'modèle de traduction absent', 'langue non gérée'];
+/** Untranslated on purpose (off, no engine connected yet…): the original stays, with the reason, not as an error. */
+const QUIET_FAILURES = ['traduction désactivée', 'aucun moteur de traduction connecté', 'langue non gérée'];
 
 /** A transcript line once its translation arrived: French text, or the original with why. */
 /** A translation identical to the original: only Counter-Strike terms. */
@@ -454,7 +461,7 @@ export function withTranslation(f: FeedEntry, t: Translation): FeedEntry {
     return { ...f, status: 'final', tr: t.translated, shown: t.translated, lat: total, err: false, note };
   }
   const why = t.error ?? 'moteur indisponible';
-  if (QUIET_FAILURES.includes(why)) return { ...f, note: why, shown: null };
+  if (QUIET_FAILURES.some((q) => why.startsWith(q))) return { ...f, note: why, shown: null };
   return { ...f, status: 'erreur', shown: null, err: true, lat: total, note: why };
 }
 

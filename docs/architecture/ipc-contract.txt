@@ -29,11 +29,14 @@ history_export
 history_list
 llm_clear_key
 llm_configure
+llm_local_servers
+llm_models
 llm_ollama_local
 llm_open_key_page
 llm_set_key
 llm_status
 llm_test
+llm_translate_test
 logs_open_folder
 logs_recent
 logs_write
@@ -64,7 +67,8 @@ stream_configure
 stream_push
 stream_status
 translation_configure
-translation_models
+translation_legacy_cleanup
+translation_legacy_models
 translation_rescan
 translation_status
 translation_test

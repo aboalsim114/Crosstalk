@@ -30,7 +30,7 @@ const { ReplyWindow } = await import('./ReplyWindow');
 
 const base: DictationState = { state: 'listening', level: 0.2, seconds: 1, text: null, translated: null, target: 'ru', via: null, copied: false, error: null };
 const listening = base;
-const copied: DictationState = { ...base, state: 'done', text: 'двое на B', translated: 'двое на B', via: 'model', copied: true };
+const copied: DictationState = { ...base, state: 'done', text: 'двое на B', translated: 'двое на B', via: 'llm', copied: true };
 
 afterEach(() => {
   vi.useRealTimers();

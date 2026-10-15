@@ -16,7 +16,7 @@ const LOCAL_KEY = 'crosstalk.settings';
 
 type Persisted = Pick<
   AppState,
-  'mode' | 'fmt' | 'corner' | 'opacity' | 'textSize' | 'duration' | 'maxBlocks' | 'overlayOn' | 'tg' | 'chatPath' | 'ownName' | 'capture' | 'vad' | 'model' | 'accel' | 'src' | 'stream' | 'speaker' | 'llm' | 'voiceFocus' | 'radar' | 'voice' | 'uiLang' | 'target' | 'langSetupDone'
+  'mode' | 'fmt' | 'corner' | 'opacity' | 'textSize' | 'duration' | 'maxBlocks' | 'overlayOn' | 'tg' | 'chatPath' | 'ownName' | 'capture' | 'vad' | 'model' | 'accel' | 'src' | 'stream' | 'speaker' | 'llm' | 'voiceFocus' | 'radar' | 'voice' | 'uiLang' | 'target' | 'langSetupDone' | 'engineSetupDone'
 >;
 
 const oneOf =
@@ -53,6 +53,7 @@ const CHECKS: { [K in keyof Persisted]: (v: unknown) => boolean } = {
   uiLang: isUiLang,
   target: isTargetLang,
   langSetupDone: isBool,
+  engineSetupDone: isBool,
 };
 
 export function snapshot(s: AppState, deviceId: string | null) {
@@ -124,7 +125,7 @@ function restoreVoice(v: Record<string, unknown>, base: AppState['voice']): AppS
   };
 }
 
-/** Online LLM settings (provider, address, model). The API key is never in this file. */
+/** Translation engine settings (provider, address, model). The API key is never in this file. */
 function restoreLlm(v: Record<string, unknown>, base: AppState['llm']): AppState['llm'] {
   const c = {
     enabled: isBool(v.enabled) ? v.enabled : base.enabled,
@@ -134,7 +135,9 @@ function restoreLlm(v: Record<string, unknown>, base: AppState['llm']): AppState
   };
   // Settings saved before the service list: the service is found from the address.
   const service = typeof v.service === 'string' && (v.service === 'custom' || llmService(v.service as LlmService)) ? (v.service as LlmService) : serviceOf(c);
-  return { ...c, service };
+  // Saved before the consent: a cloud provider already switched on was accepted with the privacy notice of the time.
+  const cloudConsent = isBool(v.cloudConsent) ? v.cloudConsent : c.enabled && !llmService(service)?.local;
+  return { ...c, service, cloudConsent };
 }
 
 /** "Qui parle ?" options: a boolean and an area inside CS2's window. */

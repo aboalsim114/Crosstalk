@@ -1,18 +1,17 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import type { PairStatus, Translation, TranslationStatus } from '../../shared/ipc';
+import type { Translation, TranslationStatus } from '../../shared/ipc';
 import { feedRow, isDemoLine, subtitle } from '../session/derive';
 import { overlayBlocks } from '../overlay/OverlayPage';
 import { GLOSSARY } from '../../app/state/data';
 import { transcriptEntry } from '../speech/speech';
 import { useApp, withTranslation } from '../../app/state/store';
-import { pairSummary, percentile, recordTime, translationConfigFrom, translationSummary, useTranslation } from './translation';
+import { percentile, recordTime, translationConfigFrom, translationHealth, translationSummary, useTranslation } from './translation';
 
 const transcript = { id: 9, partial: false, text: 'Двое идут на B', lang: 'ru' as const, langProb: 0.97, audioMs: 1800, latencyMs: 1200, asrMs: 600, avgLogprob: -0.3, noSpeechProb: 0.02, model: 'base' };
 const result = (over: Partial<Translation> = {}): Translation => ({
   id: 9, lang: 'ru', original: 'Двое идут на B', translated: 'Deux vont sur B', error: null, ms: 320, queueMs: 40, cached: false, glossary: true, ...over,
 });
-const pair = (over: Partial<PairStatus> = {}): PairStatus => ({ source: 'ru', repo: 'Helsinki-NLP/opus-mt-ru-fr', state: 'ready', error: null, loadMs: 1400, ...over });
-const status = (pairs: PairStatus[], enabled = true): TranslationStatus => ({ config: { enabled, glossary: [] }, pairs, modelsDir: 'C:\\m', queued: 0 });
+const status = (ready: boolean, enabled = true, problem: string | null = null): TranslationStatus => ({ config: { enabled, glossary: [], target: 'fr', sources: ['ru', 'en'] }, ready, problem, queued: 0 });
 
 describe('a real translation turns the transcript into a French line', () => {
   const line = withTranslation(transcriptEntry(transcript), result());
@@ -42,11 +41,11 @@ describe('a real translation turns the transcript into a French line', () => {
 });
 
 describe('without a translation the original stays, never an invented French text', () => {
-  it('keeps TRANSCRIT with the reason when the model is missing or translation is off', () => {
-    const line = withTranslation(transcriptEntry(transcript), result({ translated: null, error: 'modèle de traduction absent' }));
+  it('keeps TRANSCRIT with the reason when no engine is connected or translation is off', () => {
+    const line = withTranslation(transcriptEntry(transcript), result({ translated: null, error: 'aucun moteur de traduction connecté (Audio & IA › Traduction IA)' }));
     expect(line.status).toBe('transcrit');
     expect(line.tr).toBeNull();
-    expect(feedRow(line).note).toBe('Non traduit — modèle de traduction absent');
+    expect(feedRow(line).note).toBe('Non traduit — aucun moteur de traduction connecté (Audio & IA › Traduction IA)');
     expect(overlayBlocks([line], 3)[0].head).toMatch(/NON TRADUITE/);
   });
 
@@ -88,14 +87,15 @@ describe('store wiring', () => {
 });
 
 describe('summaries', () => {
-  it('describes the model pairs', () => {
-    expect(pairSummary(pair())).toMatchObject({ label: 'Russe → français', value: 'prêt · chargé en 1400 ms', color: '#7fe0a8' });
-    expect(pairSummary(pair({ state: 'missing' })).value).toBe('modèle absent');
-    expect(pairSummary(pair({ state: 'error', error: 'pytorch_model.bin illisible' })).value).toBe('pytorch_model.bin illisible');
+  it('describes the engine: ready with its languages, missing, off', () => {
     expect(translationSummary(null).value).toBe('…');
-    expect(translationSummary(status([pair(), pair({ source: 'en', state: 'missing' })])).value).toBe('locale · RU → FR');
-    expect(translationSummary(status([pair({ state: 'missing' })])).value).toBe('modèles absents');
-    expect(translationSummary(status([pair()], false)).value).toBe('désactivée');
+    expect(translationSummary(status(true))).toMatchObject({ value: 'RU, EN → FR', color: '#7fe0a8' });
+    expect(translationSummary(status(false, true, 'aucun moteur de traduction connecté'))).toMatchObject({ value: 'aucun moteur connecté', color: '#ffa24a' });
+    expect(translationSummary(status(true, false)).value).toBe('désactivée');
+    expect(translationHealth(status(true))).toBe('ready');
+    expect(translationHealth(status(false))).toBe('missing');
+    expect(translationHealth(status(true, false))).toBe('off');
+    expect(translationHealth(null)).toBe('off');
   });
 
   it('keeps real translation times only', () => {

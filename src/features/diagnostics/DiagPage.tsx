@@ -11,10 +11,9 @@ import type { ChatStatus } from '../../shared/ipc';
 
 type DiagState = 'OK' | 'AVERT.' | 'ÉCHEC';
 
-/** Diagnostic verdict of the local translation, from its state (never from a display colour). */
+/** Diagnostic verdict of the translation, from its state (never from a display colour). */
 export function translationDiag(health: TranslationHealth): DiagState {
   if (health === 'ready') return 'OK';
-  if (health === 'error') return 'ÉCHEC';
   return 'AVERT.';
 }
 
@@ -97,8 +96,8 @@ export function DiagPage() {
   const trSum = translationSummary(trStatus);
   const p50 = percentile(trTimes, 0.5);
   const trRow: [string, string, DiagState] = sp.native
-    ? ['Traduction locale · Opus-MT', `${trSum.value}${p50 != null ? ` · p50 ${p50} ms` : ''}`, translationDiag(translationHealth(trStatus))]
-    : ['Traduction locale · Opus-MT', down ? 'Délai dépassé (5 s) — repli sur l’original' : 'Réponse en 210 ms', down ? 'ÉCHEC' : 'OK'];
+    ? ['Traduction IA · LLM', `${trSum.value}${p50 != null ? ` · p50 ${p50} ms` : ''}`, translationDiag(translationHealth(trStatus))]
+    : ['Traduction IA · LLM', down ? 'Délai dépassé (8 s) — repli sur l’original' : 'Réponse en 210 ms', down ? 'ÉCHEC' : 'OK'];
   const chatStatus = useChat((x) => x.status);
   const chatRows: [string, string, DiagState][] = sp.native
     ? chatDiag(chatStatus)
@@ -122,7 +121,7 @@ export function DiagPage() {
     ['14:02:12', 'INFO', 'chat-ingest: suivi depuis offset 1 284 330'],
     ['14:02:12', fb ? 'WARN' : 'INFO', fb ? 'audio-win: repli endpoint loopback' : 'audio-win: process loopback pid=18244'],
     ['14:02:13', 'INFO', 'asr: whisper-small chargé (GPU)'],
-    ['14:02:13', 'INFO', 'translation: opus-mt-ru-fr chargé (local, CPU)'],
+    ['14:02:13', 'INFO', 'traduction : LLM prêt → fr'],
     ['14:03:40', 'DEBUG', 'audio-pipeline: segment 3,1 s → asr'],
     ['14:03:41', 'WARN', 'audio-pipeline: segment périmé abandonné'],
     ['14:03:44', 'INFO', 'overlay: 2 blocs affichés'],

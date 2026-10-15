@@ -79,7 +79,7 @@ function Pipeline() {
     [t('dash.stage.capture'), captureSub],
     [t('dash.stage.vad'), audio.native ? `Silero · ${threshold}` : threshold],
     [t('dash.stage.asr'), audio.native ? `whisper ${s.model} · ${sp.status?.state === 'ready' ? t('dash.ready') : engineSummary(sp.status).value.toLowerCase()}` : `whisper ${s.model}`],
-    [t('dash.stage.translation'), audio.native ? translationSummary(tr).value : 'opus-mt → fr'],
+    [t('dash.stage.translation'), audio.native ? translationSummary(tr).value : 'LLM → fr'],
     [t('dash.stage.overlay'), t(`ov.fmt.${s.fmt}`)],
   ];
   return (
@@ -135,7 +135,7 @@ function StatusCards() {
         },
     audio.native
       ? { label: t('dash.card.asr'), value: engine.value, sub: t('dash.asr.sub', { detail: engine.detail, tr: trSum.value }), dot: engine.color }
-      : { label: t('dash.card.engines'), value: `Whisper ${s.model}`, sub: `${s.accel.toUpperCase()} · Opus-MT${down ? ` ${t('dash.demo.unavailable')}` : ''}`, dot: down ? '#ff8a7a' : '#7fe0a8' },
+      : { label: t('dash.card.engines'), value: `Whisper ${s.model}`, sub: `${s.accel.toUpperCase()} · LLM${down ? ` ${t('dash.demo.unavailable')}` : ''}`, dot: down ? '#ff8a7a' : '#7fe0a8' },
     {
       label: t('dash.card.latency'),
       value: lat ? `p50 ${fmtSeconds(lat.p50)}` : '—',

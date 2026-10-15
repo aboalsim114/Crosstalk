@@ -5,8 +5,8 @@
 //!
 //! - `audio`     WASAPI capture of cs2.exe (process loopback, device fallback), levels
 //! - `speech`    Silero VAD + whisper.cpp transcription of the captured voices
-//! - `translation` local Opus-MT translation into the user's language, with an
-//!   optional online LLM in front (user's own provider and key, off by default)
+//! - `translation` translation into the user's language by the LLM the user
+//!   connects: a cloud provider with their own key, or Ollama / LM Studio on this PC
 //! - `chat`      CS2 text chat read from console.log
 //! - `game`      CS2 process detection (names and PIDs only, the game is never opened)
 //! - `tray`      notification-area icon; the app keeps running when the window is closed

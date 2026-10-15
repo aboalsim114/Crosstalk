@@ -12,7 +12,7 @@ export interface DictationState {
   text: string | null;
   translated: string | null;
   target: ReplyTarget;
-  via: 'phrasebook' | 'model' | null;
+  via: 'phrasebook' | 'llm' | null;
   copied: boolean;
   /** Said in the game by the AI voice. */
   spoken?: boolean;

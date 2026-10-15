@@ -24,6 +24,7 @@ import { DiagPage } from '../features/diagnostics/DiagPage';
 import { HistoryPage } from '../features/history/HistoryPage';
 import { LangPage } from '../features/languages/LangPage';
 import { LanguageSetup } from '../features/languages/LanguagesCard';
+import { EngineSetup } from '../features/translation/EngineSetup';
 import { OverlayPage } from '../features/overlay/OverlayPage';
 import { Stage } from './scene/Stage';
 import type { PageId } from './state/data';
@@ -127,6 +128,7 @@ export default function App() {
         </div>
 
         {entered && <LanguageSetup />}
+        {entered && <EngineSetup />}
         {showIntro && <Intro />}
         <Letterbox />
       </div>

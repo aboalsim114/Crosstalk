@@ -14,17 +14,19 @@ export interface ReplyPhrase {
 export interface ReplyResult {
   text: string;
   target: ReplyTarget;
-  via: 'phrasebook' | 'model';
+  /** Exact hand-written CS phrase, or the connected LLM. */
+  via: 'phrasebook' | 'llm';
   ms: number;
 }
-export interface ReplyModel {
+/** A language the reply can be written in, and whether free text works now. */
+export interface ReplyLanguage {
   /** The user's language. */
   source: string;
   target: ReplyTarget;
-  repo: string;
-  sizeMb: number;
-  installed: boolean;
-  loaded: boolean;
+  /** The LLM is connected: any sentence can be translated. */
+  ready: boolean;
+  /** Why free text is unavailable (the CS phrases still work). */
+  problem: string | null;
 }
 export const REPLY_OPEN_EVENT = 'reply://open';
 
@@ -32,7 +34,7 @@ export const reply = {
   phrases: (): Promise<ReplyPhrase[]> => (isTauri ? invoke<ReplyPhrase[]>('reply_phrases') : Promise.resolve([])),
   phraseText: (id: string, target: ReplyTarget): Promise<string | null> => invoke<string | null>('reply_phrase_text', { id, target }),
   translate: (text: string, target: ReplyTarget): Promise<ReplyResult> => invoke<ReplyResult>('reply_translate', { text, target }),
-  models: (): Promise<ReplyModel[]> => (isTauri ? invoke<ReplyModel[]>('reply_models') : Promise.resolve([])),
+  models: (): Promise<ReplyLanguage[]> => (isTauri ? invoke<ReplyLanguage[]>('reply_models') : Promise.resolve([])),
   open: (recentLangs: string[]): Promise<void> => (isTauri ? invoke<void>('reply_open', { recentLangs }) : Promise.resolve()),
   hide: (): Promise<void> => (isTauri ? invoke<void>('reply_hide') : Promise.resolve()),
   onOpen: (cb: (target: ReplyTarget) => void) => (isTauri ? listen<ReplyTarget>(REPLY_OPEN_EVENT, (e) => cb(e.payload)) : Promise.resolve(noop)),

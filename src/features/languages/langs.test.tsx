@@ -4,7 +4,7 @@ import { useTargetLang } from '../../shared/i18n';
 import { feedRow } from '../session/derive';
 import { LanguagePicker, LanguageSetup } from './LanguagesCard';
 import { chatEntry } from '../chat/chat';
-import { guessTarget, translatedSources, viaEnglish } from './langs';
+import { guessTarget, PLAYER_LANGS, TARGET_LANGS, translatedSources } from './langs';
 import { restore, snapshot } from '../../app/state/persist';
 import { setupNeeds } from '../setup/setup';
 import { speechConfigFrom } from '../speech/speech';
@@ -18,11 +18,8 @@ beforeEach(() => {
 });
 
 describe('languages of the translation', () => {
-  it('routes through English only where no direct model exists', () => {
-    expect(viaEnglish('ru', 'fr')).toBe(false);
-    expect(viaEnglish('de', 'ru')).toBe(true);
-    expect(viaEnglish('pl', 'ru')).toBe(true);
-    expect(viaEnglish('fr', 'fr')).toBe(false);
+  it('translates into every language directly, with the LLM', () => {
+    expect([...TARGET_LANGS]).toEqual([...PLAYER_LANGS]);
   });
 
   it("never translates the user's own language", () => {
@@ -32,15 +29,16 @@ describe('languages of the translation', () => {
   it("guesses the user's language from Windows, English when it cannot be a target", () => {
     expect(guessTarget('ru-RU')).toBe('ru');
     expect(guessTarget('de')).toBe('de');
-    expect(guessTarget('pl-PL')).toBe('en');
+    expect(guessTarget('pl-PL')).toBe('pl');
+    expect(guessTarget('it-IT')).toBe('en');
     expect(guessTarget(undefined)).toBe('en');
   });
 
-  it('reaches the Rust core: translation, Whisper and the downloads', () => {
+  it('reaches the Rust core: translation and Whisper, with no translation model to download', () => {
     const s = { ...useApp.getState(), target: 'ru' as const, src: { ...useApp.getState().src, en: true, de: true, ru: false } };
     expect(translationConfigFrom(s)).toMatchObject({ target: 'ru', sources: ['en', 'de'] });
     expect(speechConfigFrom(s).languages).toEqual(['en', 'de', 'ru']);
-    expect(setupNeeds(s).plan).toEqual({ target: 'ru', sources: ['en', 'de'] });
+    expect(setupNeeds(s)).toEqual({ model: s.model });
   });
 
   it('keep the built-in French renderings for French only', () => {
@@ -58,7 +56,8 @@ describe('languages of the translation', () => {
     const back = restore(snapshot(s, null).config, initial);
     expect(back.app.target).toBe('uk');
     expect(back.app.langSetupDone).toBe(true);
-    expect(restore({ version: 1, settings: { target: 'pl' } }, initial).app.target).toBeUndefined();
+    expect(restore({ version: 1, settings: { target: 'pl' } }, initial).app.target).toBe('pl');
+    expect(restore({ version: 1, settings: { target: 'it' } }, initial).app.target).toBeUndefined();
   });
 
   it('label the lines with the language of the translations', () => {
@@ -82,7 +81,8 @@ describe('language picker', () => {
     const routes = screen.getByTestId('language-routes').textContent ?? '';
     expect(routes).toContain('EN → RU');
     expect(routes).toContain('DE → RU');
-    expect(routes).toMatch(/DE → RU · via l’anglais/);
+    // Every pair is direct with the LLM.
+    expect(routes).not.toMatch(/via/);
   });
 
   it('warns when nothing is left to translate', () => {

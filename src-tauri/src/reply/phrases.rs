@@ -1,6 +1,6 @@
 //! Quick replies: the usual CS2 calls, written by hand in English and Russian.
 //! A message that matches one of them (accents, case and punctuation aside) is
-//! translated instantly and exactly; anything else goes to the Opus-MT model.
+//! translated instantly and exactly; anything else goes to the connected LLM.
 
 use std::sync::OnceLock;
 
