@@ -3,7 +3,7 @@
 // in the browser preview. Versioned: older files are migrated, unknown or
 // invalid values are ignored (the default stays).
 
-import { isTauri, settingsStore } from '../../shared/ipc';
+import { isTauri, llmService, serviceOf, settingsStore, type LlmService } from '../../shared/ipc';
 import { isUiLang } from '../../shared/i18n';
 import { isTargetLang } from '../../features/languages/langs';
 import { useAudio } from '../../features/audio/audio';
@@ -103,12 +103,15 @@ export function restore(raw: unknown, defaults: AppState): { app: Partial<AppSta
 
 /** Online LLM settings (provider, address, model). The API key is never in this file. */
 function restoreLlm(v: Record<string, unknown>, base: AppState['llm']): AppState['llm'] {
-  return {
+  const c = {
     enabled: isBool(v.enabled) ? v.enabled : base.enabled,
     provider: v.provider === 'openai' || v.provider === 'anthropic' ? v.provider : base.provider,
     baseUrl: isString(v.baseUrl) ? v.baseUrl : base.baseUrl,
     model: isString(v.model) ? v.model : base.model,
   };
+  // Settings saved before the service list: the service is found from the address.
+  const service = typeof v.service === 'string' && (v.service === 'custom' || llmService(v.service as LlmService)) ? (v.service as LlmService) : serviceOf(c);
+  return { ...c, service };
 }
 
 /** "Qui parle ?" options: a boolean and an area inside CS2's window. */
