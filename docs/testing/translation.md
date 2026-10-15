@@ -1,64 +1,80 @@
-# Protocole de test — traduction locale (feat/local-translation)
+# Protocole de test — traduction IA (Cloud et Local)
 
-À exécuter sur un PC **Windows 10/11 x64**. La traduction tourne sur le processeur avec les modèles Helsinki-NLP **Opus-MT** ru→fr et en→fr (licence Apache-2.0). **Aucune clé API, aucun abonnement, rien n'est envoyé en ligne.**
+À exécuter sur un PC **Windows 10/11 x64**. La traduction passe uniquement par le LLM connecté dans **Audio & IA › TRADUCTION IA** : un fournisseur en ligne avec **votre** clé, ou Ollama / LM Studio sur le PC. Crosstalk ne télécharge aucun modèle de traduction.
 
-> Les voix, les pseudos et le texte des parties sont des données personnelles : ne collez pas les phrases des joueurs dans le dépôt ni dans la PR, seulement des compteurs.
+> Les voix, les pseudos et le texte des parties sont des données personnelles : ne collez pas les phrases des joueurs dans le dépôt ni dans la PR, seulement des compteurs et les phrases du corpus ci-dessous. Ne collez **jamais** une clé API.
 
 ## 0. Préparation
 
-1. Construire le commit testé : `powershell -ExecutionPolicy Bypass -File scripts\validate.ps1`. Le dossier `dist-local\<commit>\` contient `crosstalk-translate.exe`.
-2. Dans l'application, les modèles se téléchargent seuls au premier lancement (bannière « Préparation de Crosstalk »). Pour les outils en ligne de commande, on peut aussi les installer (environ 620 Mo en plus de Whisper) avec :
-   ```powershell
-   powershell -ExecutionPolicy Bypass -File scripts\download-models.ps1 -Translation
-   ```
-   Le script vérifie la taille exacte de chaque fichier et affiche son SHA-256 : notez ceux des deux `pytorch_model.bin`.
+1. Construire le commit testé : `powershell -ExecutionPolicy Bypass -File scripts\validate.ps1` (ou installer la version de test depuis À propos).
+2. Pour le mode Local : installer Ollama (ollama.com) puis `ollama pull qwen2.5:7b` (ou `translategemma`), et/ou LM Studio avec un modèle chargé et le serveur local démarré.
+3. Pour le mode Cloud : une clé d'un fournisseur (OpenAI, Anthropic, Mistral, Groq, OpenRouter, Ollama Cloud).
 
-## 1. Outil en ligne de commande (sans CS2)
+## 1. Premier lancement
 
-Dans `dist-local\<commit>\`, l'outil s'appelle `crosstalk-translate.exe` (ci-dessous `.\translate.exe`).
-
-| # | Commande | Résultat attendu |
+| # | Action | Attendu |
 | --- | --- | --- |
-| 1.1 | `.\translate.exe --lang ru "Двое идут на B, у них AWP."` | Une phrase française correcte (« Deux vont sur B, ils ont un AWP » ou proche). Le temps de chargement et de traduction s'affiche. |
-| 1.2 | `.\translate.exe --lang en "Two players on B, they have an AWP."` | Idem en anglais. |
-| 1.3 | `.\translate.exe --lang ru --repeat 20 "Бомба на A, нужен флеш."` | Temps p50 / max. **Objectif : p50 ≤ 500 ms**, CS2 fermé. |
-| 1.4 | Même commande, CS2 lancé en partie | Notez le p50 sous charge. |
-| 1.5 | `.\translate.exe --lang ru --exact "Двое идут на B, у них AWP."` | Mode de référence (couche de sortie complète en float32) : même sens que 1.1, plus lent. Notez les deux temps. |
+| 1.1 | Installation neuve | L'installateur ne télécharge que la VAD et Whisper (≈ 640 Mo), aucun `opus-mt-*`. |
+| 1.2 | Après « Vos langues » | Fenêtre « Moteur de traduction » : API Cloud / Ollama sur ce PC / LM Studio sur ce PC / Configurer plus tard. |
+| 1.3 | « Configurer plus tard », puis Démarrer en partie | Transcription normale, lignes « Non traduit — aucun moteur de traduction connecté (Audio & IA › Traduction IA) ». L'Accueil indique « aucun moteur connecté ». |
+| 1.4 | Mise à jour depuis une version avec Opus-MT | Réglages conservés ; Audio & IA propose « Libérer l'espace » pour les anciens dossiers, rien n'est supprimé sans clic. |
 
-Préparez une liste de 20 annonces courantes (10 russes, 10 anglaises) et notez pour chacune : correcte / compréhensible / fausse.
+## 2. Cloud
 
-### 1 bis. Annonces courtes (lexique) et qualité
-
-| # | Commande | Résultat attendu |
+| # | Action | Attendu |
 | --- | --- | --- |
-| 1.6 | `.\translate.exe --lang en "CT, go, go."` | « CT, on y va » (lexique des annonces, instantané) — plus jamais une phrase de film inventée. |
-| 1.7 | `.\translate.exe --lang ru "Двое на Б"` · `--lang en "one low, lit"` | « deux sur B » · « un ennemi à peu de PV, touché (gros dégâts) ». |
-| 1.8 | Une vraie phrase (« they are rotating to B with the AWP ») | Traduite par le modèle avec recherche en faisceau (4 hypothèses) : notez le temps et la qualité (correcte / compréhensible / fausse). |
+| 2.1 | Choisir un fournisseur, coller la clé, Enregistrer | « Clé enregistrée · Gestionnaire d'identifiants Windows ». La clé n'apparaît ni dans `%APPDATA%\Crosstalk\config.json` ni dans le journal (`logs/`). |
+| 2.2 | « Lister les modèles » | Liste réelle du fournisseur ; choisir un modèle. |
+| 2.3 | « Connecter » sans cocher l'accord | Refusé : « Acceptez d'abord l'envoi du texte des phrases à … ». |
+| 2.4 | Cocher l'accord, Connecter, « Tester la connexion » | « ✓ Réponse en … ms » avec la phrase d'exemple traduite. |
+| 2.5 | « Tester une traduction » : corpus §5, FR → RU puis RU → FR | Traductions correctes ; notez la latence. |
+| 2.6 | Clé fausse | « clé refusée par le fournisseur » et le conseil ; plus aucun appel tant que la clé ne change pas. |
+| 2.7 | Couper Internet en partie | Lignes en langue d'origine avec « réseau indisponible » ; l'application ne se fige pas. Rebrancher : les lignes suivantes sont traduites. |
+| 2.8 | Changer de fournisseur | Déconnexion automatique, nouvelle clé à coller, reconnecter. |
+| 2.9 | Effacer la clé, Déconnecter | « Aucune clé enregistrée » ; plus aucune traduction. |
 
-## 2. Dans l'application
+## 3. Local
 
-| # | Action | Résultat attendu |
+| # | Action | Attendu |
 | --- | --- | --- |
-| 2.1 | **Audio & IA**, carte « Traduction locale · Opus-MT » | « Russe → français : prêt · chargé en … ms », idem pour l'anglais. Sans modèles : « modèle absent », puis **Rechercher les modèles** après installation. Aucune mention de DeepL, d'Azure ni de clé API. |
-| 2.2 | Champ de test : « Traduire » sur la phrase proposée | La traduction française et son temps s'affichent. |
-| 2.3 | **Accueil → Démarrer**, un joueur parle russe | La ligne apparaît d'abord en russe (« traduction en cours »), puis passe en **FINAL** : texte français, original en dessous, `RU → FR`. Le sous-titre indique « VOIX · RUSSE → FRANÇAIS ». |
-| 2.4 | Overlay en jeu | « VOIX • RUSSE → FRANÇAIS », la phrase française, l'original en petit (format bilingue). |
-| 2.5 | Désactiver « Traduire les voix en français » | Les nouvelles lignes restent en langue originale avec « Non traduit — traduction désactivée ». |
-| 2.6 | Supprimer le dossier `opus-mt-en-fr` puis parler anglais | « Non traduit — modèle de traduction absent » : jamais de texte français inventé. |
-| 2.7 | **Ctrl+Alt+F10** pendant qu'une phrase est traduite | Aucune traduction n'arrive après l'arrêt. |
-| 2.8 | Glossaire : laisser « smoke » en *Conserver*, dire « throw smoke mid » | « smoke » reste tel quel dans la traduction. Si le modèle perd le repère, la phrase est traduite sans protection (le terme peut alors être traduit). Notez combien de fois sur 10. |
-| 2.9 | Gestionnaire des tâches pendant une partie | CPU et mémoire de `crosstalk.exe` avec les deux modèles chargés (environ 600 Mo de plus attendus). FPS de CS2 avec / sans traduction. |
-| 2.10 | **Diagnostic** | Ligne « Traduction locale · Opus-MT » avec l'état réel et le p50. |
+| 3.1 | Onglet « Local », Ollama démarré avec des modèles | « Détecté · N modèles », liste réelle ; aucun champ de clé, aucun accord demandé. |
+| 3.2 | Ollama arrêté | « Non détecté sur ce PC », bouton « Télécharger Ollama ↗ ». Démarrer Ollama, « Actualiser les modèles locaux » : détecté. |
+| 3.3 | Ollama démarré sans modèle | « Démarré, aucun modèle disponible » et la commande `ollama pull …`. |
+| 3.4 | LM Studio avec un modèle chargé | Idem 3.1 sur le port 1234. |
+| 3.5 | Connecter, Tester une traduction (corpus §5) | Traduction correcte ; notez la première latence (chargement) et les suivantes. |
+| 3.6 | Arrêter Ollama en pleine partie, puis le relancer | Lignes « réseau indisponible » pendant l'arrêt, traduction reprise toute seule ensuite. |
+| 3.7 | PC hors ligne (Wi-Fi coupé) | La traduction locale continue. |
+| 3.8 | Gestionnaire des tâches | CPU/GPU d'Ollama ou LM Studio et FPS de CS2 avec / sans traduction. |
 
-## 3. Compte rendu
+## 4. Toutes les fonctions sur le moteur choisi
+
+| # | Action | Attendu |
+| --- | --- | --- |
+| 4.1 | Voix russe en partie | Provisoire en russe, puis FINAL traduit ; overlay « VOIX • RUSSE → FRANÇAIS ». En mode Cloud, aucun appel pour les provisoires. |
+| 4.2 | Chat anglais | Traduit par le même moteur. |
+| 4.3 | Ctrl+Alt+F7 : « Mon équipe ne sait pas jouer. » vers le russe | Texte copié en russe (sens : « Моя команда не умеет играть. »). « Éco » reste la phrase CS toute prête. |
+| 4.4 | Ctrl+Alt+F6 (dictée) | Même résultat après transcription. |
+| 4.5 | Historique, mode streamer, radar, résumé de partie, Diagnostic | Lignes traduites présentes ; Diagnostic « Traduction IA · LLM » avec l'état réel. |
+| 4.6 | Ctrl+Alt+F10 pendant une traduction | Aucune traduction n'arrive après l'arrêt. |
+
+## 5. Corpus linguistique
+
+| Français | Russe attendu (sens) | Anglais attendu (sens) |
+| --- | --- | --- |
+| Mon équipe ne sait pas jouer. | Моя команда не умеет играть. | My team can't play. |
+| Deux ennemis arrivent sur B. | Два врага идут на B. | Two enemies are coming to B. |
+| Attendez-moi au mid. | Ждите меня на миде. | Wait for me at mid. |
+| Il est derrière toi. | Он позади тебя. | He's behind you. |
+| Ils ont posé la bombe. | Они поставили бомбу. | They planted the bomb. |
+
+Critères (sens, pas mot à mot) : négation conservée, nombre « 2 » conservé, position (B, mid) conservée, aucune explication ajoutée, une seule ligne.
+
+## 6. Compte rendu
 
 ```
-Commit : …            Windows : … (build …)      CPU : …      RAM : …
-SHA-256 pytorch_model.bin ru-fr : …   en-fr : …
-1.1 / 1.2 : traductions correctes ? …
-1.3 : p50 … ms (CS2 fermé) · 1.4 : p50 … ms (CS2 lancé) · 1.5 exact : … ms
-20 annonces : correctes … / compréhensibles … / fausses …
-2.1 – 2.10 : ✅ / ❌ + remarques (sans le texte des joueurs)
-Glossaire 2.8 : terme conservé … / 10
-Mémoire crosstalk.exe : … Mo · FPS sans / avec : … / …
+Commit : …   Windows : … (build …)   CPU : …   GPU : …   RAM : …
+Cloud : fournisseur … modèle … · latence p50 … ms · corpus FR→RU …/5 FR→EN …/5 RU→FR …/5
+Local : Ollama / LM Studio … modèle … · 1re latence … ms, suivantes … ms · corpus …/5
+1.1 – 4.6 : ✅ / ❌ + remarques (sans texte de joueurs, sans clé)
+FPS sans / avec traduction locale : … / …
 ```

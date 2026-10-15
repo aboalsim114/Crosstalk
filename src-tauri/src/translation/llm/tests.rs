@@ -770,3 +770,157 @@ fn redirects_are_refused_and_explained() {
         "redirection refusée (vérifiez l'adresse)"
     );
 }
+
+// ---------- linguistic corpus (simulated model) ----------
+
+/// The answers below are written by hand, as a model would give them: these
+/// tests check what Crosstalk does with the request and the answer, not the
+/// quality of a real model (no provider is reachable from the tests).
+const CORPUS: [(&str, &str, &str); 5] = [
+    (
+        "Mon équipe ne sait pas jouer.",
+        "Моя команда не умеет играть.",
+        "My team can't play.",
+    ),
+    (
+        "Deux ennemis arrivent sur B.",
+        "Два врага идут на B.",
+        "Two enemies are coming to B.",
+    ),
+    (
+        "Attendez-moi au mid.",
+        "Ждите меня на миде.",
+        "Wait for me at mid.",
+    ),
+    (
+        "Il est derrière toi.",
+        "Он позади тебя.",
+        "He's behind you.",
+    ),
+    (
+        "Ils ont posé la bombe.",
+        "Они поставили бомбу.",
+        "They planted the bomb.",
+    ),
+];
+
+/// Meaning kept, checked loosely: each group needs one of its forms (stems,
+/// lower case), so a rephrasing passes and a dropped negation, number or
+/// position fails.
+fn meaning_kept(sentence: &str, out: &str) -> Result<(), String> {
+    let groups: &[&[&str]] = match sentence {
+        "Mon équipe ne sait pas jouer." => &[
+            &[
+                "не ", "can't", "cannot", "can not", "don't", "doesn't", "ne ", "pas",
+            ],
+            &["команд", "team", "équipe"],
+            &["игра", "play", "jou"],
+        ],
+        "Deux ennemis arrivent sur B." => &[
+            &["два", "двое", "2", "two", "deux"],
+            &["враг", "противник", "enem", "ennemi"],
+            &["b", "б"],
+        ],
+        "Attendez-moi au mid." => &[&["жди", "wait", "attend"], &["мид", "mid"]],
+        "Il est derrière toi." => &[&["позади", "за тобой", "сзади", "behind", "derrière"]],
+        "Ils ont posé la bombe." => &[&["бомб", "bomb"], &["постав", "заложил", "plant", "pos"]],
+        _ => return Err(format!("phrase hors corpus : {sentence}")),
+    };
+    let low = format!(" {} ", out.to_lowercase());
+    for g in groups {
+        if !g.iter().any(|w| low.contains(w)) {
+            return Err(format!("« {out} » perd le sens de « {sentence} » ({g:?})"));
+        }
+    }
+    if out.contains('\n') {
+        return Err(format!("« {out} » tient sur plusieurs lignes"));
+    }
+    Ok(())
+}
+
+#[test]
+fn corpus_french_to_russian_and_english_keeps_the_meaning() {
+    for (to, pick) in [("ru", 1), ("en", 2)] {
+        for config in [
+            openai(),
+            anthropic(),
+            ollama("qwen2.5:7b"),
+            ollama("translategemma:4b"),
+        ] {
+            let replies = CORPUS
+                .iter()
+                .map(|c| {
+                    let answer = if pick == 1 { c.1 } else { c.2 };
+                    if config.provider == Provider::Anthropic {
+                        Ok(json!({ "content": [ { "type": "text", "text": answer } ], "stop_reason": "end_turn" }).to_string())
+                    } else {
+                        openai_reply(answer)
+                    }
+                })
+                .collect();
+            let model = config.model.clone();
+            let (c, sent) = client(config, Some(TEST_KEY), replies);
+            for (fr, ..) in CORPUS {
+                let out = c
+                    .translate(fr, "fr", to)
+                    .unwrap_or_else(|e| panic!("{model} {fr}: {e}"));
+                meaning_kept(fr, &out).unwrap();
+            }
+            // Each request carries the sentence once, and the language pair.
+            let sent = sent.lock().unwrap();
+            assert_eq!(sent.len(), CORPUS.len());
+            for ((_, _, body, _), (fr, ..)) in sent.iter().zip(CORPUS) {
+                let text = body.to_string();
+                assert_eq!(text.matches(fr).count(), 1, "{model}: {text}");
+                let target = if to == "ru" { "Russian" } else { "English" };
+                assert!(
+                    text.contains("French") && text.contains(target),
+                    "{model}: {text}"
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn corpus_russian_and_english_to_french_keeps_the_meaning() {
+    for (from, pick) in [("ru", 1), ("en", 2)] {
+        let replies = CORPUS.iter().map(|c| openai_reply(c.0)).collect();
+        let (c, _) = client(ollama("qwen2.5:7b"), None, replies);
+        for row in CORPUS {
+            let line = if pick == 1 { row.1 } else { row.2 };
+            let out = c.translate(line, from, "fr").unwrap();
+            meaning_kept(row.0, &out).unwrap();
+        }
+    }
+}
+
+#[test]
+fn the_meaning_check_catches_a_lost_negation_number_or_position() {
+    assert!(meaning_kept("Mon équipe ne sait pas jouer.", "Моя команда умеет играть.").is_err());
+    assert!(meaning_kept("Deux ennemis arrivent sur A.", "Два врага идут на A.").is_err());
+    assert!(meaning_kept("Deux ennemis arrivent sur B.", "Враги идут на B.").is_err());
+    assert!(meaning_kept("Attendez-moi au mid.", "Ждите меня.").is_err());
+    assert!(meaning_kept("Il est derrière toi.", "Он позади тебя.\nПримечание: …").is_err());
+    // Rephrasings pass.
+    assert!(meaning_kept(
+        "Mon équipe ne sait pas jouer.",
+        "Моя команда вообще не умеет играть."
+    )
+    .is_ok());
+    assert!(meaning_kept("Deux ennemis arrivent sur B.", "Двое противников на B.").is_ok());
+}
+
+#[test]
+fn a_commented_answer_never_reaches_the_overlay() {
+    let (c, _) = client(
+        openai(),
+        Some(TEST_KEY),
+        vec![openai_reply(
+            "Voici la traduction :\n« Моя команда не умеет играть. »\nNote : registre familier.",
+        )],
+    );
+    assert!(c
+        .translate("Mon équipe ne sait pas jouer.", "fr", "ru")
+        .is_err());
+}
