@@ -34,7 +34,7 @@ export interface InstallOptions {
   desktop: boolean;
 }
 
-const SIM_INFO: SetupInfo = { version: '0.3.0', defaultDir: 'C:\\Users\\vous\\AppData\\Local\\Crosstalk', appBytes: 26_000_000, modelBytes: 776_000_000, installed: null };
+const SIM_INFO: SetupInfo = { version: '0.4.0', defaultDir: 'C:\\Users\\vous\\AppData\\Local\\Crosstalk', appBytes: 26_000_000, modelBytes: 776_000_000, installed: null };
 
 let simTimer: ReturnType<typeof setInterval> | undefined;
 const simListeners = new Set<(p: SetupProgress) => void>();
