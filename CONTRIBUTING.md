@@ -82,7 +82,7 @@ Restent manuels, selon le sujet : capture et reconnaissance vocale avec CS2, mes
 
 ### Version de test téléchargeable
 
-Après **chaque fusion dans `develop`**, republier la version de test depuis un `develop` à jour et propre :
+Après **chaque fusion dans `develop`** (et après chaque release, une fois `main` refusionnée dans `develop`), republier la version de test depuis un `develop` à jour et propre. C'est ce qui rend la mise à jour disponible dans l'application (À propos, flux `latest.json`) :
 
 ```bash
 scripts/publish-dev-build.sh
