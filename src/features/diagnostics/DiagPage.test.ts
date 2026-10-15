@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { journalRows, translationDiag } from './DiagPage';
+import { journalRows, pulseDiag, translationDiag } from './DiagPage';
 import { translationHealth, translationSummary } from '../translation/translation';
 import type { TranslationStatus } from '../../shared/ipc';
 
@@ -27,5 +27,15 @@ describe('translation row of the diagnostic', () => {
     expect(translationSummary(status(false)).color).toBe('#ffa24a');
     expect(translationSummary(status(true, false)).color).toBe('#8f8a83');
     expect(translationSummary(null).color).toBe('#8f8a83');
+  });
+});
+
+describe('voice to text row of the diagnostic', () => {
+  it('names the stage that stops, else shows the last summary', () => {
+    expect(pulseDiag(null)[1]).toBe('AVERT.');
+    expect(pulseDiag({ capturing: true, summary: null, alerts: [] })).toEqual(['Capture en cours : premier bilan dans 30 s', 'OK']);
+    const summary = '30 s de capture : son moyen -30 dBFS, crête -6 dBFS · VAD : 2 segment(s)';
+    expect(pulseDiag({ capturing: true, summary, alerts: [] })).toEqual([summary, 'OK']);
+    expect(pulseDiag({ capturing: false, summary, alerts: ['capture silencieuse : CS2 n\'envoie que du silence'] })).toEqual(['capture silencieuse : CS2 n\'envoie que du silence', 'ÉCHEC']);
   });
 });
