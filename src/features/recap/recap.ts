@@ -10,6 +10,8 @@ import type { GsiStatus } from '../../shared/ipc';
 import { useGsi } from './gsi';
 import { historyEntryFrom } from '../history/history';
 import { isLive, useApp, type FeedEntry } from '../../app/state/store';
+import { layoutOf } from '../radar/radar';
+import { lineMentions } from '../radar/detect';
 
 /** Translated lines kept for the optional quotes on the card. */
 const MAX_SAMPLES = 40;
@@ -37,6 +39,8 @@ export interface MatchStats {
   samples: string[];
   /** `kind:tid` of the counted lines. */
   counted: string[];
+  /** Callouts heard per zone of the map plan (lines naming it), for the heat map. */
+  zones: Record<string, number>;
 }
 
 export function newMatch(gsi: Pick<GsiStatus, 'map' | 'mapName' | 'mode'> | null, now = Date.now()): MatchStats {
@@ -56,6 +60,7 @@ export function newMatch(gsi: Pick<GsiStatus, 'map' | 'mapName' | 'mode'> | null
     latencies: [],
     samples: [],
     counted: [],
+    zones: {},
   };
 }
 
@@ -69,6 +74,14 @@ export function countEntry(m: MatchStats, f: FeedEntry): MatchStats {
   const next: MatchStats = { ...m, counted: [...m.counted, key] };
   if (f.kind === 'voice') next.voice++;
   else next.chat++;
+  const layout = layoutOf(m.map);
+  if (layout) {
+    const named = lineMentions(e.original, e.translated ?? null, layout);
+    if (named.length) {
+      next.zones = { ...m.zones };
+      for (const z of named) next.zones[z.zone] = (next.zones[z.zone] ?? 0) + 1;
+    }
+  }
   if (e.translated) {
     next.translated++;
     next.langs = { ...m.langs, [e.lang]: (m.langs[e.lang] ?? 0) + 1 };
@@ -120,6 +133,18 @@ export function recapFacts(m: MatchStats, now = Date.now()): RecapFacts {
     heroLabel: m.translated === 1 ? 'annonce traduite' : 'annonces traduites',
     rows: rows.slice(0, 5),
   };
+}
+
+/** The most called zones, most first (ties: the plan's order). */
+export function topZones(m: Pick<MatchStats, 'map' | 'zones'>, n = 3): { id: string; label: string; count: number }[] {
+  const layout = layoutOf(m.map);
+  if (!layout) return [];
+  return layout.zones
+    .map((z, i) => ({ id: z.id, label: z.label, count: m.zones?.[z.id] ?? 0, i }))
+    .filter((z) => z.count > 0)
+    .sort((a, b) => b.count - a.count || a.i - b.i)
+    .slice(0, n)
+    .map(({ id, label, count }) => ({ id, label, count }));
 }
 
 /** Up to `n` short translated lines for the optional quotes. */

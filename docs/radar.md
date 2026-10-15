@@ -28,6 +28,19 @@ Mirage, Inferno, Dust II, Nuke, Ancient, Anubis, Vertigo, Overpass, Train : les 
 
 Les plans sont **schématiques**, dessinés à la main (`src/features/radar/layouts.ts`) : un point par callout, placé à peu près comme sur le radar du jeu, et des traits vers les deux voisins les plus proches. Aucun fichier du jeu n'est lu ni distribué. Les positions sont approximatives ; corrections bienvenues.
 
+## Carte des annonces de la partie
+
+Le résumé de partie (Historique › Résumé de partie) dessine aussi **toutes les zones annoncées pendant le match** sur le plan de la carte :
+- une lueur orange par zone, d'autant plus grande que la zone a été citée souvent (surface proportionnelle à la racine du nombre, pour qu'une zone n'écrase pas les autres) ;
+- le nom des trois zones les plus citées sur le plan ;
+- leur nombre de citations à côté.
+
+<p align="center"><img src="assets/recap-heatmap.jpg" alt="Résumé de partie sur Inferno : 92 annonces traduites, plan d'Inferno avec Banana (14), B (9) et Apps (7) en surbrillance." width="720" /></p>
+
+<sub>Image d'exemple : partie inventée, rendue par le code du résumé.</sub>
+
+Chaque ligne finale (voix ou chat) compte une fois pour chaque zone qu'elle nomme. La carte n'apparaît que sur une carte connue, quand au moins une zone a été annoncée. L'interrupteur « Carte des annonces », sous l'image, la retire. Comme le reste du résumé : aucun pseudo, rien n'est envoyé.
+
 ## Respect du jeu
 
 Le radar n'affiche que ce que disent vos coéquipiers, déjà transcrit et traduit par Crosstalk. Il ne lit ni la mémoire du jeu, ni les positions des joueurs : la Game State Integration ne fournit à Crosstalk que la carte (`"map" "1"`).

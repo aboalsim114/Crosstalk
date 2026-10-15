@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import type { GsiStatus } from '../../shared/ipc';
 import { useGsi } from './gsi';
-import { countEntry, finishMatch, formatDuration, median, newMatch, pickQuotes, recapFacts, startRecapTracker, useRecap, type MatchStats } from './recap';
+import { countEntry, finishMatch, formatDuration, median, newMatch, pickQuotes, recapFacts, startRecapTracker, topZones, useRecap, type MatchStats } from './recap';
 import { useApp, type FeedEntry } from '../../app/state/store';
 
 const line = (p: Partial<FeedEntry>): FeedEntry => ({ kind: 'voice', src: 'ru', orig: 'Двое на Б', prov: '', tr: null, id: 1, tid: 1, time: '', status: 'final', shown: 'Deux sur B.', lat: 1800, err: false, ...p });
@@ -18,6 +18,27 @@ describe('match recap: counts', () => {
     m = countEntry(m, line({ tid: undefined })); // demo line
     expect(m).toMatchObject({ voice: 2, chat: 1, translated: 2, langs: { ru: 1, en: 1 }, words: 7, latencies: [1800, 2200] });
     expect(m.samples).toEqual(['Deux sur B.', 'Deux en B, vite.']);
+  });
+
+  it('counts the zones called during the match for the heat map', () => {
+    let m = newMatch(gsi({}), 0);
+    m = countEntry(m, line({ orig: 'Двое на апах', shown: 'Deux en apps.' }));
+    m = countEntry(m, line({ tid: 2, orig: 'трое на апах', shown: 'Trois en apps.' }));
+    m = countEntry(m, line({ tid: 3, orig: 'один в паласе, на B', shown: 'Un au Palace, sur B.' }));
+    m = countEntry(m, line({ tid: 4, kind: 'chat', src: 'en', orig: '2 B', shown: '2 B', status: 'original' }));
+    m = countEntry(m, line({ tid: 5, orig: 'гг', shown: 'gg' }));
+    m = countEntry(m, line({ tid: 6, orig: 'на рампе', status: 'transcrit', shown: null })); // not final
+    expect(m.zones).toEqual({ apps: 2, palace: 1, b: 2 });
+    expect(topZones(m)).toEqual([
+      { id: 'b', label: 'B', count: 2 },
+      { id: 'apps', label: 'Apps', count: 2 },
+      { id: 'palace', label: 'Palace', count: 1 },
+    ]);
+    expect(topZones(m, 1)).toHaveLength(1);
+    // Without a known map, no heat map.
+    const noMap = countEntry(newMatch(null, 0), line({ orig: 'Двое на апах' }));
+    expect(noMap.zones).toEqual({});
+    expect(topZones(noMap)).toEqual([]);
   });
 
   it('writes the card text without any name', () => {
