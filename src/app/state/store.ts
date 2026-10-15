@@ -5,6 +5,7 @@ import { isCapturing, useAudio } from '../../features/audio/audio';
 import type { UiLang } from '../../shared/i18n';
 import { EVENTS, GLOSSARY, type GlossEntry, type ModelId, type PageId, type SimEvent } from './data';
 import type { PlayerLang, TargetLang } from '../../features/languages/langs';
+import { RADAR_DEFAULTS, type RadarOpts } from '../../features/radar/radar';
 import { useTargetLang } from '../../shared/i18n';
 
 export type Session = 'IDLE' | 'INITIALIZING' | 'LISTENING' | 'DEGRADED' | 'PAUSED' | 'STOPPING' | 'STOPPED';
@@ -88,6 +89,10 @@ export interface AppState {
   accel: Accel;
   /** "Focus voix": keep the centred voice chat, turn down game sounds from the sides. */
   voiceFocus: boolean;
+  /** Callout radar in the overlay. */
+  radar: RadarOpts;
+  /** "Essayer": time the sample radar was asked for (not saved). */
+  radarDemo: number | null;
   /** The players' languages (Langues › Mes langues). */
   src: Record<SourceLang, boolean>;
   /** The user's language: everything is translated into it. */
@@ -175,6 +180,8 @@ const initial: AppState = {
   model: 'base',
   accel: 'auto',
   voiceFocus: false,
+  radar: RADAR_DEFAULTS,
+  radarDemo: null,
   src: { fr: false, en: true, ru: true, de: false, es: false, uk: false, pl: false, tr: false },
   target: 'fr',
   langSetupDone: false,

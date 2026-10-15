@@ -10,6 +10,8 @@ import { setupNeeds, startSetup, useSetup } from '../features/setup/setup';
 import { chatConfigFrom, chatEntry, useChat } from '../features/chat/chat';
 import { captureModeFor, levelToUnit, recordTestLevel, refreshDevices, useAudio } from '../features/audio/audio';
 import { recentLangs } from '../features/languages/langs';
+import { radarPayload, type RadarPayload } from '../features/radar/radar';
+import { useGsi } from '../features/recap/gsi';
 import { isRunning, useApp, type AppState, type FeedEntry, type Session } from './state/store';
 
 export interface OverlayPayload {
@@ -27,6 +29,8 @@ export interface OverlayPayload {
   locale: Locale;
   /** Language of the translations ("RUSSE → FRANÇAIS"). */
   target: string;
+  /** Callout radar: map and lit zones, null when off or on an unknown map. */
+  radar: RadarPayload | null;
 }
 
 export function overlayPayload(s: AppState): OverlayPayload {
@@ -41,6 +45,7 @@ export function overlayPayload(s: AppState): OverlayPayload {
     repos: s.repos,
     locale: resolveLocale(s.uiLang),
     target: s.target,
+    radar: radarPayload(s.radar, useGsi.getState().status?.map, s.feed, s.radarDemo, Date.now()),
   };
 }
 
@@ -313,13 +318,16 @@ export function startNativeBridge(): () => void {
 
   const sync = (s: AppState, prev?: AppState) => {
     windowFlags.sync(s, prev);
-    if (!prev || prev.feed !== s.feed || prev.fmt !== s.fmt || prev.opacity !== s.opacity || prev.textSize !== s.textSize || prev.maxBlocks !== s.maxBlocks || prev.duration !== s.duration || prev.corner !== s.corner || prev.repos !== s.repos || prev.uiLang !== s.uiLang || prev.target !== s.target) push();
+    if (!prev || prev.feed !== s.feed || prev.fmt !== s.fmt || prev.opacity !== s.opacity || prev.textSize !== s.textSize || prev.maxBlocks !== s.maxBlocks || prev.duration !== s.duration || prev.corner !== s.corner || prev.repos !== s.repos || prev.uiLang !== s.uiLang || prev.target !== s.target || prev.radar !== s.radar || prev.radarDemo !== s.radarDemo) push();
   };
   sync(useApp.getState());
   const unsub = useApp.subscribe(sync);
+  // The radar follows the map being played.
+  const unsubMap = useGsi.subscribe((g, prev) => g.status?.map !== prev.status?.map && push());
 
   return () => {
     unsub();
+    unsubMap();
     unlisten.forEach((p) => p.then((f) => f()));
   };
 }
