@@ -27,9 +27,9 @@ describe('settings kept between launches', () => {
     expect(app0.speaker.enabled).toBe(false);
   });
 
-  it('keeps the online LLM settings, off by default, without any key', () => {
+  it('keeps the translation engine settings, not connected by default, without any key', () => {
     expect(app0.llm.enabled).toBe(false);
-    const llm = { enabled: true, service: 'anthropic' as const, provider: 'anthropic' as const, baseUrl: 'https://api.anthropic.com/v1', model: 'claude-haiku-4-5' };
+    const llm = { enabled: true, service: 'anthropic' as const, provider: 'anthropic' as const, baseUrl: 'https://api.anthropic.com/v1', model: 'claude-haiku-4-5', cloudConsent: true };
     const snap = snapshot({ ...app0, llm }, null);
     expect(restore(JSON.parse(JSON.stringify(snap.config)), app0).app.llm).toEqual(llm);
     // Settings saved before the service list: the service is found from the address.
@@ -41,6 +41,19 @@ describe('settings kept between launches', () => {
     expect(JSON.stringify(snap)).not.toMatch(/key/i);
     const bad = restore({ version: 1, settings: { llm: { enabled: 'yes', provider: 'gemini', baseUrl: 42, model: 'x'.repeat(600) } } }, app0).app.llm;
     expect(bad).toEqual(app0.llm);
+  });
+
+  it('keeps the consent of a cloud provider connected before it existed, never for one never switched on', () => {
+    const old = (llm: Record<string, unknown>) => restore({ version: 1, settings: { llm } }, app0).app.llm?.cloudConsent;
+    expect(old({ enabled: true, provider: 'openai', baseUrl: 'https://api.openai.com/v1', model: 'gpt-4o-mini' })).toBe(true);
+    expect(old({ enabled: false, provider: 'openai', baseUrl: 'https://api.openai.com/v1', model: 'gpt-4o-mini' })).toBe(false);
+    expect(old({ enabled: true, provider: 'openai', baseUrl: 'http://localhost:11434/v1', model: 'qwen2.5:7b' })).toBe(false);
+    expect(old({ enabled: true, provider: 'openai', baseUrl: 'https://api.openai.com/v1', model: 'm', cloudConsent: false })).toBe(false);
+  });
+
+  it('asks for the engine once, and keeps the answer', () => {
+    expect(app0.engineSetupDone).toBe(false);
+    expect(restore(snapshot({ ...app0, engineSetupDone: true }, null).config, app0).app.engineSetupDone).toBe(true);
   });
 
   it('round-trips the settings, the device and the glossary', () => {

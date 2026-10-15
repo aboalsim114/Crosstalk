@@ -49,7 +49,7 @@ describe('reply in the teammates’ language', () => {
   it('translates on Enter, copies the result and says how to paste it', async () => {
     const writeText = vi.fn().mockResolvedValue(undefined);
     Object.assign(navigator, { clipboard: { writeText } });
-    translate.mockResolvedValue({ text: 'Они идут через верх', target: 'ru', via: 'model', ms: 640 });
+    translate.mockResolvedValue({ text: 'Они идут через верх', target: 'ru', via: 'llm', ms: 640 });
     const copied = vi.fn();
     render(<ReplyBox target="ru" onTarget={() => {}} onCopied={copied} />);
     const input = screen.getByLabelText('Message (Français)');
@@ -60,7 +60,7 @@ describe('reply in the teammates’ language', () => {
     expect(translate).toHaveBeenCalledWith('ils arrivent par le haut', 'ru');
     expect(writeText).toHaveBeenCalledWith('Они идут через верх');
     expect(screen.getByTestId('reply-out').textContent).toBe('Они идут через верх');
-    expect(screen.getByText(`Traduit sur ce PC en 0,6 s · ${PASTE_HINT}`)).toBeTruthy();
+    expect(screen.getByText(`Traduit par le LLM en 0,6 s · ${PASTE_HINT}`)).toBeTruthy();
     expect(copied).toHaveBeenCalled();
   });
 

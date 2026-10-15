@@ -1,4 +1,5 @@
-// First-run model download (src-tauri/src/downloads.rs).
+// First-run download of the speech models (src-tauri/src/downloads.rs):
+// Whisper and Silero. Translation needs no download (it is done by the LLM).
 
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
@@ -15,17 +16,9 @@ export interface DownloadStatus {
   error: string | null;
 }
 
-/** The user's language and the players', for the translation models to fetch. */
-export interface TranslationPlan {
-  target: string;
-  sources: string[];
-}
-
 export const modelDownload = {
-  status: (model: string, translation: boolean, plan?: TranslationPlan): Promise<DownloadStatus | null> =>
-    isTauri ? invoke<DownloadStatus>('models_download_status', { model, translation, plan: plan ?? null }) : Promise.resolve(null),
-  start: (model: string, translation: boolean, plan?: TranslationPlan): Promise<DownloadStatus | null> =>
-    isTauri ? invoke<DownloadStatus>('models_download_start', { model, translation, plan: plan ?? null }) : Promise.resolve(null),
+  status: (model: string): Promise<DownloadStatus | null> => (isTauri ? invoke<DownloadStatus>('models_download_status', { model }) : Promise.resolve(null)),
+  start: (model: string): Promise<DownloadStatus | null> => (isTauri ? invoke<DownloadStatus>('models_download_start', { model }) : Promise.resolve(null)),
   cancel: (): Promise<void> => (isTauri ? invoke<void>('models_download_cancel') : Promise.resolve()),
   onProgress: (cb: (s: DownloadStatus) => void) => (isTauri ? listen<DownloadStatus>('models://download', (e) => cb(e.payload)) : Promise.resolve(noop)),
 };

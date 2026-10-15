@@ -101,14 +101,11 @@ export const LICENSES: [string, string][] = [
   ['tauri', 'MIT / Apache-2.0'],
   ['whisper.cpp · ggml', 'MIT'],
   ['whisper-rs', 'Unlicense'],
-  ['candle (Hugging Face)', 'MIT / Apache-2.0'],
   ['windows-rs', 'MIT / Apache-2.0'],
   ['ureq', 'MIT / Apache-2.0'],
   ['React · three.js · motion', 'MIT'],
   ['Modèles Whisper (OpenAI)', 'MIT'],
   ['Silero VAD', 'MIT'],
-  ['Opus-MT (Helsinki-NLP)', 'Apache-2.0'],
-  ['Opus-MT ru-en, en-de', 'CC-BY-4.0'],
 ];
 
 /** `status: 'transcrit'` marks a real transcript shown in its original language. */

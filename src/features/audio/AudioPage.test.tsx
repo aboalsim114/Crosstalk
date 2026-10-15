@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { IDLE_CAPTURE } from '../../shared/ipc';
 import { useAudio } from './audio';
 import { useSpeech } from '../speech/speech';
@@ -98,30 +98,39 @@ describe('speech recognition cards in the desktop app', () => {
   });
 });
 
-describe('local translation card', () => {
-  it('shows the model pairs in the desktop app and no API key field', async () => {
+describe('translation card', () => {
+  it('shows the state of the engine, its metrics and no other translation engine', async () => {
     const { useTranslation } = await import('../translation/translation');
-    useTranslation.setState({
-      native: true,
-      status: {
-        config: { enabled: true, glossary: [] },
-        pairs: [
-          { source: 'ru', repo: 'Helsinki-NLP/opus-mt-ru-fr', state: 'ready', error: null, loadMs: 1200 },
-          { source: 'en', repo: 'Helsinki-NLP/opus-mt-en-fr', state: 'missing', error: null, loadMs: null },
-        ],
-        modelsDir: 'C:\\m',
-        queued: 0,
-      },
-      times: [310, 420],
-    });
+    useTranslation.setState({ native: true, status: { config: { enabled: true, glossary: [], target: 'fr', sources: ['ru', 'en'] }, ready: true, problem: null, queued: 0 }, times: [310, 420] });
     render(<AudioPage />);
-    expect(screen.getByTestId('pair-ru')).toHaveTextContent('prêt · chargé en 1200 ms');
-    expect(screen.getByTestId('pair-en')).toHaveTextContent('modèle absent');
+    expect(screen.getByTestId('translation-state')).toHaveTextContent('RU, EN → FR');
     expect(screen.getByTestId('translation-metrics')).toHaveTextContent('Traduction p50 420 ms');
-    expect(screen.getByTestId('translation-card')).toHaveTextContent('Aucune clé API');
-    expect(screen.getByTestId('translation-card').textContent).not.toMatch(/DeepL|Azure|cloud/i);
+    expect(screen.getByTestId('translation-card').textContent).not.toMatch(/opus|helsinki|DeepL|Azure/i);
     fireEvent.click(screen.getByRole('switch', { name: 'Traduire les voix et le chat' }));
     expect(useApp.getState().tg.translate).toBe(false);
+  });
+
+  it('says why nothing is translated without an engine', async () => {
+    const { useTranslation } = await import('../translation/translation');
+    useTranslation.setState({ native: true, status: { config: { enabled: true, glossary: [] }, ready: false, problem: 'aucun moteur de traduction connecté (Audio & IA › Traduction IA)', queued: 0 }, times: [] });
+    render(<AudioPage />);
+    expect(screen.getByTestId('translation-state')).toHaveTextContent('aucun moteur connecté');
+    expect(screen.getByTestId('translation-problem')).toHaveTextContent('Audio & IA › Traduction IA');
+  });
+
+  it('offers to delete the old Opus-MT folders, only on request', async () => {
+    const { useTranslation } = await import('../translation/translation');
+    const ipc = await import('../../shared/ipc');
+    useTranslation.setState({ native: true, status: { config: { enabled: true, glossary: [] }, ready: true, problem: null, queued: 0 }, times: [] });
+    vi.spyOn(ipc.translation, 'legacyModels').mockResolvedValue({ folders: 2, bytes: 612_000_000 });
+    const cleanup = vi.spyOn(ipc.translation, 'legacyCleanup').mockResolvedValue({ folders: 0, bytes: 0 });
+    render(<AudioPage />);
+    expect(await screen.findByTestId('legacy-models')).toHaveTextContent('2 dossiers, 612 Mo');
+    expect(cleanup).not.toHaveBeenCalled();
+    await act(async () => fireEvent.click(screen.getByText('Libérer l’espace')));
+    expect(cleanup).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(screen.queryByTestId('legacy-models')).toBeNull());
+    vi.restoreAllMocks();
   });
 });
 
@@ -129,14 +138,15 @@ describe('translation test', () => {
   it('says which engine translated the sentence', async () => {
     const { useTranslation } = await import('../translation/translation');
     const ipc = await import('../../shared/ipc');
-    useTranslation.setState({ native: true, status: { config: { enabled: true, glossary: [] }, pairs: [], modelsDir: '', queued: 0 }, times: [] });
+    useTranslation.setState({ native: true, status: { config: { enabled: true, glossary: [] }, ready: true, problem: null, queued: 0 }, times: [] });
     const result = { id: 0, lang: 'ru', original: 'Двое идут на B', translated: 'Deux joueurs arrivent sur B.', error: null, ms: 640, queueMs: 0, cached: false, glossary: true, target: 'fr' };
-    const spy = vi.spyOn(ipc.translation, 'test').mockResolvedValueOnce({ ...result, engine: 'llm' }).mockResolvedValueOnce({ ...result, ms: 210, engine: 'opus-mt' });
+    const spy = vi.spyOn(ipc.translation, 'test').mockResolvedValueOnce({ ...result, engine: 'llm' }).mockResolvedValueOnce({ ...result, ms: 2, engine: 'lexicon' });
     render(<AudioPage />);
-    await act(async () => fireEvent.click(screen.getByText('Traduire')));
-    expect(await screen.findByTestId('translation-result')).toHaveTextContent('« Deux joueurs arrivent sur B. » · 640 ms · LLM en ligne');
-    await act(async () => fireEvent.click(screen.getByText('Traduire')));
-    await waitFor(() => expect(screen.getByTestId('translation-result')).toHaveTextContent('210 ms · Opus-MT local'));
+    const translate = () => within(screen.getByTestId('translation-card')).getByText('Traduire');
+    await act(async () => fireEvent.click(translate()));
+    expect(await screen.findByTestId('translation-result')).toHaveTextContent('« Deux joueurs arrivent sur B. » · 640 ms · LLM');
+    await act(async () => fireEvent.click(translate()));
+    await waitFor(() => expect(screen.getByTestId('translation-result')).toHaveTextContent('lexique Counter-Strike'));
     expect(spy).toHaveBeenCalledTimes(2);
     spy.mockRestore();
   });

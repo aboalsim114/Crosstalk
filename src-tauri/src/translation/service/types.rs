@@ -4,7 +4,7 @@
 use serde::{Deserialize, Serialize};
 
 use super::super::glossary::Term;
-use super::super::models;
+use super::super::languages;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
@@ -21,11 +21,11 @@ pub struct TranslationConfig {
 }
 
 fn default_target() -> String {
-    models::DEFAULT_TARGET.into()
+    languages::DEFAULT_TARGET.into()
 }
 
 fn default_sources() -> Vec<String> {
-    models::DEFAULT_SOURCES
+    languages::DEFAULT_SOURCES
         .iter()
         .map(|s| s.to_string())
         .collect()
@@ -45,12 +45,12 @@ impl Default for TranslationConfig {
 impl TranslationConfig {
     /// Unknown languages dropped; an unsupported target falls back to French.
     pub fn sanitized(mut self) -> Self {
-        if !models::is_target(&self.target) {
+        if !languages::is_target(&self.target) {
             self.target = default_target();
         }
         let mut out: Vec<String> = Vec::new();
         for l in self.sources {
-            if models::is_language(&l) && !out.contains(&l) {
+            if languages::is_language(&l) && !out.contains(&l) {
                 out.push(l);
             }
         }
@@ -62,39 +62,20 @@ impl TranslationConfig {
     pub fn translated(&self) -> Vec<String> {
         self.sources
             .iter()
-            .filter(|s| **s != self.target && models::route(s, &self.target).is_some())
+            .filter(|s| **s != self.target)
             .cloned()
             .collect()
     }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "lowercase")]
-pub enum PairState {
-    Missing,
-    Loading,
-    Ready,
-    Error,
-}
-
-#[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct PairStatus {
-    pub source: String,
-    pub target: String,
-    /// Repositories of the route ("A + B" when it goes through English).
-    pub repo: String,
-    pub state: PairState,
-    pub error: Option<String>,
-    pub load_ms: Option<u32>,
 }
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TranslationStatus {
     pub config: TranslationConfig,
-    pub pairs: Vec<PairStatus>,
-    pub models_dir: String,
+    /// The LLM can be asked (connected, configured, key or local server).
+    pub ready: bool,
+    /// Why translations are unavailable, shown as is.
+    pub problem: Option<String>,
     pub queued: usize,
 }
 
@@ -105,7 +86,8 @@ pub struct Translation {
     pub id: u64,
     pub lang: String,
     pub original: String,
-    /// French text, or `None` with `error` set: the original stays displayed.
+    /// Text in the user's language, or `None` with `error` set: the original
+    /// stays displayed with the reason (no invented translation).
     pub translated: Option<String>,
     pub error: Option<String>,
     /// Translation time (queue wait excluded).
@@ -120,7 +102,7 @@ pub struct Translation {
     /// Language of `translated` (the user's language when it was sent).
     #[serde(default)]
     pub target: String,
-    /// What produced `translated`: "llm", "opus-mt", or "lexicon" (built-in
+    /// What produced `translated`: "llm", or "lexicon" (built-in
     /// Counter-Strike callouts); `None` when untranslated or already in the
     /// user's language.
     #[serde(default)]

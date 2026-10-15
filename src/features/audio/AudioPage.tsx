@@ -1,7 +1,7 @@
 import { config } from '../../app/config';
 import { capturesDuring } from '../../app/native';
-import { useState } from 'react';
-import { isTauri, translation as nativeTranslation, type Translation } from '../../shared/ipc';
+import { useEffect, useState } from 'react';
+import { isTauri, translation as nativeTranslation, type LegacyModels, type Translation } from '../../shared/ipc';
 import { Radio, Seg, Slider, Toggle, ToggleRow, fnt } from '../../shared/ui/atoms';
 import { LevelMeter } from '../../shared/ui/LevelMeter';
 import { SpeakerCard } from '../speaker/SpeakerCard';
@@ -9,7 +9,7 @@ import { captureSummary, cs2Summary, isCapturing, refreshDevices, runCaptureTest
 import { MODELS, type ModelId } from '../../app/state/data';
 import { engineSummary, formatMs, rescanModels, statsLine, useSpeech } from '../speech/speech';
 import { useApp, type Accel, type CaptureSource } from '../../app/state/store';
-import { pairSummary, percentile, rescanTranslation, useTranslation } from '../translation/translation';
+import { percentile, refreshTranslation, translationSummary, useTranslation } from '../translation/translation';
 import { engineLabel } from '../translation/llm';
 import { LlmCard } from '../translation/LlmCard';
 
@@ -358,7 +358,47 @@ const TEST_SAMPLES: Record<'ru' | 'en', string> = {
   en: 'Two players on B, they have an AWP.',
 };
 
-/** Local translation: Opus-MT on this PC, no API key, nothing sent online. */
+const mb = (bytes: number) => `${Math.round(bytes / 1_000_000)} Mo`;
+
+/** Opus-MT folders left by earlier versions: shown, deleted only on the user's request. */
+function LegacyModelsBlock() {
+  const [legacy, setLegacy] = useState<LegacyModels | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  useEffect(() => {
+    nativeTranslation
+      .legacyModels()
+      .then(setLegacy)
+      .catch(() => setLegacy(null));
+  }, []);
+  if (!legacy?.folders) return null;
+  const cleanup = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      setLegacy(await nativeTranslation.legacyCleanup());
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div className="flex flex-col gap-2 rounded-lg px-3 py-2.5" style={{ border: '1px solid rgba(255,255,255,.07)' }} data-testid="legacy-models">
+      <span style={{ font: fnt(400, 11, 'sans', 1.5), color: '#8f8a83' }}>
+        Anciens modèles de traduction locale (Opus-MT) encore présents : {legacy.folders} dossier{legacy.folders > 1 ? 's' : ''}, {mb(legacy.bytes)}. Crosstalk ne les utilise plus.
+      </span>
+      <div className="flex items-center gap-2">
+        <div className="pill pill-ghost flex-none px-3.5 py-[7px]" role="button" aria-disabled={busy} onClick={() => !busy && cleanup()} style={{ font: fnt(500, 11.5) }}>
+          {busy ? 'Suppression…' : 'Libérer l’espace'}
+        </div>
+      </div>
+      {error && <span style={{ font: fnt(400, 11, 'sans', 1.5), color: '#ff8a7a' }}>{error}</span>}
+    </div>
+  );
+}
+
+/** Translation of the games: on/off, state of the engine chosen below, a manual test. */
 export function TranslationCard() {
   const on = useApp((s) => s.tg.translate);
   const toggle = useApp((s) => s.toggle);
@@ -369,6 +409,7 @@ export function TranslationCard() {
   const [result, setResult] = useState<Translation | null>(null);
   const p50 = percentile(tr.times, 0.5);
   const p95 = percentile(tr.times, 0.95);
+  const summary = translationSummary(tr.status);
   const test = async () => {
     setBusy(true);
     setResult(null);
@@ -381,26 +422,26 @@ export function TranslationCard() {
   return (
     <div className="glass flex flex-col gap-3 p-5" data-testid="translation-card">
       <div className="flex items-center justify-between">
-        <span className="lbl">TRADUCTION LOCALE · OPUS-MT</span>
-        <span style={{ font: fnt(500, 9.5, 'mono'), letterSpacing: '.12em', color: '#6e6961' }}>CPU · SANS CLÉ API</span>
+        <span className="lbl">TRADUCTION DES PARTIES</span>
+        <span style={{ font: fnt(500, 9.5, 'mono'), letterSpacing: '.12em', color: '#6e6961' }}>VOIX · CHAT · RÉPONSES</span>
       </div>
       <div style={{ font: fnt(400, 11, 'sans', 1.5), color: '#8f8a83' }}>
-        Les voix et le chat des joueurs sont traduits dans votre langue sur ce PC (Langues › Mes langues). Aucune clé API, aucun abonnement : rien n’est envoyé en ligne, sauf si vous activez la traduction en ligne ci-dessous.
+        Les voix et le chat des joueurs sont traduits dans votre langue (Langues › Mes langues) par le moteur choisi dans « Traduction IA ». Sans moteur connecté, les phrases restent dans leur langue d’origine.
       </div>
       <ToggleRow title="Traduire les voix et le chat" sub="Sinon, la transcription reste en langue originale" on={on} onClick={() => toggle('translate')} />
       {tr.native ? (
         <>
-          {(tr.status?.pairs ?? []).map((p) => {
-            const sum = pairSummary(p);
-            return (
-              <div key={p.source} className="flex items-baseline justify-between gap-3" data-testid={`pair-${p.source}`}>
-                <span style={{ font: fnt(500, 12.5), color: '#ece6dc' }}>{sum.label}</span>
-                <span className="truncate text-right" title={p.repo} style={{ font: fnt(400, 11), color: sum.color }}>
-                  {sum.value}
-                </span>
-              </div>
-            );
-          })}
+          <div className="flex items-baseline justify-between gap-3" data-testid="translation-state">
+            <span style={{ font: fnt(500, 12.5), color: '#ece6dc' }}>{summary.label}</span>
+            <span className="truncate text-right" title={tr.status?.problem ?? undefined} style={{ font: fnt(400, 11), color: summary.color }}>
+              {summary.value}
+            </span>
+          </div>
+          {tr.status?.config.enabled && !tr.status.ready && tr.status.problem && (
+            <div style={{ font: fnt(400, 11, 'sans', 1.5), color: '#ffa24a' }} data-testid="translation-problem">
+              {tr.status.problem}
+            </div>
+          )}
           {p50 != null && (
             <div style={{ font: fnt(400, 11, 'sans', 1.5), color: '#8f8a83' }} data-testid="translation-metrics">
               Traduction p50 {formatMs(p50)} · p95 {formatMs(p95 ?? p50)} · {tr.times.length} phrases
@@ -435,19 +476,14 @@ export function TranslationCard() {
             )}
           </div>
           <div className="flex items-center gap-3">
-            <div className="pill pill-ghost flex-none px-3.5 py-[7px]" role="button" onClick={() => rescanTranslation()} style={{ font: fnt(500, 11.5) }}>
-              Rechercher les modèles
+            <div className="pill pill-ghost flex-none px-3.5 py-[7px]" role="button" onClick={() => refreshTranslation()} style={{ font: fnt(500, 11.5) }}>
+              Actualiser l’état
             </div>
-            <span className="min-w-0 truncate" style={{ font: fnt(400, 10.5, 'mono'), color: '#5a5650' }}>
-              opus-mt-ru-fr · opus-mt-en-fr
-            </span>
           </div>
-          <div style={{ font: fnt(400, 10.5, 'sans', 1.5), color: '#5a5650' }}>
-            Modèles téléchargés automatiquement au premier lancement (environ 620 Mo). Helsinki-NLP Opus-MT, licence Apache-2.0.
-          </div>
+          <LegacyModelsBlock />
         </>
       ) : (
-        <div style={{ font: fnt(400, 11, 'sans', 1.5), color: '#6e6961' }}>Disponible dans l’application Windows : modèles Opus-MT installés sur le PC.</div>
+        <div style={{ font: fnt(400, 11, 'sans', 1.5), color: '#6e6961' }}>Disponible dans l’application Windows, avec le moteur choisi dans « Traduction IA ».</div>
       )}
     </div>
   );
@@ -463,8 +499,8 @@ export function AudioPage() {
       </div>
       <div className="flex flex-col gap-4">
         <ModelCard />
-        <TranslationCard />
         <LlmCard />
+        <TranslationCard />
       </div>
     </div>
   );

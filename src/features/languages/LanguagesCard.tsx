@@ -1,9 +1,6 @@
-import { useEffect, useState } from 'react';
-import { modelDownload, type DownloadStatus } from '../../shared/ipc';
 import { fnt } from '../../shared/ui/atoms';
 import { useT } from '../../shared/i18n';
-import { NATIVE_NAME, PLAYER_LANGS, TARGET_LANGS, translatedSources, viaEnglish, type PlayerLang, type TargetLang } from './langs';
-import { setupNeeds, startSetup, useSetup } from '../setup/setup';
+import { NATIVE_NAME, PLAYER_LANGS, TARGET_LANGS, translatedSources, type PlayerLang, type TargetLang } from './langs';
 import { useApp } from '../../app/state/store';
 
 function Chip({ on, disabled, onClick, children, role }: { on: boolean; disabled?: boolean; onClick: () => void; children: React.ReactNode; role: 'radio' | 'checkbox' }) {
@@ -66,48 +63,22 @@ export function LanguagePicker() {
           routes.map((s) => (
             <span key={s} style={{ font: fnt(400, 11.5, 'mono'), color: '#8f8a83' }}>
               {s.toUpperCase()} → {target.toUpperCase()}
-              {viaEnglish(s, target) ? ` · ${t('myLang.pivot')}` : ''}
             </span>
           ))
         )}
       </div>
-      <span style={{ font: fnt(400, 10.5, 'sans', 1.5), color: '#5a5650' }}>{t('myLang.noTarget')}</span>
+      <span style={{ font: fnt(400, 10.5, 'sans', 1.5), color: '#5a5650' }}>{t('myLang.llmHint')}</span>
     </div>
   );
-}
-
-/** What the chosen languages still need to download (from the Rust core). */
-function useMissing(): DownloadStatus | null {
-  const key = useApp((s) => JSON.stringify(setupNeeds(s)));
-  const progress = useSetup((s) => s.status);
-  const [st, setSt] = useState<DownloadStatus | null>(null);
-  useEffect(() => {
-    const n = setupNeeds(useApp.getState());
-    modelDownload.status(n.model, n.translation, n.plan).then(setSt);
-  }, [key, progress?.state]);
-  return st;
 }
 
 /** Langues › Mes langues. */
 export function MyLanguagesCard() {
   const t = useT();
-  const st = useMissing();
-  const missing = st && st.state !== 'downloading' ? st.missingBytes : 0;
   return (
     <div className="glass flex flex-col gap-4 p-5" data-testid="my-languages">
       <span className="lbl">{t('myLang.title')}</span>
       <LanguagePicker />
-      {st &&
-        (missing > 0 ? (
-          <div className="flex items-center justify-between gap-3 rounded-xl px-3 py-2.5" style={{ background: 'rgba(255,162,74,.07)', border: '1px solid rgba(255,162,74,.22)' }}>
-            <span style={{ font: fnt(400, 11.5, 'sans', 1.45), color: '#ffc68a' }}>{t('myLang.missing', { size: Math.round(missing / 1_000_000) })}</span>
-            <div className="pill pill-ember flex-none px-3.5 py-1.5" role="button" onClick={() => startSetup(useApp.getState())} style={{ font: fnt(500, 12) }}>
-              {t('myLang.download')}
-            </div>
-          </div>
-        ) : (
-          st.state !== 'downloading' && <span style={{ font: fnt(400, 11, 'sans', 1.5), color: '#7fe0a8' }}>{t('myLang.installed')}</span>
-        ))}
     </div>
   );
 }

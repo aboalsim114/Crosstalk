@@ -1,30 +1,29 @@
-//! Translation service: every accepted transcript is translated into the
-//! user's language (Langues › Ma langue, French by default) on a dedicated
-//! low-priority thread, with a bounded queue, an LRU cache, the user's
-//! glossary and the same purge as the speech pipeline.
+//! Translation service: every accepted line (voice transcript, chat message)
+//! is translated into the user's language (Langues › Ma langue) by the LLM
+//! the user connected, on a dedicated low-priority thread, with a bounded
+//! queue, an LRU cache, the user's glossary and the same purge as the speech
+//! pipeline. The audio thread, Tauri's main thread and the interface never
+//! wait for an answer: results arrive as events.
 
-use std::collections::{HashMap, VecDeque};
-use std::path::PathBuf;
+use std::collections::VecDeque;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Condvar, Mutex};
 use std::time::{Duration, Instant};
 
+use super::engine::Translator;
 use super::glossary::Term;
-use super::models;
 
 mod cache;
 mod types;
 mod worker;
 
-pub use super::engine::{Chain, Engine, EngineLoader};
-pub use super::opus::OpusLoader;
 pub use types::*;
 
 use cache::Cache;
 use worker::worker_loop;
 
-/// A line waiting longer than this is shown untranslated (F-34).
-pub const MAX_WAIT: Duration = Duration::from_secs(5);
+/// A line waiting longer than this is shown untranslated, with the reason (F-34).
+pub const MAX_WAIT: Duration = Duration::from_secs(8);
 pub const QUEUE_CAPACITY: usize = 8;
 pub const CACHE_CAPACITY: usize = 1000;
 
@@ -43,29 +42,16 @@ struct Job {
     partial: bool,
 }
 
-struct Pair {
-    state: PairState,
-    error: Option<String>,
-    load_ms: Option<u32>,
-}
-
 struct Inner {
     events: Arc<dyn TranslationEvents>,
-    loader: Arc<dyn EngineLoader>,
-    models_dir: PathBuf,
+    translator: Arc<dyn Translator>,
     config: Mutex<TranslationConfig>,
-    /// Per source language, for the current target.
-    pairs: Mutex<HashMap<String, Pair>>,
     queue: Mutex<VecDeque<Job>>,
     wake: Condvar,
     cache: Mutex<Cache>,
     /// Callouts of the map being played, kept as spoken (F-36).
     map_terms: Mutex<Vec<Term>>,
     generation: AtomicU64,
-    /// Asks the worker to (re)load the installed models.
-    reload: AtomicBool,
-    /// Asks the worker to drop its engines before reloading (online LLM changed).
-    rebuild: AtomicBool,
     shutdown: AtomicBool,
 }
 
@@ -76,24 +62,18 @@ pub struct TranslationService {
 impl TranslationService {
     pub fn start(
         events: Arc<dyn TranslationEvents>,
-        loader: Arc<dyn EngineLoader>,
-        models_dir: PathBuf,
+        translator: Arc<dyn Translator>,
         config: TranslationConfig,
     ) -> Arc<Self> {
-        let pairs = pairs_for(&config);
         let inner = Arc::new(Inner {
             events,
-            loader,
-            models_dir,
-            config: Mutex::new(config),
-            pairs: Mutex::new(pairs),
+            translator,
+            config: Mutex::new(config.sanitized()),
             queue: Mutex::new(VecDeque::new()),
             wake: Condvar::new(),
             cache: Mutex::new(Cache::default()),
             map_terms: Mutex::new(Vec::new()),
             generation: AtomicU64::new(0),
-            reload: AtomicBool::new(true),
-            rebuild: AtomicBool::new(false),
             shutdown: AtomicBool::new(false),
         });
         let worker = inner.clone();
@@ -114,27 +94,13 @@ impl TranslationService {
             let mut c = self.inner.config.lock().unwrap();
             let g = c.glossary != config.glossary;
             let l = c.target != config.target || c.sources != config.sources;
-            *c = config.clone();
+            *c = config;
             (g, l)
         };
         if changed_glossary {
             *self.inner.cache.lock().unwrap() = Cache::default();
         }
         if changed_langs {
-            // Pairs of the new languages, keeping the state of those that stay.
-            let mut pairs = self.inner.pairs.lock().unwrap();
-            let mut next = pairs_for(&config);
-            for (k, v) in next.iter_mut() {
-                if let Some(old) = pairs.remove(k) {
-                    if old.state == PairState::Ready || old.state == PairState::Loading {
-                        // Ready for the old target only: reloaded for the new one.
-                        continue;
-                    }
-                    *v = old;
-                }
-            }
-            *pairs = next;
-            drop(pairs);
             // Lines queued for the old target would come back in the wrong language.
             self.purge();
         }
@@ -158,19 +124,15 @@ impl TranslationService {
         }
     }
 
-    /// The online LLM was configured, enabled, disabled or got a new key:
-    /// translations made by the previous setup leave the cache and every route
-    /// is rebuilt (a route without a local model exists only while the LLM is active).
+    /// The LLM was connected, disconnected, changed or got a new key:
+    /// translations of the previous setup leave the cache.
     pub fn engines_changed(&self) -> TranslationStatus {
         *self.inner.cache.lock().unwrap() = Cache::default();
-        self.inner.rebuild.store(true, Ordering::SeqCst);
         self.rescan()
     }
 
-    /// Looks for newly installed models (and loads them).
+    /// Publishes the current state (engine ready or not).
     pub fn rescan(&self) -> TranslationStatus {
-        self.inner.reload.store(true, Ordering::SeqCst);
-        self.inner.wake.notify_all();
         let st = self.inner.status();
         self.inner.events.status(&st);
         st
@@ -189,8 +151,9 @@ impl TranslationService {
         });
     }
 
-    /// Live words of a voice line: translated quickly when the worker is idle;
-    /// a newer live line replaces a pending one, final lines go first.
+    /// Live words of a voice line: a newer live line replaces a pending one,
+    /// final lines go first, and the LLM decides whether it is worth a call
+    /// (never towards a cloud provider: see `LlmClient::translate_partial`).
     pub fn submit_partial(&self, id: u64, lang: &str, text: &str) {
         {
             let mut q = self.inner.queue.lock().unwrap();
@@ -221,7 +184,7 @@ impl TranslationService {
             partial: false,
         });
         rx.recv_timeout(Duration::from_secs(60))
-            .unwrap_or_else(|_| failure(0, lang, text, "moteur indisponible", 0))
+            .unwrap_or_else(|_| failure(0, lang, text, "traduction trop longue", 0))
     }
 
     /// Drops queued lines (capture stopped, emergency stop, CS2 closed).
@@ -256,26 +219,6 @@ impl TranslationService {
     }
 }
 
-fn pairs_for(config: &TranslationConfig) -> HashMap<String, Pair> {
-    config
-        .translated()
-        .into_iter()
-        .map(|s| {
-            (
-                s,
-                // Not examined yet: the worker says Missing or Ready once it
-                // has looked. Missing here showed "modèles absents" (and a
-                // WARN in the journal) for seconds at every start.
-                Pair {
-                    state: PairState::Loading,
-                    error: None,
-                    load_ms: None,
-                },
-            )
-        })
-        .collect()
-}
-
 impl Drop for TranslationService {
     fn drop(&mut self) {
         self.inner.shutdown.store(true, Ordering::SeqCst);
@@ -285,56 +228,13 @@ impl Drop for TranslationService {
 
 impl Inner {
     fn status(&self) -> TranslationStatus {
-        let pairs = self.pairs.lock().unwrap();
-        let config = self.config.lock().unwrap().clone();
+        let problem = self.translator.problem();
         TranslationStatus {
-            pairs: config
-                .translated()
-                .into_iter()
-                .filter_map(|src| {
-                    let s = pairs.get(&src)?;
-                    let repo = models::route(&src, &config.target)
-                        .unwrap_or_default()
-                        .iter()
-                        .map(|p| p.repo)
-                        .collect::<Vec<_>>()
-                        .join(" + ");
-                    Some(PairStatus {
-                        target: config.target.clone(),
-                        source: src,
-                        repo,
-                        state: s.state,
-                        error: s.error.clone(),
-                        load_ms: s.load_ms,
-                    })
-                })
-                .collect(),
-            config,
-            models_dir: self.models_dir.display().to_string(),
+            config: self.config.lock().unwrap().clone(),
+            ready: problem.is_none(),
+            problem,
             queued: self.queue.lock().unwrap().len(),
         }
-    }
-
-    fn set_pair(
-        &self,
-        source: &str,
-        state: PairState,
-        error: Option<String>,
-        load_ms: Option<u32>,
-    ) {
-        {
-            let mut pairs = self.pairs.lock().unwrap();
-            // The languages may have changed meanwhile.
-            let Some(p) = pairs.get_mut(source) else {
-                return;
-            };
-            p.state = state;
-            p.error = error;
-            if load_ms.is_some() || state != PairState::Ready {
-                p.load_ms = load_ms;
-            }
-        }
-        self.events.status(&self.status());
     }
 }
 

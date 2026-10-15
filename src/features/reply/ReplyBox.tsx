@@ -85,7 +85,7 @@ export function ReplyBox({ target, onTarget, onCopied, autoFocusKey }: Props) {
     setOut({ text: '…', note: 'Traduction locale en cours (le premier message charge le modèle, quelques secondes)' });
     try {
       const r = await reply.translate(t, target);
-      await done(r.text, r.via === 'phrasebook' ? 'Phrase CS vérifiée' : `Traduit sur ce PC en ${(r.ms / 1000).toFixed(1).replace('.', ',')} s`);
+      await done(r.text, r.via === 'phrasebook' ? 'Phrase CS vérifiée' : `Traduit par le LLM en ${(r.ms / 1000).toFixed(1).replace('.', ',')} s`);
       setText('');
     } catch (e) {
       setOut({ text: '', note: String(e), error: true });

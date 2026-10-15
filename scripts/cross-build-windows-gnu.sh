@@ -56,7 +56,7 @@ fix_archives() {
 build() { (cd src-tauri && cargo build --release --locked --target $target --features gpu "$@"); }
 
 # First pass builds whisper.cpp (and fails at link), second pass links.
-build --example asr_bench --example audio_probe --example translate || { fix_archives; build --example asr_bench --example audio_probe --example translate; }
+build --example asr_bench --example audio_probe || { fix_archives; build --example asr_bench --example audio_probe; }
 fix_archives
 # The app through the Tauri CLI (builds and embeds its UI). MinGW builds need
 # libstdc++ and WebView2Loader.dll next to the exe.
@@ -92,7 +92,6 @@ rm -rf "$out" && mkdir -p "$out"
 cp "$rel/crosstalk.exe" "$out/"
 cp "$rel/examples/asr_bench.exe" "$out/crosstalk-asr-bench.exe"
 cp "$rel/examples/audio_probe.exe" "$out/crosstalk-audio-probe.exe"
-cp "$rel/examples/translate.exe" "$out/crosstalk-translate.exe"
 cp "$rel/WebView2Loader.dll" "$out/"
 cp "$gcc_dir/libstdc++-6.dll" "$gcc_dir/libgcc_s_seh-1.dll" /usr/x86_64-w64-mingw32/lib/libwinpthread-1.dll "$out/"
 cp scripts/download-models.ps1 scripts/fetch-asr-corpus.py "$out/"

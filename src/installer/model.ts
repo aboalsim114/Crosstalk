@@ -7,7 +7,7 @@ export const PH = [0, 12, 62, 88, 100];
 
 export const PHASES: [string, string, string][] = [
   ['PRÉPARATION', 'Préparation de Crosstalk…', 'Vérification de l’espace disponible'],
-  ['EXTRACTION', 'Extraction des fichiers…', 'Copie de l’application et téléchargement des modèles de voix et de traduction'],
+  ['EXTRACTION', 'Extraction des fichiers…', 'Copie de l’application et téléchargement des modèles de reconnaissance vocale'],
   ['CONFIGURATION', 'Configuration de l’application…', 'Enregistrement de Crosstalk dans Windows'],
   ['FINALISATION', 'Finalisation de l’installation…', 'Création des raccourcis'],
 ];

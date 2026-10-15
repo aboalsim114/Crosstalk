@@ -6,7 +6,7 @@
 #
 # Étapes : garde anti-triche, règles d'architecture, typecheck, tests UI,
 # build UI, rustfmt, clippy, tests Rust (application et installateur), installateurs NSIS + MSI (MSVC), crosstalk-audio-probe,
-# crosstalk-asr-bench et crosstalk-translate. Résultat : dist-local\<commit>\ avec les exécutables,
+# et crosstalk-asr-bench. Résultat : dist-local\<commit>\ avec les exécutables,
 # SHA256SUMS.txt et validation.md, le rapport à coller dans la Pull Request.
 # S'arrête à la première étape en échec. Ne mesure ni Whisper en partie, ni CS2,
 # ni les FPS : ces tests restent manuels (docs/testing/).
@@ -128,8 +128,8 @@ Step 'Installateur : rustfmt, clippy, tests' "$root\src-installer" {
 if (-not $SkipBundle) {
     Step 'Installateurs NSIS + MSI (MSVC)' $root { npx tauri build --target $target }
 }
-Step 'audio_probe + asr_bench + translate (release, MSVC)' "$root\src-tauri" {
-    cargo build --release --locked --example audio_probe --example asr_bench --example translate --target $target
+Step 'audio_probe + asr_bench (release, MSVC)' "$root\src-tauri" {
+    cargo build --release --locked --example audio_probe --example asr_bench --target $target
 }
 
 # --- Paquet de test ---------------------------------------------------------
@@ -137,7 +137,6 @@ $rel = "src-tauri\target\$target\release"
 New-Item -ItemType Directory -Force -Path $dest | Out-Null
 Copy-Item "$rel\examples\audio_probe.exe" "$dest\crosstalk-audio-probe.exe"
 Copy-Item "$rel\examples\asr_bench.exe" "$dest\crosstalk-asr-bench.exe"
-Copy-Item "$rel\examples\translate.exe" "$dest\crosstalk-translate.exe"
 Copy-Item scripts\download-models.ps1, scripts\fetch-asr-corpus.py $dest
 if (-not $SkipBundle) {
     Copy-Item "$rel\crosstalk.exe" $dest
