@@ -410,3 +410,23 @@ fn credential_manager_round_trip() {
     store.clear().expect("clearing twice is not an error");
     assert_ne!(CredentialStore::TARGET, store.target);
 }
+
+/// Every launch sends the unchanged (default) settings: this used to keep the
+/// settings lock while reading the status, a deadlock on the main thread
+/// ("Crosstalk ne répond pas" at start-up).
+#[test]
+fn configuring_the_same_settings_twice_does_not_deadlock() {
+    let (tx, rx) = std::sync::mpsc::channel();
+    std::thread::spawn(move || {
+        let c = LlmClient::new(Arc::new(MemoryKeyStore::default()), Box::new(UreqTransport));
+        c.configure(LlmConfig::default());
+        c.configure(LlmConfig::default());
+        let st = c.configure(openai());
+        c.configure(openai());
+        let _ = tx.send(st.config.model);
+    });
+    let model = rx
+        .recv_timeout(Duration::from_secs(5))
+        .expect("configure() deadlocked when the settings did not change");
+    assert_eq!(model, "gpt-4o-mini");
+}
