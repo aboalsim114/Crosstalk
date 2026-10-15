@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Crosstalk — Showcase</title>
+    <link rel="icon" href="data:," />
+    <style>
+      html, body { margin: 0; background: #000; overflow: hidden; }
+      #stage { position: relative; width: 1920px; height: 1080px; overflow: hidden; background: #020203; transform-origin: 0 0; }
+      #gl, #dom, #grain, #vignette, #fade { position: absolute; inset: 0; width: 1920px; height: 1080px; }
+      #dom { pointer-events: none; color: #ece6dc; -webkit-font-smoothing: antialiased; text-rendering: geometricPrecision; }
+      #dom .layer { position: absolute; inset: 0; }
+      #vignette { background: radial-gradient(ellipse 75% 75% at 50% 48%, transparent 55%, rgba(0,0,0,.55) 100%); pointer-events: none; }
+      #grain { opacity: .045; mix-blend-mode: screen; pointer-events: none; }
+      #fade { background: #000; pointer-events: none; }
+    </style>
+  </head>
+  <body>
+    <div id="stage">
+      <canvas id="gl" width="1920" height="1080"></canvas>
+      <div id="dom"></div>
+      <div id="vignette"></div>
+      <canvas id="grain" width="960" height="540"></canvas>
+      <div id="fade"></div>
+    </div>
+    <script>
+      // Fit the 1920×1080 stage in the browser window when previewing.
+      const fit = () => {
+        const s = Math.min(innerWidth / 1920, innerHeight / 1080);
+        document.getElementById('stage').style.transform = s < 1 ? `scale(${s})` : '';
+      };
+      if (!new URLSearchParams(location.search).has('render')) { addEventListener('resize', fit); fit(); }
+    </script>
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>

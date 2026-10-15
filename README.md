@@ -1,6 +1,8 @@
 <div align="center">
 
-<img src="docs/assets/crosstalk-readme-cover.svg" alt="Crosstalk — Comprenez le call. Restez dans le jeu." width="100%" />
+<a href="https://cdn.jsdelivr.net/gh/aboalsim114/Crosstalk@media/showcase/crosstalk-showcase.mp4" title="Regarder la vidéo de présentation (50 s)"><img src="docs/assets/crosstalk-showcase-cover.jpg" alt="Crosstalk — Comprenez le call. Restez dans le jeu. Cliquez pour voir la vidéo de présentation (50 s)." width="100%" /></a>
+
+<sub>▶ <a href="https://cdn.jsdelivr.net/gh/aboalsim114/Crosstalk@media/showcase/crosstalk-showcase.mp4"><b>Voir la vidéo de présentation</b></a> · 50 s · 1080p · avec le son · <a href="https://github.com/aboalsim114/Crosstalk/raw/media/showcase/crosstalk-showcase.mp4">télécharger le MP4</a></sub>
 
 <br />
 
@@ -25,6 +27,8 @@ Une application Windows pensée pour rendre les annonces vocales de **Counter-St
 Une annonce en russe. Un *callout* en anglais. Une information décisive que vous n'avez pas comprise.
 
 **Crosstalk transforme la parole détectée dans l'audio de CS2 en sous-titres français**, affichés dans un overlay discret. L'objectif : réduire la barrière de la langue, préserver votre attention et vous laisser jouer.
+
+<p align="center"><a href="https://cdn.jsdelivr.net/gh/aboalsim114/Crosstalk@media/showcase/crosstalk-showcase.mp4"><img src="https://github.com/aboalsim114/Crosstalk/raw/media/showcase/crosstalk-showcase.gif" alt="Une annonce russe traduite dans l'overlay de Crosstalk : ligne provisoire, traduction finale, puis un message de chat anglais traduit." width="720" /></a></p>
 
 <table>
 <tr>
