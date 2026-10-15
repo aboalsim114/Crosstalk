@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { chat, diagnostics, getShortcutStatus, type LogLine, type ShortcutStatus } from '../../shared/ipc';
+import { chat, diagnostics, getShortcutStatus, type LogLine, type PulseView, type ShortcutStatus } from '../../shared/ipc';
 import { config } from '../../app/config';
 import { fnt } from '../../shared/ui/atoms';
 import { useAudio, type AudioState } from '../audio/audio';
@@ -64,6 +64,14 @@ export function nativeLog(chat: ChatStatus | null, lines: [string, string][]): [
   return out;
 }
 
+/** "Voix → texte" row: the stage that stops during this capture, else the last 30 s summary. */
+export function pulseDiag(p: PulseView | null): [string, DiagState] {
+  if (!p || (!p.capturing && !p.summary)) return ['Démarrez une session : bilan toutes les 30 s (son, VAD, Whisper, traduction)', 'AVERT.'];
+  const last = p.alerts[p.alerts.length - 1];
+  if (last) return [last, 'ÉCHEC'];
+  return [p.summary ?? 'Capture en cours : premier bilan dans 30 s', 'OK'];
+}
+
 /** Journal lines as shown on screen (local time). */
 export function journalRows(lines: LogLine[]): [string, string, string][] {
   return lines.map((l) => [new Date(l.ts).toLocaleTimeString('fr-FR'), l.level, `${l.source}: ${l.message}`]);
@@ -81,6 +89,7 @@ export function DiagPage() {
   }, [s.diag]);
   const keysFailed = keys?.filter((k) => !k.registered) ?? [];
   const [journal, setJournal] = useState<LogLine[]>([]);
+  const [pulse, setPulse] = useState<PulseView | null>(null);
   const [exported, setExported] = useState<string | null>(null);
   const audio = useAudio();
   const [captureDetail, captureState] = audio.native
@@ -110,6 +119,7 @@ export function DiagPage() {
     ...chatRows,
     ['Process loopback', captureDetail, captureState],
     asrRow,
+    ...(sp.native ? [['Voix → texte', ...pulseDiag(pulse)] as [string, string, DiagState]] : []),
     trRow,
     keysFailed.length
       ? ['Raccourcis globaux', `${keysFailed.map((k) => k.keys).join(', ')} déjà utilisé par une autre application`, 'AVERT.']
@@ -128,7 +138,10 @@ export function DiagPage() {
   ];
   useEffect(() => {
     if (!sp.native) return;
-    const load = () => diagnostics.recent(80).then(setJournal);
+    const load = () => {
+      diagnostics.recent(80).then(setJournal);
+      diagnostics.pulse().then(setPulse);
+    };
     load();
     const t = setInterval(load, 2000);
     return () => clearInterval(t);

@@ -54,6 +54,28 @@ Les WAV enregistrés avec `crosstalk-audio-probe.exe --wav` conviennent directem
 | 2.10 | Gestionnaire des tâches pendant une partie | Notez le CPU de `crosstalk.exe` et les FPS de CS2 avec et sans Crosstalk. |
 | 2.11 | Écran **Diagnostic** | La ligne « Modèle whisper-… » montre l'état réel du moteur. |
 
+## 2 bis. Bilan de la chaîne dans le journal (issue #103)
+
+Pendant une capture, Crosstalk écrit une ligne `pipeline` dans le journal toutes les 30 s (Diagnostic › Journal, ou `%LOCALAPPDATA%\Crosstalk\logs\crosstalk-<date>.log`). Cette ligne ne contient que des compteurs et des niveaux, jamais le texte ni le son :
+
+```
+30 s de capture : son moyen -34 dBFS, crête -8 dBFS · VAD : 6 segment(s), écartés avant Whisper : 2 (tir/explosion 2) · Whisper : 3 gardée(s), rejetées : 1 (hallucination 1) · traduction : 3 ok, 0 laissée(s) telle(s) quelle(s), 0 erreur(s)
+```
+
+Quand une étape ne produit plus rien, un avertissement `WARN pipeline:` la nomme, une seule fois par capture. La ligne **Voix → texte** de l'écran Diagnostic affiche le même message.
+
+| Avertissement | Étape en cause |
+| --- | --- |
+| `aucun bloc audio reçu de CS2` | Capture : le flux de `cs2.exe` est interrompu. |
+| `capture silencieuse` | Capture : CS2 n'envoie que du silence (mauvaise sortie, son coupé). |
+| `du son arrive de CS2 … aucune parole` | VAD : du son arrive depuis 2 min sans aucun segment (seuil trop haut, ou voix absentes du son capturé). |
+| `… tous écartés avant Whisper` | Découpage : tirs, segments trop courts, file pleine. |
+| `… envoyés à Whisper, aucune transcription gardée` | Whisper : chaque phrase est rejetée (raisons indiquées), ou Whisper ne rend rien. |
+| `bloc(s) audio perdus` | La reconnaissance ne suit pas le flux (processeur trop chargé). |
+| `traduction impossible : …` / `aucune ligne traduite` | Traduction : erreur du LLM. |
+
+Joignez ces lignes au rapport (Diagnostic › Exporter).
+
 ## 3. Résultats à remonter
 
 ```

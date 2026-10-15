@@ -15,6 +15,7 @@ chat_start
 chat_status
 chat_stop
 cs2_status
+diag_pulse
 diag_report
 diag_report_issue
 dictation_state

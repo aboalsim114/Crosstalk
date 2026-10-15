@@ -7,6 +7,7 @@
 //! - `speech`    Silero VAD + whisper.cpp transcription of the captured voices
 //! - `translation` translation into the user's language by the LLM the user
 //!   connects: a cloud provider with their own key, or Ollama / LM Studio on this PC
+//! - `pulse`     every 30 s of capture: sound, VAD segments, Whisper and translation counters in the journal
 //! - `chat`      CS2 text chat read from console.log
 //! - `game`      CS2 process detection (names and PIDs only, the game is never opened)
 //! - `tray`      notification-area icon; the app keeps running when the window is closed
@@ -31,6 +32,7 @@ mod history;
 mod logs;
 mod overlay;
 pub mod paths;
+mod pulse;
 mod recap;
 mod reply;
 mod settings;
@@ -128,6 +130,7 @@ pub fn run() {
             logs::logs_write,
             logs::logs_open_folder,
             logs::diag_report,
+            pulse::diag_pulse,
             logs::diag_report_issue,
             gsi::gsi_status,
             gsi::gsi_install,
@@ -175,6 +178,7 @@ pub fn run() {
                 ),
             );
             logs::watch(handle);
+            app.manage(pulse::watch(handle));
 
             app.manage(downloads::Downloader::new(
                 Arc::new(downloads::HttpFetcher),
