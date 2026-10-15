@@ -5,7 +5,7 @@ import { useApp, VOICE_DEFAULTS } from '../../app/state/store';
 import { restore, snapshot } from '../../app/state/persist';
 import { dictationView } from '../reply/DictationPanel';
 import { VoiceCard } from './VoiceCard';
-import { chosenVoice, downloadPercent, toDownload, useVoice, voiceSummary, voicesOf } from './voice';
+import { chosenVoice, downloadPercent, pttView, toDownload, useVoice, validPttKey, voiceSummary, voicesOf } from './voice';
 
 // Simulated Rust states: no audio device, no Piper process in these tests.
 const VOICES = [
@@ -23,6 +23,7 @@ const status = (p: Partial<VoiceStatus> = {}): VoiceStatus => ({
   speaking: false,
   error: null,
   download: { state: 'idle', current: null, doneBytes: 0, totalBytes: 0, missingFiles: 0, missingBytes: 0, error: null },
+  ptt: { phase: 'idle', detail: null, pressed: false },
   ...p,
 });
 
@@ -61,11 +62,30 @@ describe('AI voice helpers', () => {
 
   it('is off by default, saved with the settings and checked on restore', () => {
     expect(app0.voice.enabled).toBe(false);
-    const v = { enabled: true, mic: 'mic-1', voices: { ru: 'ru_RU-dmitri-medium' }, monitor: false, volume: 120, micVolume: 80 };
+    const v = { enabled: true, mic: 'mic-1', voices: { ru: 'ru_RU-dmitri-medium' }, monitor: false, volume: 120, micVolume: 80, autoPtt: true, pttKey: 'V', pttLeadMs: 300, pttTailMs: 500 };
     const snap = snapshot({ ...app0, voice: v }, null);
     expect(restore(JSON.parse(JSON.stringify(snap.config)), app0).app.voice).toEqual(v);
     const bad = restore({ version: 1, settings: { voice: { enabled: 'yes', mic: 4, voices: { russian: 'x', ru: 7 }, volume: 900 } } }, app0).app.voice;
     expect(bad).toEqual(VOICE_DEFAULTS);
+    // Automatic push-to-talk: off and K by default; settings of earlier versions get them.
+    expect(VOICE_DEFAULTS).toMatchObject({ autoPtt: false, pttKey: 'K' });
+    const old = restore({ version: 1, settings: { voice: { enabled: true, volume: 90 } } }, app0).app.voice;
+    expect(old).toMatchObject({ enabled: true, autoPtt: false, pttKey: 'K', pttLeadMs: 250, pttTailMs: 350 });
+    const evil = restore({ version: 1, settings: { voice: { autoPtt: 'yes', pttKey: 'K; rm', pttLeadMs: 5, pttTailMs: 99999 } } }, app0).app.voice;
+    expect(evil).toMatchObject({ autoPtt: false, pttKey: 'K', pttLeadMs: 250, pttTailMs: 350 });
+  });
+
+  it('accepts the same key names as the Rust side and describes each step', () => {
+    for (const k of ['K', 'v', '4', 'F5', 'f12', 'CapsLock', 'LAlt', 'Mouse4', 'Space']) expect(validPttKey(k)).toBe(true);
+    for (const k of ['', 'KK', 'F13', 'Échap', 'Mouse9']) expect(validPttKey(k)).toBe(false);
+    expect(pttView(null).step).toBe(-1);
+    expect(pttView({ phase: 'preparing', detail: null, pressed: false }).step).toBe(0);
+    expect(pttView({ phase: 'held', detail: null, pressed: true }).step).toBe(1);
+    expect(pttView({ phase: 'playing', detail: null, pressed: true })).toMatchObject({ step: 2, busy: true });
+    expect(pttView({ phase: 'done', detail: null, pressed: true })).toMatchObject({ step: 3, text: 'Phrase transmise, touche relâchée.', busy: false });
+    expect(pttView({ phase: 'done', detail: 'CS2 n’est pas au premier plan : touche non appuyée', pressed: false }).text).toContain('premier plan');
+    expect(pttView({ phase: 'error', detail: 'CS2 n’est plus au premier plan', pressed: true })).toMatchObject({ step: -1, color: '#ff8a7a' });
+    expect(pttView({ phase: 'cancelled', detail: null, pressed: true }).text).toBe('Transmission annulée, touche relâchée.');
   });
 
   it('tells when a dictated reply was said in the game', () => {
@@ -116,6 +136,38 @@ describe('AI voice card', () => {
     await act(async () => fireEvent.click(screen.getAllByText('Dire en jeu')[1]));
     expect(say).toHaveBeenCalledWith('Двое на B, осторожно, флешка.', 'ru');
     await waitFor(() => expect(screen.getByTestId('voice-state')).toHaveTextContent('Dite en jeu (2,1 s)'));
+  });
+
+  it('turns on automatic push-to-talk, checks the key, shows the steps, tests and cancels', async () => {
+    const cable = { id: 'c', name: 'CABLE Input (VB-Audio Virtual Cable)', isDefault: false };
+    const ready = status({ cable, routing: true, engineReady: true, voices: VOICES.map((v) => ({ ...v, installed: true })) });
+    useVoice.setState({ native: true, status: ready });
+    useApp.setState({ voice: { ...VOICE_DEFAULTS, enabled: true } });
+    vi.spyOn(voice, 'status').mockResolvedValue(ready);
+    const test = vi.spyOn(voice, 'pttTest').mockResolvedValue(2100);
+    const cancel = vi.spyOn(voice, 'cancel').mockResolvedValue();
+    render(<VoiceCard />);
+    expect(screen.queryByLabelText('Touche vocale')).toBeNull();
+    fireEvent.click(screen.getByRole('switch', { name: 'Appuyer automatiquement pour parler dans CS2' }));
+    expect(useApp.getState().voice.autoPtt).toBe(true);
+    const key = screen.getByLabelText('Touche vocale');
+    expect(key).toHaveValue('K');
+    expect(screen.getByTestId('voice-ptt')).toHaveTextContent('CS2 au premier plan');
+    fireEvent.change(key, { target: { value: 'Échap' } });
+    expect(screen.getByRole('alert')).toHaveTextContent('Touche non reconnue');
+    fireEvent.change(key, { target: { value: 'V' } });
+    expect(useApp.getState().voice.pttKey).toBe('V');
+    expect(screen.queryByRole('alert')).toBeNull();
+    act(() => useVoice.setState({ ptt: { phase: 'held', detail: null, pressed: true } }));
+    expect(screen.getByText('Activation micro')).toHaveAttribute('data-active', 'true');
+    act(() => useVoice.setState({ ptt: { phase: 'playing', detail: null, pressed: true } }));
+    expect(screen.getByText('Transmission')).toHaveAttribute('data-active', 'true');
+    await act(async () => fireEvent.click(screen.getByText('Tester dans 5 s')));
+    expect(test).toHaveBeenCalledWith('en', 5);
+    fireEvent.click(screen.getByText('Annuler la transmission'));
+    expect(cancel).toHaveBeenCalled();
+    act(() => useVoice.setState({ ptt: { phase: 'error', detail: 'CS2 n’est plus au premier plan : touche relâchée, phrase interrompue.', pressed: true } }));
+    expect(screen.getByTestId('voice-ptt-state')).toHaveTextContent('Erreur : CS2 n’est plus au premier plan');
   });
 
   it('shows why the voice could not speak', async () => {

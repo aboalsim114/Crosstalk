@@ -3,7 +3,7 @@ import { voice } from '../../shared/ipc';
 import { Slider, ToggleRow, fnt } from '../../shared/ui/atoms';
 import { useApp } from '../../app/state/store';
 import { targetName, useReplyLanguages } from '../reply/ReplyBox';
-import { chosenVoice, downloadPercent, megabytes, refreshVoice, toDownload, useVoice, voiceSummary, voicesOf } from './voice';
+import { chosenVoice, downloadPercent, megabytes, PTT_STEPS, pttView, refreshVoice, toDownload, useVoice, validPttKey, voiceSummary, voicesOf } from './voice';
 
 const label = { font: fnt(500, 11), color: '#bdb6ab' };
 const hint = { font: fnt(400, 10.5, 'sans', 1.5), color: '#6e6961' };
@@ -32,7 +32,7 @@ function Pill({ children, onClick, disabled, ember }: { children: ReactNode; onC
 export function VoiceCard() {
   const opts = useApp((s) => s.voice);
   const set = useApp((s) => s.set);
-  const { native, status: st, download, spoken } = useVoice();
+  const { native, status: st, download, spoken, ptt } = useVoice();
   const { targets } = useReplyLanguages();
   const [busy, setBusy] = useState<string | null>(null);
   const [note, setNote] = useState<{ text: string; error?: boolean } | null>(null);
@@ -63,6 +63,14 @@ export function VoiceCard() {
       const ms = await voice.say(SAMPLE[lang] ?? SAMPLE.en, lang);
       return `Dite en jeu (${(ms / 1000).toFixed(1).replace('.', ',')} s). Vos coéquipiers l’entendent si CS2 écoute « CABLE Output ».`;
     });
+  const testPtt = () =>
+    run('ptt-test', async () => {
+      const lang = langs[0] ?? 'en';
+      const ms = await voice.pttTest(lang, 5);
+      return `Test terminé (${(ms / 1000).toFixed(1).replace('.', ',')} s de voix).`;
+    });
+  const keyOk = validPttKey(opts.pttKey);
+  const pv = pttView(ptt ?? st?.ptt ?? null);
   const preview = (id: string) => run(`preview-${id}`, async () => (await voice.preview(id), 'Écoute dans votre casque.'));
 
   return (
@@ -72,8 +80,8 @@ export function VoiceCard() {
         <span style={{ font: fnt(500, 9.5, 'mono'), letterSpacing: '.12em', color: '#6e6961' }}>PIPER · SUR CE PC · GRATUIT</span>
       </div>
       <span style={body}>
-        Ctrl+Alt+F6, dites votre phrase dans votre langue : Crosstalk la traduit et une voix IA la dit dans le vocal de CS2, dans la langue de vos coéquipiers. Tout se passe sur votre PC, sans compte ni clé. Rien n’est appuyé dans le jeu à votre
-        place.
+        Ctrl+Alt+F6, dites votre phrase dans votre langue : Crosstalk la traduit et une voix IA la dit dans le vocal de CS2, dans la langue de vos coéquipiers. La voix est produite sur votre PC, sans compte ni clé. En appui pour parler, Crosstalk peut maintenir votre touche vocale pendant la
+        phrase (option ci-dessous, désactivée par défaut).
       </span>
       <ToggleRow title="Dire mes réponses en jeu avec une voix IA" sub="Désactivé par défaut" on={opts.enabled} onClick={() => setOpts({ enabled: !opts.enabled })} />
 
@@ -164,10 +172,84 @@ export function VoiceCard() {
 
       <Step n={4} title="Dans Windows (une fois)">
         <span style={body}>
-          Paramètres › Système › Son › Entrée : choisissez <b style={{ color: '#ece6dc', fontWeight: 500 }}>CABLE Output (VB-Audio Virtual Cable)</b> comme micro par défaut. CS2 écoute alors le câble : votre voix et la voix IA. En appui pour parler,
-          gardez votre touche vocale enfoncée pendant que la voix IA parle ; en micro ouvert, c’est automatique.
+          Paramètres › Système › Son › Entrée : choisissez <b style={{ color: '#ece6dc', fontWeight: 500 }}>CABLE Output (VB-Audio Virtual Cable)</b> comme micro par défaut. CS2 écoute alors le câble : votre voix et la voix IA. En micro ouvert, c’est
+          automatique ; en appui pour parler, gardez votre touche enfoncée, ou activez l’appui automatique ci-dessous.
         </span>
       </Step>
+
+      <div className="flex flex-col gap-2.5 rounded-xl px-3.5 py-3" style={{ border: '1px solid rgba(255,255,255,.07)', background: 'rgba(255,255,255,.015)' }} data-testid="voice-ptt">
+        <ToggleRow
+          title="Appuyer automatiquement pour parler dans CS2"
+          sub="Désactivé par défaut · seulement quand CS2 est au premier plan"
+          on={opts.autoPtt}
+          onClick={() => setOpts({ autoPtt: !opts.autoPtt })}
+        />
+        {opts.autoPtt && (
+          <>
+            <div className="flex items-center gap-2">
+              <span style={label}>Touche vocale de CS2</span>
+              <input
+                className="text-input w-[96px] text-center"
+                aria-label="Touche vocale"
+                value={opts.pttKey}
+                maxLength={8}
+                spellCheck={false}
+                onChange={(e) => setOpts({ pttKey: e.target.value.trim().slice(0, 8) })}
+                style={{ borderColor: keyOk ? undefined : 'rgba(255,138,122,.6)' }}
+              />
+              <span style={hint}>K, V, F5, CapsLock, LAlt, Mouse4…</span>
+            </div>
+            {!keyOk && (
+              <span role="alert" style={{ font: fnt(400, 11), color: '#ff8a7a' }}>
+                Touche non reconnue : tapez une lettre, un chiffre, F1–F12, Space, CapsLock, Shift, Ctrl, Alt ou Mouse3–5.
+              </span>
+            )}
+            <span style={hint}>
+              Même touche que dans CS2 : Paramètres › Audio › « Utiliser le micro » / Touches › Communication › « Parler ». Conditions : CS2 au premier plan, « CABLE Output » choisi comme micro (étape 4), et cette touche identique à votre
+              bind.
+            </span>
+            <div className="grid gap-3" style={{ gridTemplateColumns: '1fr 1fr' }}>
+              <Slider label="Avant la phrase" unit=" ms" min={50} max={1000} value={opts.pttLeadMs} onChange={(v) => setOpts({ pttLeadMs: v })} />
+              <Slider label="Après la phrase" unit=" ms" min={100} max={1500} value={opts.pttTailMs} onChange={(v) => setOpts({ pttTailMs: v })} />
+            </div>
+            <div className="flex items-center gap-1.5" data-testid="voice-ptt-steps">
+              {PTT_STEPS.map(([name], i) => {
+                const on = pv.step === i;
+                const past = pv.step > i;
+                return (
+                  <span
+                    key={name}
+                    className="rounded-full px-2.5 py-[3px]"
+                    data-active={on}
+                    style={{
+                      font: fnt(500, 10.5),
+                      color: on ? '#120f0c' : past ? '#7fe0a8' : '#6e6961',
+                      background: on ? '#ffa24a' : 'transparent',
+                      border: `1px solid ${on ? '#ffa24a' : past ? 'rgba(127,224,168,.35)' : 'rgba(255,255,255,.08)'}`,
+                    }}
+                  >
+                    {name}
+                  </span>
+                );
+              })}
+            </div>
+            {pv.text && (
+              <span style={{ font: fnt(400, 11, 'sans', 1.5), color: pv.color }} data-testid="voice-ptt-state">
+                {pv.text}
+              </span>
+            )}
+            <div className="flex items-center gap-2">
+              <Pill ember onClick={testPtt} disabled={!native || !st?.routing || !keyOk || busy === 'ptt-test'}>
+                Tester dans 5 s
+              </Pill>
+              <Pill onClick={() => void voice.cancel()} disabled={!native}>
+                Annuler la transmission
+              </Pill>
+              <span style={hint}>Lancez le test, passez sur CS2 : la phrase d’essai part touche enfoncée.</span>
+            </div>
+          </>
+        )}
+      </div>
 
       <div className="grid gap-3" style={{ gridTemplateColumns: '1fr 1fr' }}>
         <Slider label="Volume de la voix IA" unit="%" min={0} max={150} value={opts.volume} onChange={(v) => setOpts({ volume: v })} />
