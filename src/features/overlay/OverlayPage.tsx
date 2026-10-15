@@ -4,6 +4,7 @@ import { channelName, langName, quote, t, useT, type MessageKey, targetName } fr
 import { SAMPLE_OVERLAY, type OverlayLine } from '../../app/state/data';
 import { useApp, type AppState, type Corner, type OverlayFormat } from '../../app/state/store';
 import { StreamCard } from '../stream/StreamCard';
+import { RadarCard } from '../radar/RadarCard';
 
 const FORMATS: OverlayFormat[] = ['minimal', 'bilingue', 'accessible'];
 export const CORNERS: [Corner, MessageKey][] = [
@@ -179,6 +180,7 @@ export function OverlayPage() {
           </div>
         </div>
       </div>
+      <RadarCard />
       {isTauri && <StreamCard />}
     </div>
   );

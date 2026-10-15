@@ -9,13 +9,14 @@ import { isTargetLang } from '../../features/languages/langs';
 import { useAudio } from '../../features/audio/audio';
 import type { GlossEntry, ModelId } from './data';
 import { useApp, type AppState } from './store';
+import { HOLD_RANGE } from '../../features/radar/radar';
 
 export const SETTINGS_VERSION = 1;
 const LOCAL_KEY = 'crosstalk.settings';
 
 type Persisted = Pick<
   AppState,
-  'mode' | 'fmt' | 'corner' | 'opacity' | 'textSize' | 'duration' | 'maxBlocks' | 'overlayOn' | 'tg' | 'chatPath' | 'ownName' | 'capture' | 'vad' | 'model' | 'accel' | 'src' | 'stream' | 'speaker' | 'llm' | 'voiceFocus' | 'uiLang' | 'target' | 'langSetupDone'
+  'mode' | 'fmt' | 'corner' | 'opacity' | 'textSize' | 'duration' | 'maxBlocks' | 'overlayOn' | 'tg' | 'chatPath' | 'ownName' | 'capture' | 'vad' | 'model' | 'accel' | 'src' | 'stream' | 'speaker' | 'llm' | 'voiceFocus' | 'radar' | 'uiLang' | 'target' | 'langSetupDone'
 >;
 
 const oneOf =
@@ -47,6 +48,7 @@ const CHECKS: { [K in keyof Persisted]: (v: unknown) => boolean } = {
   speaker: (v) => typeof v === 'object' && v !== null,
   llm: (v) => typeof v === 'object' && v !== null,
   voiceFocus: isBool,
+  radar: (v) => typeof v === 'object' && v !== null,
   uiLang: isUiLang,
   target: isTargetLang,
   langSetupDone: isBool,
@@ -86,6 +88,9 @@ export function restore(raw: unknown, defaults: AppState): { app: Partial<AppSta
       app.stream = merged as unknown as AppState['stream'];
     } else if (k === 'speaker') {
       app.speaker = restoreSpeaker(v as Record<string, unknown>, defaults.speaker);
+    } else if (k === 'radar') {
+      const r = v as Record<string, unknown>;
+      app.radar = { on: isBool(r.on) ? r.on : defaults.radar.on, hold: inRange(...HOLD_RANGE)(r.hold) ? r.hold : defaults.radar.hold };
     } else if (k === 'llm') {
       app.llm = restoreLlm(v as Record<string, unknown>, defaults.llm);
     } else if (k === 'accel') {
