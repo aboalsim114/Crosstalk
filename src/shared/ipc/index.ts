@@ -28,3 +28,4 @@ export * from './speaker';
 export * from './tray';
 export * from './recap';
 export * from './dictation';
+export * from './voice';
