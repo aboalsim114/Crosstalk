@@ -6,9 +6,9 @@ Ce que contient ce dossier
 - crosstalk.exe              l'application (version portable, sans installateur)
 - crosstalk-asr-bench.exe    banc d'essai : test en direct sur CS2, mesures
 - crosstalk-audio-probe.exe  diagnostic de la capture audio (déjà validé)
-- crosstalk-translate.exe    test de la traduction locale en ligne de commande
-- download-models.ps1        installe Whisper, la VAD Silero et (option
-                             -Translation) les modèles de traduction Opus-MT
+- download-models.ps1        installe Whisper et la VAD Silero (la traduction
+                             n'utilise aucun modèle téléchargé : c'est le LLM
+                             connecté dans Audio & IA > Traduction IA)
 - fetch-asr-corpus.py        corpus de référence FLEURS (facultatif)
 - WebView2Loader.dll, libstdc++-6.dll, libgcc_s_seh-1.dll, libwinpthread-1.dll
                              DLL nécessaires : gardez-les à côté des .exe
@@ -24,18 +24,21 @@ IMPORTANT, à lire avant de tester
    (« Informations complémentaires » > « Exécuter quand même »).
 3. Fermez la version installée de Crosstalk (icône de la zone de
    notification > Quitter). Sinon, l'instance unique ouvre l'ancienne.
-4. Rien n'est enregistré ni envoyé : audio en mémoire, transcription et
-   traduction locales. Aucune clé API, aucun abonnement.
+4. Rien n'est enregistré : audio en mémoire, transcription sur ce PC.
+   La traduction passe par le LLM que vous connectez (Audio & IA >
+   Traduction IA) : Ollama ou LM Studio sur ce PC (rien ne sort), ou un
+   fournisseur en ligne avec votre clé (seul le texte des phrases est
+   envoyé, jamais l'audio ni les pseudos). Sans moteur connecté, les
+   phrases restent dans leur langue d'origine.
 
-1. Installer les modèles (Whisper base + VAD + traduction : environ 770 Mo)
---------------------------------------------------------------------------
+1. Installer les modèles (Whisper base + VAD : environ 150 Mo)
+--------------------------------------------------------------
 PowerShell, dans ce dossier :
 
-    powershell -ExecutionPolicy Bypass -File .\download-models.ps1 -Models base -Translation
+    powershell -ExecutionPolicy Bypass -File .\download-models.ps1 -Models base
 
-Test rapide de la traduction (CS2 fermé) :
-
-    .\crosstalk-translate.exe --lang ru "Двое идут на B, у них AWP."
+Test rapide de la traduction (CS2 fermé) : crosstalk.exe > Audio & IA >
+Traduction IA > « Tester une traduction », après avoir connecté un moteur.
 
 Les fichiers vont dans %LOCALAPPDATA%\Crosstalk\models. Le script vérifie la
 taille exacte et le SHA-1 officiel, puis affiche le SHA-256 : notez celui de

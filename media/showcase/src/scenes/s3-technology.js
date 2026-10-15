@@ -1,5 +1,5 @@
 // 3 · THE TECHNOLOGY (12–22 s): a tracking shot through the real pipeline of the app.
-// Capture (WASAPI, cs2.exe) → Silero VAD → whisper.cpp → Opus-MT → overlay.
+// Capture (WASAPI, cs2.exe) → Silero VAD → whisper.cpp → LLM (cloud ou local) → overlay.
 // The particle signal travels with the camera and changes shape at each station:
 // waveform → speech isolated → Russian characters → French sentence → overlay block.
 import * as THREE from 'three';
@@ -22,7 +22,7 @@ const STATIONS = [
   { num: '01', title: 'Capture audio', sub: 'WASAPI · SON DE CS2.EXE UNIQUEMENT', stage: ['Capture', 'cs2.exe'] },
   { num: '02', title: 'Détection vocale', sub: 'SILERO VAD · REPÈRE LA PAROLE', stage: ['VAD', 'silero'] },
   { num: '03', title: 'Transcription', sub: 'WHISPER.CPP · CARTE GRAPHIQUE OU PROCESSEUR', stage: ['Transcription', 'whisper.cpp'] },
-  { num: '04', title: 'Traduction', sub: 'OPUS-MT · SUR VOTRE PC', stage: ['Traduction', 'opus-mt → fr'] },
+  { num: '04', title: 'Traduction', sub: 'LLM · CLOUD OU LOCAL', stage: ['Traduction', 'LLM → fr'] },
   { num: '05', title: 'Sous-titres', sub: "L'OVERLAY, PAR-DESSUS LE JEU", stage: ['Overlay', 'bilingue'] },
 ];
 
