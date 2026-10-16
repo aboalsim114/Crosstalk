@@ -180,6 +180,7 @@ export const zhCN: Messages = {
   'eng.loaded': '{backend} · {threads} 线程 · 加载用时 {ms}',
   'eng.threads': '{backend} · {threads} 线程',
   'eng.loading': '正在加载…',
+  'eng.fallback': 'whisper {from} 在比赛中太慢：在停止捕获前使用 base',
   'eng.error': '错误',
   'eng.unavailable': '引擎不可用',
   'eng.noVad': '缺少 VAD',

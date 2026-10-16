@@ -59,7 +59,7 @@ Les WAV enregistrés avec `crosstalk-audio-probe.exe --wav` conviennent directem
 Pendant une capture, Crosstalk écrit une ligne `pipeline` dans le journal toutes les 30 s (Diagnostic › Journal, ou `%LOCALAPPDATA%\Crosstalk\logs\crosstalk-<date>.log`). Cette ligne ne contient que des compteurs et des niveaux, jamais le texte ni le son :
 
 ```
-30 s de capture : son moyen -34 dBFS, crête -8 dBFS · VAD : 6 segment(s), écartés avant Whisper : 2 (tir/explosion 2) · Whisper : 3 gardée(s), rejetées : 1 (hallucination 1) · traduction : 3 ok, 0 laissée(s) telle(s) quelle(s), 0 erreur(s)
+30 s de capture : son moyen -34 dBFS, crête -8 dBFS · VAD : 6 segment(s), écartés avant Whisper : 2 (tir/explosion 2) · Whisper : 3 gardée(s), rejetées : 1 (hallucination 1), calcul 0,6× la durée de voix · traduction : 3 ok, 0 laissée(s) telle(s) quelle(s), 0 erreur(s)
 ```
 
 Quand une étape ne produit plus rien, un avertissement `WARN pipeline:` la nomme, une seule fois par capture. La ligne **Voix → texte** de l'écran Diagnostic affiche le même message.
@@ -73,6 +73,27 @@ Quand une étape ne produit plus rien, un avertissement `WARN pipeline:` la nomm
 | `… envoyés à Whisper, aucune transcription gardée` | Whisper : chaque phrase est rejetée (raisons indiquées), ou Whisper ne rend rien. |
 | `bloc(s) audio perdus` | La reconnaissance ne suit pas le flux (processeur trop chargé). |
 | `traduction impossible : …` / `aucune ligne traduite` | Traduction : erreur du LLM. |
+
+`calcul N× la durée de voix` : le temps de Whisper rapporté à la durée des phrases transcrites. Au-dessus de 1×, Whisper prend du retard sur les voix.
+
+### Bascule automatique sur whisper-base
+
+Avec CS2 qui occupe le processeur, un modèle lourd (whisper-small ou plus) peut prendre tant de retard que presque tous les segments expirent dans la file : rien n'apparaît à l'écran (issue #103, build 269 : 13 segments sur 17 perdus en « trop tard » ou « file pleine »).
+
+Crosstalk compte les signes de retard pendant la capture :
+- un segment jeté « trop tard » (plus de 6 s d'attente) ;
+- un segment jeté parce que la file est pleine ;
+- un calcul plus long que la phrase transcrite.
+
+À **3 signes en moins d'une minute**, il charge whisper-base et l'utilise jusqu'à l'arrêt de la capture, puis recharge le modèle choisi. Le réglage n'est jamais modifié ; choisir un modèle à la main met fin à la bascule. Le journal l'écrit :
+
+```
+WARN  asr: whisper-small trop lent sur ce PC (2 segment(s) trop tard, 1 file pleine en 1 min) : bascule sur whisper-base jusqu'à l'arrêt de la capture
+INFO  asr: whisper-base (remplace small, trop lent) : ready · CPU · AVX2 · 4 thread(s) · chargé en 900 ms
+INFO  asr: capture arrêtée : retour à whisper-small
+```
+
+Si whisper-base n'est pas installé, aucune bascule : un avertissement demande de l'installer (Audio & IA). La carte du modèle (Audio & IA) affiche « Whisper base » et la raison pendant la bascule.
 
 Joignez ces lignes au rapport (Diagnostic › Exporter).
 

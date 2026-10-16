@@ -180,6 +180,7 @@ export const ru: Messages = {
   'eng.loaded': '{backend} · потоков: {threads} · загружен за {ms}',
   'eng.threads': '{backend} · потоков: {threads}',
   'eng.loading': 'Загрузка…',
+  'eng.fallback': 'whisper {from} слишком медленный во время матча: base используется до остановки захвата',
   'eng.error': 'Ошибка',
   'eng.unavailable': 'Движок недоступен',
   'eng.noVad': 'Нет VAD',

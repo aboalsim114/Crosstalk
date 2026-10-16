@@ -108,6 +108,11 @@ describe('engine and stats summaries', () => {
     expect(engineSummary(null).value).toBe('…');
     expect(engineSummary(status())).toMatchObject({ value: 'Whisper base', color: '#7fe0a8' });
     expect(engineSummary(status()).detail).toBe('CPU · AVX2 · 4 threads · chargé en 420 ms');
+    // Automatic fallback: the model that really runs, and why.
+    expect(engineSummary(status({ config: { ...status().config, model: 'small' }, fallbackFrom: 'small' }))).toMatchObject({
+      value: 'Whisper base',
+      detail: 'whisper small trop lent pendant la partie : base utilisé jusqu’à l’arrêt de la capture',
+    });
     expect(engineSummary(status({ state: 'loading' })).value).toBe('Chargement…');
     expect(engineSummary(status({ state: 'missing' })).value).toBe('Modèle absent');
     expect(engineSummary(status({ state: 'missing', vadReady: false })).detail).toMatch(/silero/);
