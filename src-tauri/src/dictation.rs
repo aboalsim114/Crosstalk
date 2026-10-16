@@ -218,7 +218,12 @@ fn run(app: &AppHandle, d: &Dictation, target: &str) -> DictationState {
     };
     let copied = crate::clipboard::set_text(&r.text).is_ok();
     // AI voice on: the translation is also said in the game.
-    let spoken = crate::voice::speak_reply(app, &r.text, target);
+    // The reply pop-up has the focus: closed first, so that CS2 is in front
+    // when the voice key is pressed.
+    if crate::voice::presses_key(app) {
+        let _ = crate::reply::hide(app);
+    }
+    let spoken = crate::voice::say_reply(app, &r.text, target).is_ok();
     crate::logs::info(
         "dictation",
         &format!("réponse dictée traduite ({}, {})", target, r.via),

@@ -52,6 +52,7 @@ reply_models
 reply_open
 reply_phrase_text
 reply_phrases
+reply_say
 reply_translate
 settings_load
 settings_save
