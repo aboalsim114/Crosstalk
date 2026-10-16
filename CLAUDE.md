@@ -19,6 +19,15 @@ L'application lit ce `latest.json` : la section **À propos** propose alors la m
 
 Le premier échec de `whisper-rs-sys` (« ggml not found ») pendant `scripts/cross-build-windows-gnu.sh` est attendu : le script renomme les bibliothèques ggml et recompile. Si l'espace disque manque, supprimer `src-tauri/target/debug` et les anciens paquets de `dist-test/`.
 
+## Nouveautés pour les joueurs
+
+Chaque PR qui change quelque chose de visible pour les joueurs ajoute une entrée **en tête** de `release-notes.json` :
+- `id` unique (minuscules, chiffres, tirets), `date` AAAA-MM-JJ, `title` court, `items` : 1 à 6 phrases simples ;
+- écrit pour un joueur : ce qu'il gagne et comment s'en servir, sans numéro de PR, commit, nom de fichier, « feat/fix » ni lien GitHub ;
+- pas de `build` : `scripts/publish-dev-build.sh` attribue le build à la première publication.
+
+L'application affiche ces nouveautés avant la mise à jour (À propos, bannière) et une fois après (« Quoi de neuf ? »). `npm run check:release-notes` vérifie le fichier.
+
 ## Règles du dépôt
 
 - Ne jamais modifier `main` directement, ni fusionner sans demande explicite.

@@ -112,6 +112,7 @@ if ($Release) {
 Step 'Dépendances JS (npm ci)' $root { npm ci }
 Step 'Garde anti-triche' $root { npm run check:anticheat }
 Step 'Règles d''architecture' $root { npm run check:architecture }
+Step 'Notes de version' $root { npm run check:release-notes }
 Step 'Typecheck UI' $root { npm run typecheck }
 Step 'Tests UI (Vitest)' $root { npm test }
 Step 'Build UI' $root { npm run build }

@@ -1,0 +1,62 @@
+[
+  {
+    "id": "nouveautes-apres-mise-a-jour",
+    "date": "2026-10-16",
+    "title": "Les nouveautés expliquées à chaque mise à jour",
+    "items": [
+      "Après chaque mise à jour, une fenêtre « Quoi de neuf ? » présente ce qui change, une seule fois.",
+      "Avant d'installer, À propos montre ce que la mise à jour apporte.",
+      "La section Mise à jour est plus simple : la version, les nouveautés et des messages clairs en cas de souci."
+    ]
+  },
+  {
+    "id": "voix-ia-reponses-ecrites",
+    "build": 276,
+    "date": "2026-10-16",
+    "title": "La voix IA dit aussi vos réponses écrites",
+    "items": [
+      "Nouvelle option « Dire aussi mes réponses écrites » : dans la fenêtre Répondre (Ctrl+Alt+F7), Entrée traduit votre message et la voix IA le dit à vos coéquipiers.",
+      "La touche pour parler de CS2 est maintenant bien maintenue pendant la voix IA, y compris après une dictée (Ctrl+Alt+F6).",
+      "Le message traduit reste copié : vous pouvez aussi le coller dans le chat de CS2."
+    ]
+  },
+  {
+    "id": "reconnaissance-plus-legere-en-partie",
+    "build": 272,
+    "date": "2026-10-16",
+    "title": "Des sous-titres qui suivent, même quand le PC est chargé",
+    "items": [
+      "Si votre PC n'arrive plus à suivre pendant une partie, la reconnaissance vocale passe d'elle-même à un modèle plus léger, puis revient à votre choix à la fin de la session.",
+      "Votre réglage n'est jamais modifié : la carte du modèle (Audio & IA) indique quand le modèle plus léger est utilisé."
+    ]
+  },
+  {
+    "id": "diagnostic-voix-texte",
+    "build": 269,
+    "date": "2026-10-16",
+    "title": "Diagnostic plus clair",
+    "items": [
+      "Nouvelle ligne « Voix → texte » dans Diagnostic : elle indique à quelle étape les voix se perdent (son, détection, transcription, traduction)."
+    ]
+  },
+  {
+    "id": "appui-automatique-touche-vocale",
+    "build": 266,
+    "date": "2026-10-15",
+    "title": "Appui automatique sur la touche vocale",
+    "items": [
+      "En appui pour parler, Crosstalk peut maintenir votre touche vocale (K par défaut) pendant que la voix IA parle, uniquement quand CS2 est au premier plan.",
+      "Option désactivée par défaut, avec un test en 5 secondes dans la carte Voix IA."
+    ]
+  },
+  {
+    "id": "traduction-ia-cloud-ou-locale",
+    "build": 262,
+    "date": "2026-10-15",
+    "title": "Traduction par l'IA de votre choix",
+    "items": [
+      "Traduisez avec votre propre clé (OpenAI, Claude, Mistral, Groq…) ou gratuitement sur votre PC avec Ollama ou LM Studio.",
+      "Un seul moteur pour la voix, le chat et vos réponses."
+    ]
+  }
+]

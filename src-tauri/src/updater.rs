@@ -48,8 +48,25 @@ pub struct Manifest {
     pub date: String,
     #[serde(default)]
     pub notes: Vec<String>,
+    /// What's new, written for the players, newest first: shown before the
+    /// update and once after it (release-notes.json).
+    #[serde(default)]
+    pub news: Vec<NewsEntry>,
     pub setup: Asset,
 }
+
+/// One change players can notice, with the build that first shipped it.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct NewsEntry {
+    pub build: u32,
+    pub date: String,
+    pub title: String,
+    pub items: Vec<String>,
+}
+
+const MAX_NEWS: usize = 12;
+const MAX_NEWS_ITEMS: usize = 6;
+const MAX_NEWS_CHARS: usize = 240;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "lowercase")]
@@ -103,7 +120,24 @@ pub fn parse_manifest(bytes: &[u8]) -> Result<Manifest, String> {
     if m.setup.bytes == 0 || m.setup.bytes > 200_000_000 {
         return Err("taille de l'installateur invalide".into());
     }
+    let mut m = m;
+    m.news = clean_news(std::mem::take(&mut m.news));
     Ok(m)
+}
+
+/// Keeps the news short and readable: a bad entry never blocks the update.
+fn clean_news(news: Vec<NewsEntry>) -> Vec<NewsEntry> {
+    let fits = |t: &str| !t.trim().is_empty() && t.chars().count() <= MAX_NEWS_CHARS;
+    news.into_iter()
+        .filter(|n| fits(&n.title) && n.date.len() <= 20)
+        .map(|mut n| {
+            n.items.retain(|i| fits(i));
+            n.items.truncate(MAX_NEWS_ITEMS);
+            n
+        })
+        .filter(|n| !n.items.is_empty())
+        .take(MAX_NEWS)
+        .collect()
 }
 
 pub struct Updater {
@@ -428,6 +462,27 @@ mod tests {
             assert!(std::time::Instant::now() < end, "{:?}", u.status());
             std::thread::sleep(std::time::Duration::from_millis(10));
         }
+    }
+
+    #[test]
+    fn news_for_the_players_is_read_and_kept_short() {
+        let long = "x".repeat(300);
+        let feed = serde_json::to_vec(&serde_json::json!({
+            "build": 280, "version": "0.4.1", "commit": "abc1234", "date": "2026-10-16 00:00 UTC",
+            "news": [
+                {"build": 280, "date": "2026-10-16", "title": "Nouveautés", "items": ["Une phrase.", long, ""]},
+                {"build": 276, "date": "2026-10-16", "title": long, "items": ["Titre trop long : ignoré."]},
+                {"build": 272, "date": "2026-10-16", "title": "Vide", "items": [long]}
+            ],
+            "setup": {"url": SETUP, "sha256": "a".repeat(64), "bytes": 10}
+        }))
+        .unwrap();
+        let m = parse_manifest(&feed).unwrap();
+        assert_eq!(m.news.len(), 1);
+        assert_eq!(m.news[0].items, vec!["Une phrase."]);
+        // Feeds without news (older publishes) still parse.
+        let old = parse_manifest(&manifest(270, b"exe", None)).unwrap();
+        assert!(old.news.is_empty());
     }
 
     #[test]

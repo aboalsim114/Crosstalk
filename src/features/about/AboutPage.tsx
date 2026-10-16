@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react';
 import { FALLBACK_INFO, autostart, getAppInfo, isTauri, updater, type AppInfo } from '../../shared/ipc';
 import { ToggleRow, fnt } from '../../shared/ui/atoms';
 import { LICENSES, NEVERS } from '../../app/state/data';
-import { updateSummary, useUpdate } from '../update/update';
+import { installedNews, upcomingNews, updateSummary, useUpdate, versionLabel } from '../update/update';
+import { NewsList } from '../update/WhatsNew';
 
 /** Windows integration: launch at login (straight to the notification area). */
 function WindowsCard() {
@@ -34,18 +35,26 @@ function WindowsCard() {
 function UpdateCard() {
   const { native, status } = useUpdate();
   const busy = status?.state === 'checking' || status?.state === 'downloading' || status?.state === 'installing';
+  const upcoming = upcomingNews(status);
+  const installed = installedNews(status);
   return (
     <div className="glass flex flex-col gap-2.5 p-6" data-testid="update-card">
       <div className="lbl pb-1">MISES À JOUR</div>
       <span data-testid="update-summary" style={{ font: fnt(400, 13, 'sans', 1.5), color: status?.state === 'error' ? '#ff8a7a' : '#bdb6ab' }}>
         {updateSummary(status)}
       </span>
-      {status?.latest && status.latest.build > status.build && status.latest.notes.length > 0 && (
-        <ul className="flex flex-col gap-1" style={{ font: fnt(400, 11.5, 'sans', 1.45), color: '#8f8a83' }}>
-          {status.latest.notes.map((n) => (
-            <li key={n}>· {n}</li>
-          ))}
-        </ul>
+      {upcoming.length > 0 ? (
+        <div className="flex flex-col gap-2.5 pt-1" data-testid="update-upcoming">
+          <span className="lbl">CE QUE LA MISE À JOUR APPORTE</span>
+          <NewsList entries={upcoming} />
+        </div>
+      ) : (
+        installed.length > 0 && (
+          <div className="flex flex-col gap-2.5 pt-1" data-testid="update-installed">
+            <span className="lbl">NOUVEAUTÉS DE VOTRE VERSION</span>
+            <NewsList entries={installed} />
+          </div>
+        )
       )}
       {native && (
         <div className="flex gap-2 pt-1">
@@ -60,7 +69,7 @@ function UpdateCard() {
         </div>
       )}
       <span style={{ font: fnt(400, 10.5, 'sans', 1.5), color: '#5a5650' }}>
-        Vérification au lancement puis toutes les 6 h. L’installateur est vérifié (taille, SHA-256) puis installé au même endroit ; modèles et réglages conservés.
+        Vérification au lancement puis toutes les 6 h. La mise à jour est vérifiée avant d’être installée ; vos réglages et modèles sont conservés.
       </span>
     </div>
   );
@@ -98,8 +107,7 @@ export function AboutPage() {
             </div>
           ))}
           <div className="pt-2" style={{ font: fnt(400, 10.5, 'mono'), color: '#5a5650' }}>
-            v{info.version}
-            {upd ? ` · build ${upd.build} (${upd.commit})` : ''} · Windows x64
+            Version {versionLabel(info.version, upd?.build)} · Windows
           </div>
         </div>
         <UpdateCard />

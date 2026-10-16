@@ -5,12 +5,21 @@ import { listen } from '@tauri-apps/api/event';
 import { isTauri, noop } from './core';
 
 export type UpdateState = 'idle' | 'checking' | 'uptodate' | 'available' | 'downloading' | 'ready' | 'installing' | 'error';
+/** One change players can notice, written for them (release-notes.json), with the build that first shipped it. */
+export interface NewsEntry {
+  build: number;
+  date: string;
+  title: string;
+  items: string[];
+}
 export interface UpdateManifest {
   build: number;
   version: string;
   commit: string;
   date: string;
   notes: string[];
+  /** What's new, newest first (absent from older feeds). */
+  news?: NewsEntry[];
   setup: { url: string; sha256: string; bytes: number };
 }
 export interface UpdateStatus {
