@@ -13,7 +13,7 @@ export function trayLabels(locale: Locale): Record<string, string> {
     session: t('tray.session'),
     overlay: `${t('action.overlay')}\tCtrl+Alt+F8`,
     reply: `${t('tray.reply')}\tAlt`,
-    dictate: `${t('tray.dictate')}\tAlt Gr`,
+    dictate: `${t('tray.dictate')}\tMouse 5`,
     pause: `${t('action.pause')}\tCtrl+Alt+F9`,
     emergency: `${t('action.emergency')}\tCtrl+Alt+F10`,
     quit: t('tray.quit'),

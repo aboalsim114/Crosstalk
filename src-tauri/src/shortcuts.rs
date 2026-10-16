@@ -1,8 +1,9 @@
 //! System-wide hotkeys, active even while CS2 has the focus.
 //!
 //! Registered with `RegisterHotKey` through tauri-plugin-global-shortcut: no keyboard
-//! hook and nothing touches the game process. Répondre (Alt) and the dictation
-//! (Alt Gr) are one-key taps, which `RegisterHotKey` cannot do: see tap_keys.rs.
+//! hook and nothing touches the game process. Répondre (Mouse 4) and the dictation
+//! (Mouse 5) are on the mouse's side buttons, which `RegisterHotKey` cannot do:
+//! see tap_keys.rs.
 
 use std::sync::Mutex;
 
@@ -61,7 +62,7 @@ pub fn register_all(app: &AppHandle) {
     let tap_statuses = crate::tap_keys::TAP_KEYS.iter().map(|k| ShortcutStatus {
         keys: k.label,
         registered: taps,
-        error: (!taps).then(|| "lecture du clavier impossible".to_string()),
+        error: (!taps).then(|| "lecture de la souris impossible".to_string()),
     });
     let statuses = tap_statuses
         .chain(

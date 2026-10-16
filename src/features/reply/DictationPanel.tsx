@@ -6,7 +6,7 @@ import { PASTE_HINT, targetName } from './ReplyBox';
 export function dictationView(st: DictationState): { title: string; detail: string; color: string } {
   switch (st.state) {
     case 'listening':
-      return { title: 'Parlez dans votre langue…', detail: `${st.seconds.toFixed(1).replace('.', ',')} s · la phrase se termine toute seule (ou Alt Gr)`, color: '#ff8a7a' };
+      return { title: 'Parlez dans votre langue…', detail: `${st.seconds.toFixed(1).replace('.', ',')} s · la phrase se termine toute seule (ou Mouse 5)`, color: '#ff8a7a' };
     case 'transcribing':
       return { title: 'Transcription et traduction…', detail: `Sur ce PC, vers ${targetName(st.target)}`, color: '#ffa24a' };
     case 'done':
@@ -24,7 +24,7 @@ export function dictationView(st: DictationState): { title: string; detail: stri
   }
 }
 
-/** Spoken reply in progress (Alt Gr or "Dicter"). */
+/** Spoken reply in progress (Mouse 5 or "Dicter"). */
 export function DictationPanel({ st }: { st: DictationState }) {
   const v = dictationView(st);
   return (

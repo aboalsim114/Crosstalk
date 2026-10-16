@@ -35,7 +35,7 @@ pub fn create(app: &AppHandle) -> tauri::Result<()> {
     let dictate = MenuItem::with_id(
         app,
         "dictate",
-        "Dicter une réponse\tAlt Gr",
+        "Dicter une réponse\tMouse 5",
         true,
         None::<&str>,
     )?;

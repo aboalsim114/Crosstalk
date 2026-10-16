@@ -4,7 +4,7 @@ import { fnt } from '../../shared/ui/atoms';
 import { DictationPanel } from '../../features/reply/DictationPanel';
 import { ReplyBox } from '../../features/reply/ReplyBox';
 
-/** Pop-up over the game (Alt): type, Enter, it is in the clipboard. */
+/** Pop-up over the game (Mouse 4): type, Enter, it is in the clipboard. */
 export function ReplyWindow() {
   const [target, setTarget] = useState<ReplyTarget>('en');
   const [opened, setOpened] = useState(0);

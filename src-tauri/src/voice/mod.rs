@@ -1,4 +1,4 @@
-//! "Voix IA": the user dictates a sentence in their language (Alt Gr),
+//! "Voix IA": the user dictates a sentence in their language (Mouse 5),
 //! Crosstalk transcribes and translates it (src/dictation.rs) and a local
 //! neural voice (Piper) says it in the teammates' language, in CS2's voice
 //! chat, through a virtual cable (VB-CABLE). Off by default; synthesis runs on
@@ -46,7 +46,7 @@ pub struct VoiceOptions {
     /// Key held before the first sample, and after the last one (ms).
     pub ptt_lead_ms: u32,
     pub ptt_tail_ms: u32,
-    /// Also say the replies typed in the pop-up (Alt) when Enter is pressed.
+    /// Also say the replies typed in the pop-up (Mouse 4) when Enter is pressed.
     pub speak_typed: bool,
 }
 
@@ -777,7 +777,7 @@ mod tests {
         );
         assert!(s.ptt.held.lock().unwrap().is_none());
         assert!(!s.holding_key());
-        // While a key is held, the Alt / Alt Gr taps are ignored (tap_keys.rs).
+        // While a key is held, the Mouse 4 / Mouse 5 taps are ignored (tap_keys.rs).
         *s.ptt.held.lock().unwrap() = Some(k);
         assert!(s.holding_key());
         *s.ptt.held.lock().unwrap() = None;

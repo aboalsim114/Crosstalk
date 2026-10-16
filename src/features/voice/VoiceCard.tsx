@@ -10,9 +10,9 @@ const hint = { font: fnt(400, 10.5, 'sans', 1.5), color: '#6e6961' };
 const body = { font: fnt(400, 11.5, 'sans', 1.5), color: '#8f8a83' };
 
 
-/** The voice key is one of Crosstalk's one-key shortcuts (Alt: Répondre, Alt Gr: dictation). */
-export function altConflict(key: string): boolean {
-  return ['ALT', 'LALT', 'RALT', 'ALTGR'].includes(key.trim().toUpperCase());
+/** The voice key is one of Crosstalk's shortcuts (Mouse 4: Répondre, Mouse 5: dictation). */
+export function shortcutConflict(key: string): boolean {
+  return ['MOUSE4', 'MOUSE5'].includes(key.trim().toUpperCase().replace(/\s+/g, ''));
 }
 
 function Step({ n, title, done, children }: { n: number; title: string; done?: boolean; children: ReactNode }) {
@@ -86,7 +86,7 @@ export function VoiceCard() {
         <span style={{ font: fnt(500, 9.5, 'mono'), letterSpacing: '.12em', color: '#6e6961' }}>PIPER · SUR CE PC · GRATUIT</span>
       </div>
       <span style={body}>
-        Alt Gr, dites votre phrase dans votre langue : Crosstalk la traduit et une voix IA la dit dans le vocal de CS2, dans la langue de vos coéquipiers. La voix est produite sur votre PC, sans compte ni clé. En appui pour parler, Crosstalk peut maintenir votre touche vocale pendant la
+        Mouse 5, dites votre phrase dans votre langue : Crosstalk la traduit et une voix IA la dit dans le vocal de CS2, dans la langue de vos coéquipiers. La voix est produite sur votre PC, sans compte ni clé. En appui pour parler, Crosstalk peut maintenir votre touche vocale pendant la
         phrase (option ci-dessous, désactivée par défaut).
       </span>
       <ToggleRow title="Dire mes réponses en jeu avec une voix IA" sub="Désactivé par défaut" on={opts.enabled} onClick={() => setOpts({ enabled: !opts.enabled })} />
@@ -186,7 +186,7 @@ export function VoiceCard() {
       <div className="rounded-xl px-3.5 py-3" style={{ border: '1px solid rgba(255,255,255,.07)', background: 'rgba(255,255,255,.015)' }} data-testid="voice-typed">
         <ToggleRow
           title="Dire aussi mes réponses écrites"
-          sub="Pop-up Alt : Entrée traduit, copie et fait dire la phrase par la voix IA (touche vocale appuyée si l’appui automatique est activé)"
+          sub="Pop-up Mouse 4 : Entrée traduit, copie et fait dire la phrase par la voix IA (touche vocale appuyée si l’appui automatique est activé)"
           on={!!opts.speakTyped}
           onClick={() => setOpts({ speakTyped: !opts.speakTyped })}
         />
@@ -212,11 +212,11 @@ export function VoiceCard() {
                 onChange={(e) => setOpts({ pttKey: e.target.value.trim().slice(0, 8) })}
                 style={{ borderColor: keyOk ? undefined : 'rgba(255,138,122,.6)' }}
               />
-              <span style={hint}>K, V, F5, CapsLock, Mouse4…</span>
+              <span style={hint}>K, V, F5, CapsLock, Mouse3…</span>
             </div>
-            {altConflict(opts.pttKey) && (
-              <span role="alert" data-testid="ptt-alt-conflict" style={{ font: fnt(400, 11, 'sans', 1.5), color: '#ffa24a' }}>
-                Alt ouvre Répondre et Alt Gr lance la dictée quand on les tape seuls : une touche vocale Alt ouvrirait aussi ces fenêtres quand vous parlez brièvement. Choisissez plutôt K, V ou une touche de souris.
+            {shortcutConflict(opts.pttKey) && (
+              <span role="alert" data-testid="ptt-shortcut-conflict" style={{ font: fnt(400, 11, 'sans', 1.5), color: '#ffa24a' }}>
+                Mouse 4 ouvre Répondre et Mouse 5 lance la dictée : avec cette touche vocale, parler brièvement ouvrirait aussi ces fenêtres. Choisissez plutôt K, V ou Mouse3.
               </span>
             )}
             {!keyOk && (

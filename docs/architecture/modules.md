@@ -25,7 +25,7 @@
 | `recap` | Enregistrement de la carte de fin de match | — | — |
 | `logs` | Journal de diagnostic (sans nom d'utilisateur), rapport | — | — |
 | `settings` | Réglages sur disque (`%APPDATA%\Crosstalk`) | — | — |
-| `overlay`, `tray`, `shortcuts`, `tap_keys` (Alt / Alt Gr tapés seuls, `GetAsyncKeyState`), `actions`, `clipboard`, `commands` | Intégration Windows | principal | `crosstalk://action` |
+| `overlay`, `tray`, `shortcuts`, `tap_keys` (boutons latéraux Mouse 4 / Mouse 5, `GetAsyncKeyState`), `actions`, `clipboard`, `commands` | Intégration Windows | principal | `crosstalk://action` |
 
 ## Installateur (`src-installer/src`)
 
