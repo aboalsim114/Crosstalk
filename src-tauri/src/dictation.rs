@@ -1,4 +1,4 @@
-//! Spoken reply: the user presses Ctrl+Alt+F6 (or "Dicter"), says a sentence
+//! Spoken reply: the user presses Alt Gr (or "Dicter"), says a sentence
 //! in French; Crosstalk records the default microphone until the end of the
 //! sentence (or a second press), transcribes it with the speech recogniser, translates it to
 //! the teammates' language (src/features/reply) and copies it to the clipboard, ready to

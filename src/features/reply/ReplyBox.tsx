@@ -154,7 +154,7 @@ export function ReplyBox({ target, onTarget, onCopied, autoFocusKey, speakOnSend
           style={{ flex: 1, minWidth: 0 }}
         />
         {isTauri && (
-          <div className="pill flex-none px-3 py-2" role="button" title={`Dicter en ${myName} (Ctrl+Alt+F6)`} onClick={() => void dictation.toggle([], target)} style={{ font: fnt(500, 12) }}>
+          <div className="pill flex-none px-3 py-2" role="button" title={`Dicter en ${myName} (Alt Gr)`} onClick={() => void dictation.toggle([], target)} style={{ font: fnt(500, 12) }}>
             🎙 Dicter
           </div>
         )}

@@ -23,9 +23,9 @@ pub enum Action {
     Emergency,
     /// Start or stop the session (tray menu).
     Session,
-    /// Ctrl+Alt+F7: reply in the teammates' language (pop-up over the game).
+    /// Alt (tapped alone): reply in the teammates' language (pop-up over the game).
     Reply,
-    /// Ctrl+Alt+F6: dictate the reply (microphone), press again to finish.
+    /// Alt Gr (tapped alone): dictate the reply (microphone), tap again to finish.
     Dictate,
 }
 

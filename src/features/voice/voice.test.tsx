@@ -182,3 +182,11 @@ describe('AI voice card', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent('le moteur de voix ne répond pas');
   });
 });
+
+describe('voice key and the one-key shortcuts', () => {
+  it('warns when the voice key is Alt or Alt Gr (they open Répondre and the dictation)', async () => {
+    const { altConflict } = await import('./VoiceCard');
+    for (const k of ['Alt', 'LAlt', 'ralt', ' AltGr ']) expect(altConflict(k)).toBe(true);
+    for (const k of ['K', 'V', 'Mouse4', 'LCtrl']) expect(altConflict(k)).toBe(false);
+  });
+});

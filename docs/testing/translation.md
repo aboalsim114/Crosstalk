@@ -52,8 +52,8 @@
 | --- | --- | --- |
 | 4.1 | Voix russe en partie | Provisoire en russe, puis FINAL traduit ; overlay « VOIX • RUSSE → FRANÇAIS ». En mode Cloud, aucun appel pour les provisoires. |
 | 4.2 | Chat anglais | Traduit par le même moteur. |
-| 4.3 | Ctrl+Alt+F7 : « Mon équipe ne sait pas jouer. » vers le russe | Texte copié en russe (sens : « Моя команда не умеет играть. »). « Éco » reste la phrase CS toute prête. |
-| 4.4 | Ctrl+Alt+F6 (dictée) | Même résultat après transcription. |
+| 4.3 | Alt : « Mon équipe ne sait pas jouer. » vers le russe | Texte copié en russe (sens : « Моя команда не умеет играть. »). « Éco » reste la phrase CS toute prête. |
+| 4.4 | Alt Gr (dictée) | Même résultat après transcription. |
 | 4.5 | Historique, mode streamer, radar, résumé de partie, Diagnostic | Lignes traduites présentes ; Diagnostic « Traduction IA · LLM » avec l'état réel. |
 | 4.6 | Ctrl+Alt+F10 pendant une traduction | Aucune traduction n'arrive après l'arrêt. |
 
