@@ -27,7 +27,7 @@ export interface SpeakerOpts {
   region: { x: number; y: number; w: number; h: number };
 }
 export const SPEAKER_DEFAULTS: SpeakerOpts = { enabled: false, region: { x: 0, y: 0.5, w: 0.25, h: 0.3 } };
-export const VOICE_DEFAULTS: VoiceOptions = { enabled: false, mic: null, voices: {}, monitor: true, volume: 100, micVolume: 100, autoPtt: false, pttKey: 'K', pttLeadMs: 250, pttTailMs: 350 };
+export const VOICE_DEFAULTS: VoiceOptions = { enabled: false, mic: null, voices: {}, monitor: true, volume: 100, micVolume: 100, autoPtt: false, pttKey: 'K', pttLeadMs: 250, pttTailMs: 350, speakTyped: false };
 
 /**
  * Translation engine (Audio & IA › Traduction IA): a cloud provider or a server on this PC,

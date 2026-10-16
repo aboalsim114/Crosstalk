@@ -37,5 +37,7 @@ export const reply = {
   models: (): Promise<ReplyLanguage[]> => (isTauri ? invoke<ReplyLanguage[]>('reply_models') : Promise.resolve([])),
   open: (recentLangs: string[]): Promise<void> => (isTauri ? invoke<void>('reply_open', { recentLangs }) : Promise.resolve()),
   hide: (): Promise<void> => (isTauri ? invoke<void>('reply_hide') : Promise.resolve()),
+  /** Closes the pop-up (CS2 back in front), then the AI voice says the text in the game. Returns its length in ms. */
+  say: (text: string, target: ReplyTarget): Promise<number> => invoke<number>('reply_say', { text, target }),
   onOpen: (cb: (target: ReplyTarget) => void) => (isTauri ? listen<ReplyTarget>(REPLY_OPEN_EVENT, (e) => cb(e.payload)) : Promise.resolve(noop)),
 };

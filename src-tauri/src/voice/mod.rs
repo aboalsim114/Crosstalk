@@ -46,6 +46,8 @@ pub struct VoiceOptions {
     /// Key held before the first sample, and after the last one (ms).
     pub ptt_lead_ms: u32,
     pub ptt_tail_ms: u32,
+    /// Also say the replies typed in the pop-up (Ctrl+Alt+F7) when Enter is pressed.
+    pub speak_typed: bool,
 }
 
 impl Default for VoiceOptions {
@@ -61,6 +63,7 @@ impl Default for VoiceOptions {
             ptt_key: "K".into(),
             ptt_lead_ms: ptt::DEFAULT_LEAD_MS,
             ptt_tail_ms: ptt::DEFAULT_TAIL_MS,
+            speak_typed: false,
         }
     }
 }
@@ -498,14 +501,27 @@ pub fn start(app: &AppHandle) -> Arc<VoiceService> {
     v
 }
 
-/// After a dictated reply: say it in the game when the AI voice is on.
-/// Returns true when the sentence was queued.
-pub fn speak_reply(app: &AppHandle, text: &str, lang: &str) -> bool {
-    let Some(v) = app.try_state::<Arc<VoiceService>>() else {
-        return false;
-    };
+/// The AI voice is on.
+pub fn enabled(app: &AppHandle) -> bool {
+    app.try_state::<Arc<VoiceService>>()
+        .is_some_and(|v| v.options().enabled)
+}
+
+/// The AI voice is on and holds CS2's voice key: CS2 must be in front.
+pub fn presses_key(app: &AppHandle) -> bool {
+    app.try_state::<Arc<VoiceService>>().is_some_and(|v| {
+        let o = v.options();
+        o.enabled && o.auto_ptt
+    })
+}
+
+/// Says a reply in the game when the AI voice is on; logs the outcome.
+pub fn say_reply(app: &AppHandle, text: &str, lang: &str) -> Result<u32, String> {
+    let v = app
+        .try_state::<Arc<VoiceService>>()
+        .ok_or("voix IA indisponible")?;
     if !v.options().enabled {
-        return false;
+        return Err("voix IA désactivée (Audio & IA › Voix IA)".into());
     }
     match v.say(text, lang) {
         Ok(ms) => {
@@ -518,11 +534,11 @@ pub fn speak_reply(app: &AppHandle, text: &str, lang: &str) -> bool {
                 },
             );
             crate::logs::info("voice", &format!("réponse dite en jeu ({lang}, {ms} ms)"));
-            true
+            Ok(ms)
         }
         Err(e) => {
             crate::logs::warn("voice", &format!("voix IA : {e}"));
-            false
+            Err(e)
         }
     }
 }

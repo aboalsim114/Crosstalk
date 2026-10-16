@@ -25,6 +25,9 @@ pub const TAIL_RANGE: (u32, u32) = (100, 1500);
 /// Beyond the sentence's length, the release happens anyway (stuck output).
 const SAFETY_MARGIN: Duration = Duration::from_secs(3);
 const TICK: Duration = Duration::from_millis(10);
+/// CS2 may take a moment to come back in front (the reply pop-up just
+/// closed): the key waits this long for it before the voice plays without it.
+pub const FOCUS_WAIT: Duration = Duration::from_millis(1500);
 
 /// A key or mouse button CS2 can bind to voice chat.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -202,6 +205,13 @@ pub fn transmit(
     if let Some(key) = plan.key {
         if cancelled() {
             return finish(Phase::Cancelled, None, false, report);
+        }
+        let until = Instant::now() + FOCUS_WAIT;
+        while !keys.game_in_front() && Instant::now() < until {
+            if cancelled() {
+                return finish(Phase::Cancelled, None, false, report);
+            }
+            std::thread::sleep(TICK);
         }
         if !keys.game_in_front() {
             note = Some(
@@ -713,6 +723,24 @@ pub(crate) mod tests {
         let (end, ..) = run(plan(), &keys, &AtomicBool::new(false));
         assert_eq!(keys.events(), vec![Ev::Play(1600)]);
         assert!(end.detail.unwrap().contains("maintenez la touche"));
+    }
+
+    #[test]
+    fn the_key_waits_for_cs2_to_come_back_in_front() {
+        // The reply pop-up closes: CS2 is in front 300 ms later.
+        let keys = Arc::new(FakeKeys::default());
+        keys.behind.store(true, Ordering::SeqCst);
+        let k2 = keys.clone();
+        let t = std::thread::spawn(move || {
+            std::thread::sleep(Duration::from_millis(300));
+            k2.behind.store(false, Ordering::SeqCst);
+        });
+        let started = Instant::now();
+        let (end, ..) = run(plan(), &keys, &AtomicBool::new(false));
+        t.join().unwrap();
+        assert_eq!((end.phase, end.pressed), (Phase::Done, true));
+        assert_eq!(keys.events(), vec![Ev::Down(K), Ev::Play(1600), Ev::Up(K)]);
+        assert!(started.elapsed() < FOCUS_WAIT + Duration::from_millis(900));
     }
 
     #[test]

@@ -53,7 +53,7 @@ export function ReplyWindow() {
         <span style={{ font: fnt(400, 10, 'mono'), color: '#5a5650' }}>Échap pour fermer</span>
       </div>
       {dict && <DictationPanel st={dict} />}
-      <ReplyBox key={opened} target={target} onTarget={setTarget} autoFocusKey={opened} onCopied={() => hideLater(1800)} />
+      <ReplyBox key={opened} target={target} onTarget={setTarget} autoFocusKey={opened} onCopied={() => hideLater(1800)} speakOnSend />
     </div>
   );
 }

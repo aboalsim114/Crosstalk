@@ -141,6 +141,7 @@ pub fn run() {
             reply::reply_models,
             reply::reply_open,
             reply::reply_hide,
+            reply::reply_say,
             dictation::dictation_toggle,
             dictation::dictation_state,
             stream::stream_status,

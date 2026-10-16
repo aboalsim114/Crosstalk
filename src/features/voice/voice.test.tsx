@@ -62,15 +62,15 @@ describe('AI voice helpers', () => {
 
   it('is off by default, saved with the settings and checked on restore', () => {
     expect(app0.voice.enabled).toBe(false);
-    const v = { enabled: true, mic: 'mic-1', voices: { ru: 'ru_RU-dmitri-medium' }, monitor: false, volume: 120, micVolume: 80, autoPtt: true, pttKey: 'V', pttLeadMs: 300, pttTailMs: 500 };
+    const v = { enabled: true, mic: 'mic-1', voices: { ru: 'ru_RU-dmitri-medium' }, monitor: false, volume: 120, micVolume: 80, autoPtt: true, pttKey: 'V', pttLeadMs: 300, pttTailMs: 500, speakTyped: true };
     const snap = snapshot({ ...app0, voice: v }, null);
     expect(restore(JSON.parse(JSON.stringify(snap.config)), app0).app.voice).toEqual(v);
     const bad = restore({ version: 1, settings: { voice: { enabled: 'yes', mic: 4, voices: { russian: 'x', ru: 7 }, volume: 900 } } }, app0).app.voice;
     expect(bad).toEqual(VOICE_DEFAULTS);
     // Automatic push-to-talk: off and K by default; settings of earlier versions get them.
-    expect(VOICE_DEFAULTS).toMatchObject({ autoPtt: false, pttKey: 'K' });
+    expect(VOICE_DEFAULTS).toMatchObject({ autoPtt: false, pttKey: 'K', speakTyped: false });
     const old = restore({ version: 1, settings: { voice: { enabled: true, volume: 90 } } }, app0).app.voice;
-    expect(old).toMatchObject({ enabled: true, autoPtt: false, pttKey: 'K', pttLeadMs: 250, pttTailMs: 350 });
+    expect(old).toMatchObject({ enabled: true, autoPtt: false, pttKey: 'K', pttLeadMs: 250, pttTailMs: 350, speakTyped: false });
     const evil = restore({ version: 1, settings: { voice: { autoPtt: 'yes', pttKey: 'K; rm', pttLeadMs: 5, pttTailMs: 99999 } } }, app0).app.voice;
     expect(evil).toMatchObject({ autoPtt: false, pttKey: 'K', pttLeadMs: 250, pttTailMs: 350 });
   });

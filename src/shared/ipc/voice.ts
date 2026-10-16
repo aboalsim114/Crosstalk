@@ -23,6 +23,8 @@ export interface VoiceOptions {
   /** Key held before the first sample / after the last one (ms). */
   pttLeadMs: number;
   pttTailMs: number;
+  /** Also say the replies typed in the pop-up (Ctrl+Alt+F7) when Enter is pressed. */
+  speakTyped?: boolean;
 }
 
 /** Where an automatic push-to-talk transmission is. */

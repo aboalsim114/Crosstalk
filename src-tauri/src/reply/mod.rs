@@ -254,12 +254,29 @@ pub fn reply_open(
     open(&app, &guess_target(&recent_langs, &reply.targets()))
 }
 
-#[tauri::command]
-pub fn reply_hide(app: AppHandle) -> Result<(), String> {
+/// Hides the reply window: Windows gives the focus back to the game.
+pub fn hide(app: &AppHandle) -> Result<(), String> {
     let win = app
         .get_webview_window(LABEL)
         .ok_or("fenêtre de réponse absente")?;
     win.hide().map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn reply_hide(app: AppHandle) -> Result<(), String> {
+    hide(&app)
+}
+
+/// A typed reply said in the game by the AI voice ("Dire mes réponses
+/// écrites"): the pop-up closes first so that CS2 is in front for the key.
+#[tauri::command(async)]
+pub fn reply_say(app: AppHandle, text: String, target: String) -> Result<u32, String> {
+    // Voice off: the pop-up stays open to show why.
+    if !crate::voice::enabled(&app) {
+        return Err("voix IA désactivée (Audio & IA › Voix IA)".into());
+    }
+    let _ = hide(&app);
+    crate::voice::say_reply(&app, &text, &target)
 }
 
 #[cfg(test)]
