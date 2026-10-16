@@ -1,4 +1,4 @@
-//! Turns per-frame speech probabilities into utterance segments for Whisper.
+//! Turns per-frame speech probabilities into utterance segments for the recogniser.
 //!
 //! - opens after `start_frames` frames above the threshold, with a pre-roll so
 //!   the first syllable is kept;

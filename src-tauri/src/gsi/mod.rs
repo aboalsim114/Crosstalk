@@ -33,7 +33,7 @@ const CS2_APPID: u64 = 730;
 #[derive(Debug, Clone, Deserialize)]
 pub struct MapInfo {
     pub name: String,
-    /// Callouts given to Whisper.
+    /// Callouts of the map (counted in the GSI status).
     pub prompt: Vec<String>,
     /// Callouts kept as spoken in translations.
     pub keep: Vec<String>,

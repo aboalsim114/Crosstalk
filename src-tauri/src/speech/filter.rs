@@ -104,7 +104,7 @@ fn is_cyrillic(c: char) -> bool {
 }
 
 /// A whole sentence followed by copies of itself ("Save your weapons this
-/// round. Save your weapons this round. Save your…"): Whisper heard it once,
+/// round. Save your weapons this round. Save your…"): the model heard it once,
 /// then looped. Returns that sentence. Only a phrase of at least three different
 /// words repeated end to end counts: a chant ("go go go go") stays a loop.
 pub fn collapse_repeats(text: &str) -> Option<String> {

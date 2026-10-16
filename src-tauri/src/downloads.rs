@@ -230,7 +230,7 @@ impl Downloader {
         st
     }
 
-    /// [`Downloader::start`] for several Whisper models.
+    /// [`Downloader::start`] for several models.
     pub fn start_all(self: &Arc<Self>, dir: PathBuf, model_ids: &[&str]) -> bool {
         let files = missing_all(&dir, model_ids);
         if files.is_empty() || self.running.swap(true, Ordering::SeqCst) {

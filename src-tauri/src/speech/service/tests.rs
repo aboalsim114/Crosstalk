@@ -442,9 +442,9 @@ fn a_late_final_segment_takes_its_live_text() {
     let t = next_transcript(&rx).unwrap();
     assert_eq!((t.id, t.partial, t.text.as_str()), (42, false, "Двое идут"));
     assert!(t.latency_ms >= 4000);
-    assert_eq!(calls.load(Ordering::SeqCst), 0, "no Whisper pass");
+    assert_eq!(calls.load(Ordering::SeqCst), 0, "no recogniser pass");
     assert_eq!(svc.stats().transcribed, 1);
-    // Without a live line, Whisper is needed.
+    // Without a live line, the recogniser is needed.
     assert!(!finalize_from_live(
         &svc.inner,
         &Job {
@@ -455,10 +455,10 @@ fn a_late_final_segment_takes_its_live_text() {
 }
 
 #[test]
-fn live_lines_stop_when_whisper_cannot_keep_up() {
+fn live_lines_stop_when_the_recogniser_cannot_keep_up() {
     let (svc, rx, calls) = service("Двое на B", 0, true);
     wait_ready(&svc);
-    // The last live line took 3 s of Whisper for 2 s of audio.
+    // The last live line took 3 s of recognition for 2 s of audio.
     svc.inner.live.lock().unwrap().partial_ms = 3000;
     let mut sink = svc.sink();
     // Two halves: the capture → VAD buffer holds 256 blocks of 10 ms.

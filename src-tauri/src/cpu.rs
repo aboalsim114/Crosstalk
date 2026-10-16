@@ -1,4 +1,4 @@
-//! CPU usage of the Crosstalk core process (WASAPI capture, VAD and Whisper all
+//! CPU usage of the Crosstalk core process (WASAPI capture, VAD and the recogniser all
 //! run in it; the WebView2 UI has its own processes), and the priority of the
 //! compute threads (speech, translation). Reads this process's own counters
 //! only. A leaf module: it uses nothing else from the crate.
@@ -49,7 +49,7 @@ pub fn process_cpu_time() -> Option<Duration> {
 }
 
 /// Runs the calling thread below normal priority so the game keeps the CPU
-/// when both compete. No-op outside Windows. Not for Whisper: its worker
+/// when both compete. No-op outside Windows. Not for the recogniser: its worker
 /// threads wait for the calling one at every step (see `speech::service`).
 pub fn lower_current_thread_priority() {
     #[cfg(windows)]

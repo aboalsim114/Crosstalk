@@ -203,7 +203,7 @@ fn main() {
         let cost = t0.elapsed().as_secs_f64() / (len as f64 / RATE as f64) * 100.0;
         costs.push(cost);
         let out: Vec<f32> = out[LATENCY_FRAMES..].to_vec();
-        // SNR on the voice parts only (what Whisper hears).
+        // SNR on the voice parts only (what the recogniser hears).
         let (mut c, mut p, mut o) = (Vec::new(), Vec::new(), Vec::new());
         for &(a, b) in &spans {
             let (a, b) = ((a as usize) * 48, (b as usize) * 48);
