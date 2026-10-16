@@ -2,7 +2,7 @@
 //!
 //! 0. PRÉPARATION   (0–12 %)  free space, Crosstalk not running.
 //! 1. EXTRACTION    (12–62 %) application files into a staging folder, then
-//!    the speech models (Silero VAD, Whisper base and small) downloaded into
+//!    the speech models (Silero VAD, Parakeet TDT 0.6B v3) downloaded into
 //!    %LOCALAPPDATA%\Crosstalk\models, weighted by their size. No translation
 //!    model: translation uses the LLM the user connects at first launch (cloud
 //!    with their own key, or Ollama / LM Studio already on their PC).
@@ -32,10 +32,8 @@ pub struct Entry {
 }
 
 pub const APP_EXE: &str = "crosstalk.exe";
-/// Whisper models installed: every one the app runs on the CPU in this
-/// version (base: fast, small: more precise). Medium and large-v3-turbo, too
-/// slow without a GPU, can still be fetched from the app.
-pub const WHISPER_MODELS: &[&str] = &["base", "small"];
+/// Speech recognition model installed (the only one of the catalogue).
+pub const SPEECH_MODELS: &[&str] = &[crate::speech::models::DEFAULT_MODEL];
 const STAGING: &str = ".crosstalk-setup";
 /// The installed files being replaced, kept until every new file is in place.
 const PREVIOUS: &str = ".crosstalk-previous";
@@ -156,7 +154,15 @@ impl Installer {
     }
 
     fn models_todo(&self) -> Vec<downloads::FileSpec> {
-        downloads::missing_all(&self.models_dir, WHISPER_MODELS)
+        let todo = downloads::missing_all(&self.models_dir, SPEECH_MODELS);
+        // The test fetcher serves zeros: the SHA-256 check is tested in
+        // downloads.rs, the installer tests the sequence and the progress.
+        #[cfg(test)]
+        let todo = todo
+            .into_iter()
+            .map(|f| downloads::FileSpec { sha256: None, ..f })
+            .collect();
+        todo
     }
 
     pub fn platform(&self) -> &dyn Platform {
@@ -411,7 +417,7 @@ impl Installer {
         let d = Downloader::new(self.fetcher.clone(), Arc::new(Forward(Mutex::new(tx))));
         *self.downloader.lock().unwrap() = Some(d.clone());
         self.check()?;
-        if !d.start_all(self.models_dir.clone(), WHISPER_MODELS) {
+        if !d.start_files(self.models_todo()) {
             return Ok(());
         }
         for st in rx {
@@ -515,7 +521,7 @@ fn ensure_not_running(dir: &Path) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::speech::models as whisper;
+    use crate::speech::models as speech_models;
     use std::sync::atomic::AtomicUsize;
 
     fn pack(data: &[u8]) -> &'static [u8] {
@@ -579,7 +585,7 @@ mod tests {
             if self.fail {
                 return Err("connexion impossible".into());
             }
-            let size = downloads::missing_all(&PathBuf::from("/nonexistent"), WHISPER_MODELS)
+            let size = downloads::missing_all(&PathBuf::from("/nonexistent"), SPEECH_MODELS)
                 .into_iter()
                 .find(|f| f.url == url)
                 .unwrap()
@@ -714,8 +720,8 @@ mod tests {
         let inst = installer(&root, fetcher.clone(), Arc::new(Fake::default()));
         assert!(inst.model_bytes() > 600_000_000, "{}", inst.model_bytes());
         // Every model already present (sparse files of the exact size) but the VAD.
-        for f in downloads::missing_all(&inst.models_dir, WHISPER_MODELS) {
-            if f.path.ends_with(whisper::VAD_FILE) {
+        for f in downloads::missing_all(&inst.models_dir, SPEECH_MODELS) {
+            if f.path.ends_with(speech_models::VAD_FILE) {
                 continue;
             }
             std::fs::create_dir_all(f.path.parent().unwrap()).unwrap();
@@ -724,7 +730,7 @@ mod tests {
                 .set_len(f.bytes)
                 .unwrap();
         }
-        assert_eq!(inst.model_bytes(), whisper::VAD_BYTES);
+        assert_eq!(inst.model_bytes(), speech_models::VAD_BYTES);
         let seen = Mutex::new(Vec::new());
         let r = inst.run(
             &Options {
@@ -864,11 +870,15 @@ mod tests {
 
     #[test]
     fn no_translation_model_is_installed() {
-        let all = downloads::missing_all(&PathBuf::from("/nonexistent"), WHISPER_MODELS);
+        let all = downloads::missing_all(&PathBuf::from("/nonexistent"), SPEECH_MODELS);
         assert!(all
             .iter()
             .all(|f| !f.url.contains("opus-mt") && !f.url.contains("Helsinki-NLP")));
-        assert_eq!(all.len(), 1 + WHISPER_MODELS.len(), "Silero + Whisper only");
+        // Silero + the four files of Parakeet, and no Whisper.
+        assert_eq!(all.len(), 5);
+        assert!(all
+            .iter()
+            .all(|f| !f.url.contains("whisper") && !f.url.contains("ggml")));
     }
 
     #[test]

@@ -71,7 +71,7 @@ Un overlay transparent conçu pour afficher les sous-titres sans prendre le cont
 | **Overlay en jeu** | Fenêtre transparente, repositionnable, avec clics traversants par défaut. Fonctionne avec CS2 en mode fenêtré sans bordures. |
 | **Contrôle immédiat** | Affichez ou masquez l'overlay, mettez en pause ou déclenchez l'arrêt d'urgence via des raccourcis globaux. |
 | **Discret par conception** | Crosstalk peut continuer à fonctionner dans la zone de notification lorsque sa fenêtre principale est masquée. |
-| **Reconnaissance vocale locale** | Pipeline WASAPI → Silero VAD → whisper.cpp, sur votre PC. Whisper tourne sur la **carte graphique** (Vulkan : NVIDIA, AMD, Intel) quand elle est compatible, sinon sur le processeur. Aucun compte ni clé pour la transcription. |
+| **Reconnaissance vocale locale** | Pipeline WASAPI → Silero VAD → Parakeet TDT 0.6B v3 (sherpa-onnx), sur le processeur de votre PC. 25 langues européennes, dont le russe, l'anglais, le français, l'allemand, l'espagnol, l'ukrainien et le polonais (pas le turc). Aucun compte ni clé pour la transcription. |
 | **Traduction IA : Cloud ou Local** | Un seul moteur pour la voix, le chat et vos réponses : un LLM. **Cloud** : OpenAI, Anthropic (Claude), Mistral, Groq, OpenRouter, Ollama Cloud ou tout service compatible OpenAI, avec **votre propre clé** (gardée par le Gestionnaire d'identifiants Windows). **Local** : **Ollama** ou **LM Studio** déjà installés sur votre PC, détectés automatiquement, sans clé et hors ligne. Crosstalk ne télécharge aucun LLM. Seul le texte des phrases est envoyé au moteur choisi, jamais l'audio ni les pseudos ; en mode Cloud, vous l'acceptez avant la connexion. Sans moteur connecté, les phrases restent dans leur langue d'origine ([détails](docs/translation-llm.md)). |
 | **Vraie application Windows** | Interface React + TypeScript intégrée dans Tauri v2, cœur natif Rust, rendu via WebView2. Ce n'est pas un site web. |
 
@@ -88,7 +88,7 @@ Crosstalk est un outil **externe**. Il n'injecte pas de code dans `cs2.exe`, ne 
 **[↓ Télécharger l'installateur Crosstalk-setup.exe](https://github.com/aboalsim114/Crosstalk/raw/downloads/Crosstalk-setup.exe)**
 
 1. **Téléchargez** `Crosstalk-setup.exe` depuis la branche de distribution `downloads`.
-2. **Installez** Crosstalk dans le dossier proposé ou celui de votre choix. L'installateur met en place l'application, les raccourcis et **télécharge les modèles vocaux** pendant l'installation : détection de voix, Whisper base et small (environ **640 Mo**, une seule fois). Aucun modèle de traduction n'est téléchargé.
+2. **Installez** Crosstalk dans le dossier proposé ou celui de votre choix. L'installateur met en place l'application, les raccourcis et **télécharge les modèles vocaux** pendant l'installation : détection de voix et reconnaissance Parakeet (environ **670 Mo**, une seule fois). Aucun modèle de traduction n'est téléchargé.
 3. **Lancez** Crosstalk et choisissez le moteur de traduction : **API Cloud**, **Ollama local**, **LM Studio local**, ou **Configurer plus tard** (la transcription marche déjà ; la traduction reste indisponible jusqu'à la configuration). Puis ouvrez CS2.
 4. **Mises à jour : depuis l'application.** À partir du build 94, Crosstalk vérifie au lancement (puis toutes les 6 h) s'il existe une version plus récente et propose de l'installer : il télécharge l'installateur, vérifie sa taille et son empreinte SHA-256, puis se met à jour au même endroit et redémarre, modèles et réglages conservés. Plus besoin de revenir sur cette page.
 
@@ -121,7 +121,7 @@ Ces raccourcis utilisent `RegisterHotKey`, sans hook clavier. Un éventuel confl
 | Capacité | Statut | Détail |
 | --- | --- | --- |
 | Détection de `cs2.exe` et capture audio de processus | **Implémenté · en test** | WASAPI process loopback, Windows compatibles. |
-| Détection de parole et transcription RU / EN | **Implémenté · en test** | Silero VAD et whisper.cpp ; séparation parole / sons du jeu encore imparfaite. |
+| Détection de parole et transcription RU / EN | **Implémenté · en test** | Silero VAD et Parakeet (sherpa-onnx) ; séparation parole / sons du jeu encore imparfaite ; pas encore essayé en partie avec le nouveau moteur. |
 | Traduction par LLM (Cloud avec votre clé, ou Ollama / LM Studio local) | **Implémenté · à valider** | Seul moteur de traduction. Testée avec des fournisseurs et serveurs locaux simulés ; à essayer avec une vraie clé et un vrai Ollama / LM Studio sous Windows ([rapport](docs/reports/llm-only-translation-migration.md)). |
 | Overlay Windows et commandes rapides | **Implémenté** | Fenêtre transparente et raccourcis globaux. |
 | Identification fiable du joueur qui parle | **Expérimental / à valider** | Approche HUD et OCR prévue ; ne pas présumer qu'un pseudo est correctement identifié. |
@@ -134,7 +134,7 @@ Le cap produit est simple : **moins de bruit, des traductions utiles, et un mini
 
 <div align="center">
 
-`Counter-Strike 2` → `WASAPI` → `Silero VAD` → `whisper.cpp` → `LLM (Cloud ou Local)` → `Overlay`
+`Counter-Strike 2` → `WASAPI` → `Silero VAD` → `Parakeet (sherpa-onnx)` → `LLM (Cloud ou Local)` → `Overlay`
 
 </div>
 
@@ -148,7 +148,7 @@ La capture ciblée récupère l'audio attribué au processus CS2 — **y compris
 | Interface | **React · TypeScript · Tailwind CSS** |
 | Direction artistique et animation | **Motion · Three.js** |
 | Capture / fonctionnalités Windows | **WASAPI process loopback · WebView2 · APIs Windows** |
-| Intelligence vocale locale | **Silero VAD · whisper.cpp** |
+| Intelligence vocale locale | **Silero VAD · Parakeet TDT 0.6B v3 · sherpa-onnx (ONNX Runtime)** |
 | Traduction | **LLM : API compatibles OpenAI, Anthropic, Ollama, LM Studio** |
 | Tests | **Vitest · Cargo tests · scripts de validation Windows** |
 
@@ -174,7 +174,7 @@ Architecture du code : [docs/architecture/overview.md](docs/architecture/overvie
 
 ## Développer en local
 
-**Prérequis :** Windows 10/11 x64, Node.js 22, Rust stable avec toolchain **MSVC**, Visual Studio Build Tools (développement desktop C++), LLVM / `LIBCLANG_PATH` et CMake.
+**Prérequis :** Windows 10/11 x64, Node.js 22, Rust stable avec toolchain **MSVC**, Visual Studio Build Tools (développement desktop C++). Les bibliothèques précompilées de sherpa-onnx sont téléchargées pendant le build (ou par `scripts/fetch-sherpa-onnx.sh windows`).
 
 ```powershell
 npm install

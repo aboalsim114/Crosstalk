@@ -257,7 +257,7 @@ pub fn translate(lang: &str, text: &str) -> Option<String> {
     if segments.is_empty() || segments.len() > 6 {
         return None;
     }
-    // Whisper often cuts "smoke out" (grenade thrown) into "smoke, out".
+    // The recogniser may cut "smoke out" (grenade thrown) into "smoke, out".
     let mut merged: Vec<String> = Vec::with_capacity(segments.len());
     for s in segments {
         match merged.last_mut() {

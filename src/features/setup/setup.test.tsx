@@ -24,8 +24,8 @@ describe('first-run setup', () => {
     expect(setupView(null).visible).toBe(false);
   });
 
-  it('needs the chosen Whisper model only: no translation model is ever downloaded', () => {
-    expect(setupNeeds({ model: 'small' })).toEqual({ model: 'small' });
+  it('needs the recognition model only: no translation model is ever downloaded', () => {
+    expect(setupNeeds({ model: 'parakeet-tdt-0.6b-v3' })).toEqual({ model: 'parakeet-tdt-0.6b-v3' });
     expect(mb(147_951_465)).toBe('148 Mo');
   });
 

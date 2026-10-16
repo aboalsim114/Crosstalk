@@ -189,7 +189,7 @@ export function mentions(text: string, m: MapLayout): Mention[] {
 
 /**
  * Mentions of a line from its original text and its translation: the original
- * wins (it is what was said), the translation adds zones Whisper wrote in Latin
+ * wins (it is what was said), the translation adds zones the recogniser wrote in Latin
  * letters or that the translation kept ("Banana").
  */
 export function lineMentions(orig: string, translated: string | null, m: MapLayout): Mention[] {

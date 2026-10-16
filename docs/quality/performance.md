@@ -2,6 +2,8 @@
 
 Machine : Windows 11 Famille 26200, Intel Core i7-1165G7 (4 cœurs / 8 threads, sans GPU dédié), 15,8 Go. Toutes les mesures portent sur le processeur : la version MSVC n'a pas de Whisper GPU (CT-002).
 
+> **Moteur remplacé ([D-14](../architecture/decisions.md))** : les mesures Whisper ci-dessous datent d'avant le passage à Parakeet TDT 0.6B v3 (sherpa-onnx, processeur seul). Elles n'ont pas été refaites sur cette machine avec le nouveau moteur. Voir [Parakeet : banc synthétique](#parakeet--banc-synthétique-d-14).
+
 Sauf mention contraire, les mesures sont faites **machine au repos**. Plusieurs mesures prises pendant une analyse Ghidra ou une compilation ont été écartées comme non comparables. Elles restent signalées quand elles ont orienté une décision.
 
 ## Reconnaissance vocale — banc `crosstalk-asr-bench`
@@ -25,6 +27,17 @@ Lecture :
 - **Combat** : en base, `fr8` boucle sur « je retire, je retire… ». La seconde passe par échantillonnage (CT-001) le récupère une fois sur deux d'un essai à l'autre (elle est aléatoire par nature). Le p95 combat augmente d'autant.
 - **Modèle small** : RTF de 0,86 à 0,94 sur ce processeur à 4 threads. C'est trop juste pendant une partie, ce qui confirme le choix de base par défaut.
 - **Bruit seul** (`--noise-only 120`, tirs et explosions synthétiques) : 0 segment détecté et 0 fausse transcription, avant comme après.
+
+## Parakeet : banc synthétique (D-14)
+
+Mesures du [rapport de remplacement](../reports/asr-engine-replacement.md), **pas** sur la machine ci-dessus : processeur d'un conteneur Linux, 4 fils.
+
+- **Corpus** : 517 extraits, voix de synthèse Piper (ru, en, fr), propres et sous bruit de combat synthétique ; 50 extraits de bruit seul.
+- **WER** : Parakeet 46,6 % ; FastConformer multilingue 57,2 % ; whisper-base 60,7 %.
+- **Bruit seul** : 1 fausse transcription sur 50 avec Parakeet, 50 sur 50 avec whisper-base.
+- **Temps par extrait** : p50 ~480 ms. **Mémoire** : ~0,8 Go. **Chargement** : ~6 s.
+
+À refaire sur l'i7-1165G7 de référence et avec CS2 lancé : ni la latence en jeu, ni le CPU en partie, ni les FPS n'ont été mesurés.
 
 ## Bout en bout dans l'application
 
@@ -82,5 +95,6 @@ L'écart entre mémoire réservée et ensemble de travail vient surtout des tamp
 ## Non mesuré
 
 - **FPS de CS2 avec et sans Crosstalk** : aucune mesure dans une vraie partie. CS2 était ouvert, mais aucun outil de mesure d'images n'était disponible, et une partie demande un joueur.
-- **VRAM, inférence GPU** : pas de build GPU (CT-002) ni de GPU dédié.
+- **VRAM, inférence GPU** : pas de build GPU (CT-002) ni de GPU dédié. Sans objet depuis D-14 : la reconnaissance tourne sur le processeur seul.
+- **Parakeet sur cette machine** : ni banc, ni application, ni partie (voir plus haut).
 - **Russe** : aucune voix russe sur la machine.

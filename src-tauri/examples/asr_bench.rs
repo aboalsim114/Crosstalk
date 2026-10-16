@@ -1,27 +1,23 @@
 //! `crosstalk-asr-bench`: offline and live evaluation of the speech pipeline
-//! (the app's exact chain: 16 kHz conditioning, Silero VAD, segmenter, Whisper,
-//! filter).
+//! (the app's exact chain: 16 kHz conditioning, Silero VAD, segmenter,
+//! recogniser (Parakeet TDT 0.6B v3 through sherpa-onnx), filter).
 //!
 //! ```text
 //! # Reference corpus: TSV lines "path<TAB>lang<TAB>reference text"
-//! crosstalk-asr-bench --manifest corpus/manifest.tsv --model base,small [--scenario clean,combat]
+//! crosstalk-asr-bench --manifest corpus/manifest.tsv [--scenario clean,combat]
 //! # Your own CS2 recordings (already noisy; reference optional)
 //! crosstalk-asr-bench --manifest mes-enregistrements.tsv --scenario clean
 //! # False transcripts on synthetic shots/explosions only (no voice)
-//! crosstalk-asr-bench --noise-only 120 --model base
+//! crosstalk-asr-bench --noise-only 120
 //! # Live: real CS2 capture, transcripts printed, latency and CPU measured (Windows)
-//! crosstalk-asr-bench --live 120 --model base
+//! crosstalk-asr-bench --live 120
 //! ```
 //!
-//! `--gpu-info` prints the Vulkan GPU Whisper would use (or none) and exits.
-//! `--accel cpu|gpu|auto` (default cpu): where Whisper runs (Vulkan builds;
-//! `auto` measures both and keeps the GPU if clearly faster).
-//! `--full-encoder` encodes Whisper's full 30 s window instead of the segment
-//! duration (the app's default), to compare speed and accuracy.
-//! `--vad-only` runs the VAD and segmenter without Whisper (no model needed).
+//! `--model ID` (default: the app's model, see `speech::models::CATALOG`).
+//! `--vad-only` runs the VAD and segmenter without the recogniser (no model needed).
 //! Options: `--models-dir DIR` (default: the app's folder), `--threads N`,
 //! `--lang ru,en`, `--vad-threshold 0.55`, `--combat-peak-db -3`, `--markdown out.md`.
-//! `--verbose` prints raw offline results, rejection reasons, language/full timings.
+//! `--verbose` prints raw offline results, rejection reasons and timings.
 //! Live diagnostics: set CROSSTALK_SPEECH_DIAGNOSTICS=1 (stderr; raw text included).
 //! `--live` requires CS2 process capture; there is no output-device fallback.
 //! Nothing is uploaded; audio is never written unless `--export-mix DIR` is given.
@@ -38,9 +34,7 @@ use crosstalk_lib::speech::bench::{
 };
 use crosstalk_lib::speech::engine::{default_threads, logical_threads, Recognizer};
 use crosstalk_lib::speech::vad::VoiceDetector;
-use crosstalk_lib::speech::{
-    models, Accel, EngineLoader, Lang, RejectReason, SpeechConfig, WhisperLoader,
-};
+use crosstalk_lib::speech::{models, EngineLoader, Lang, RejectReason, SherpaLoader, SpeechConfig};
 
 fn arg(args: &[String], name: &str) -> Option<String> {
     args.iter()
@@ -109,7 +103,7 @@ fn lang_idx(l: Lang) -> usize {
     Lang::ALL.iter().position(|&x| x == l).unwrap_or(0)
 }
 
-/// Post-roll (13 frames) + worst VAD hop (192 ms) before Whisper starts.
+/// Post-roll (13 frames) + worst VAD hop (192 ms) before recognition starts.
 const PIPELINE_DELAY_MS: u32 = 13 * 32 + 192;
 
 fn account(t: &mut Totals, results: &[SegmentResult], clip_lang: Option<Lang>) -> String {
@@ -143,7 +137,6 @@ fn run_corpus(
     detector: &mut dyn VoiceDetector,
     recognizer: &mut dyn Recognizer,
     config: &SpeechConfig,
-    threads: usize,
     export: Option<&Path>,
     verbose: bool,
 ) -> Totals {
@@ -170,7 +163,7 @@ fn run_corpus(
             );
         }
         t.audio_s += mono.len() as f64 / wav.rate as f64;
-        let results = run_pipeline(&mono, wav.rate, detector, Some(recognizer), config, threads)
+        let results = run_pipeline(&mono, wav.rate, detector, Some(recognizer), config)
             .unwrap_or_else(|e| fail(&e.to_string()));
         let hyp = account(&mut t, &results, clip.lang);
         if let (Some(l), false) = (clip.lang, clip.reference.is_empty()) {
@@ -189,8 +182,8 @@ fn run_corpus(
             );
             for r in &results {
                 println!(
-                    "      audio_ms={} inference_ms={} timing={:?} outcome={:?} recognition={:?}",
-                    r.audio_ms, r.asr_ms, r.timing, r.outcome, r.recognition
+                    "      audio_ms={} inference_ms={} outcome={:?} recognition={:?}",
+                    r.audio_ms, r.asr_ms, r.outcome, r.recognition
                 );
             }
         }
@@ -246,18 +239,10 @@ fn row(model: &str, scenario: &str, t: &Totals) -> String {
     )
 }
 
-const HEADER: &str = "| Modèle | Scénario | WER ru | CER ru | WER en | CER en | Langue ok | Whisper p50 / p95 | Latence estimée p50 / p95 | RTF | CPU / temps réel | Segments rejetés |\n|---|---|---|---|---|---|---|---|---|---|---|---|";
+const HEADER: &str = "| Modèle | Scénario | WER ru | CER ru | WER en | CER en | Langue ok | Reconnaissance p50 / p95 | Latence estimée p50 / p95 | RTF | CPU / temps réel | Segments rejetés |\n|---|---|---|---|---|---|---|---|---|---|---|---|";
 
 fn main() {
     let args: Vec<String> = std::env::args().collect();
-    #[cfg(feature = "whisper")]
-    if args.iter().any(|a| a == "--gpu-info") {
-        match crosstalk_lib::speech::engine::vulkan_gpu() {
-            Some(name) => println!("GPU Vulkan : {name}"),
-            None => println!("GPU Vulkan : aucun (Whisper sur le processeur)"),
-        }
-        return;
-    }
     if args.iter().any(|a| a == "--help" || a == "-h") {
         println!(
             "{}",
@@ -290,12 +275,6 @@ fn main() {
     if let Some(l) = arg(&args, "--lang") {
         config.languages = parse_langs(&l);
     }
-    config.fast_encoder = !args.iter().any(|a| a == "--full-encoder");
-    config.accel = match arg(&args, "--accel").as_deref() {
-        Some("gpu") => Accel::Gpu,
-        Some("auto") => Accel::Auto,
-        _ => Accel::Cpu,
-    };
     if let Some(v) = arg(&args, "--vad-threshold").and_then(|v| v.parse().ok()) {
         config.vad_threshold = v;
     }
@@ -312,7 +291,7 @@ fn main() {
         dir.display(),
         config.languages
     );
-    let loader = WhisperLoader;
+    let loader = SherpaLoader;
     let mut detector = loader
         .load_detector(&dir)
         .unwrap_or_else(|e| fail(&format!("VAD : {e}")));
@@ -327,9 +306,8 @@ fn main() {
 
     let mut md = String::new();
     md.push_str(&format!(
-        "### Banc d'essai ASR\n\nMachine : {} threads logiques, Whisper sur {threads} threads, CPU (AVX2), sans GPU, encodeur {}. Bruit de combat **synthétique** (crête {peak_db} dBFS, voix à −6 dBFS).\n\n",
+        "### Banc d'essai ASR\n\nMachine : {} threads logiques, reconnaissance sur {threads} threads, processeur (ONNX Runtime). Bruit de combat **synthétique** (crête {peak_db} dBFS, voix à −6 dBFS).\n\n",
         std::thread::available_parallelism().map(|n| n.get()).unwrap_or(0),
-        if config.fast_encoder { "réduit à la durée du segment" } else { "fenêtre complète de 30 s" },
     ));
 
     for model in model_list
@@ -338,13 +316,13 @@ fn main() {
         .filter(|m| !m.is_empty())
     {
         let t0 = Instant::now();
-        let mut recognizer = match loader.load_recognizer(&dir, model, config.accel) {
+        let mut recognizer = match loader.load_recognizer(&dir, model, threads) {
             Ok(r) => r,
             Err(e) => fail(&format!("modèle {model} : {e}")),
         };
         let load_ms = t0.elapsed().as_millis();
         let backend = recognizer.backend().unwrap_or_else(|| "CPU".into());
-        println!("\n== whisper {model} · {backend} (chargé en {load_ms} ms)");
+        println!("\n== {model} · {backend} (chargé en {load_ms} ms)");
         let config = SpeechConfig {
             model: model.into(),
             ..config.clone()
@@ -359,7 +337,6 @@ fn main() {
                 detector.as_mut(),
                 Some(recognizer.as_mut()),
                 &config,
-                threads,
             )
             .unwrap_or_else(|e| fail(&e.to_string()));
             let mut t = Totals {
@@ -367,9 +344,9 @@ fn main() {
                 ..Default::default()
             };
             account(&mut t, &res, None);
-            let to_whisper = res.iter().filter(|r| r.recognition.is_some()).count();
+            let to_asr = res.iter().filter(|r| r.recognition.is_some()).count();
             let line = format!(
-                "Bruit seul ({secs} s, tirs + explosions synthétiques) : {} segments détectés, {to_whisper} envoyés à Whisper, **{} fausses transcriptions affichées** — rejets : {}",
+                "Bruit seul ({secs} s, tirs + explosions synthétiques) : {} segments détectés, {to_asr} envoyés à la reconnaissance, **{} fausses transcriptions affichées** — rejets : {}",
                 res.len(),
                 t.accepted,
                 rejected(&t)
@@ -402,16 +379,10 @@ fn main() {
                     detector.as_mut(),
                     recognizer.as_mut(),
                     &config,
-                    threads,
                     export.as_deref(),
                     verbose,
                 );
-                let label = if config.fast_encoder {
-                    model.to_string()
-                } else {
-                    format!("{model} (fenêtre 30 s)")
-                };
-                let r = row(&label, scenario, &t);
+                let r = row(model, scenario, &t);
                 println!(
                     "{HEADER}\n{r}\n  ({:.0} s d'audio traités en {:.0} s)",
                     t.audio_s, t.wall_s
@@ -425,14 +396,14 @@ fn main() {
             }
         }
     }
-    md.push_str("\nLatence estimée = post-roll 416 ms + pas de VAD 192 ms + calcul Whisper (hors file d'attente). CPU / temps réel : temps CPU du processus ÷ durée audio (100 % = un cœur occupé en continu).\n");
+    md.push_str("\nLatence estimée = post-roll 416 ms + pas de VAD 192 ms + calcul de la reconnaissance (hors file d'attente). CPU / temps réel : temps CPU du processus ÷ durée audio (100 % = un cœur occupé en continu).\n");
     if let Some(out) = arg(&args, "--markdown") {
         std::fs::write(&out, &md).unwrap_or_else(|e| fail(&format!("{out}: {e}")));
         println!("\nRapport écrit dans {out}");
     }
 }
 
-/// VAD + segmenter only (no Whisper model needed): what reaches Whisper.
+/// VAD + segmenter only (no recognition model needed): what reaches the recogniser.
 fn vad_only(args: &[String], detector: &mut dyn VoiceDetector, config: &SpeechConfig, peak: f32) {
     let summarize = |name: &str, res: &[SegmentResult], audio_s: f64| {
         let sent: Vec<_> = res.iter().filter(|r| r.outcome.is_ok()).collect();
@@ -444,7 +415,7 @@ fn vad_only(args: &[String], detector: &mut dyn VoiceDetector, config: &SpeechCo
             }
         }
         let mut out = format!(
-            "{name} : {:.1} s d'audio → {} segments envoyés à Whisper ({:.1} s), rejetés avant Whisper : {:?}\n",
+            "{name} : {:.1} s d'audio → {} segments envoyés à la reconnaissance ({:.1} s), rejetés avant : {:?}\n",
             audio_s,
             sent.len(),
             speech_ms as f64 / 1000.0,
@@ -460,11 +431,11 @@ fn vad_only(args: &[String], detector: &mut dyn VoiceDetector, config: &SpeechCo
         print!("{out}");
         out
     };
-    let mut report = String::from("### VAD seule (sans Whisper)\n\n```\n");
+    let mut report = String::from("### VAD seule (sans reconnaissance)\n\n```\n");
     if let Some(secs) = arg(args, "--noise-only").and_then(|s| s.parse::<u64>().ok()) {
         let rate = 48_000;
         let noise = combat_track((secs * rate as u64) as usize, rate, peak, 42);
-        let res = run_pipeline(&noise, rate, detector, None, config, 1)
+        let res = run_pipeline(&noise, rate, detector, None, config)
             .unwrap_or_else(|e| fail(&e.to_string()));
         report.push_str(&summarize("Bruit seul (synthétique)", &res, secs as f64));
     }
@@ -481,7 +452,7 @@ fn vad_only(args: &[String], detector: &mut dyn VoiceDetector, config: &SpeechCo
                     let noise = combat_track(mono.len(), wav.rate, peak, 1000);
                     crosstalk_lib::speech::bench::mix(&mut mono, &noise);
                 }
-                let res = run_pipeline(&mono, wav.rate, detector, None, config, 1)
+                let res = run_pipeline(&mono, wav.rate, detector, None, config)
                     .unwrap_or_else(|e| fail(&e.to_string()));
                 let name = format!("{} [{scenario}]", clip.path.display());
                 report.push_str(&summarize(&name, &res, mono.len() as f64 / wav.rate as f64));
@@ -521,13 +492,12 @@ fn live(secs: u64, dir: &Path, model: &str, config: SpeechConfig, threads: usize
                 return;
             }
             println!(
-                "[{}] « {} »  (audio {} ms · Whisper {} ms · latence {} ms · logprob {:.2})",
+                "[{}] « {} »  (audio {} ms · reconnaissance {} ms · latence {} ms)",
                 t.lang.code().to_uppercase(),
                 t.text,
                 t.audio_ms,
                 t.asr_ms,
-                t.latency_ms,
-                t.avg_logprob
+                t.latency_ms
             );
         }
         fn retract(&self, _id: u64) {
@@ -554,10 +524,14 @@ fn live(secs: u64, dir: &Path, model: &str, config: SpeechConfig, threads: usize
     let console = Arc::new(Console(Mutex::new(None)));
     let speech = SpeechService::start_with_threads(
         console.clone(),
-        Arc::new(WhisperLoader),
+        Arc::new(SherpaLoader),
         dir.to_path_buf(),
         SpeechConfig {
-            model: model.split(',').next().unwrap_or("base").into(),
+            model: model
+                .split(',')
+                .next()
+                .unwrap_or(models::DEFAULT_MODEL)
+                .into(),
             ..config
         },
         threads,

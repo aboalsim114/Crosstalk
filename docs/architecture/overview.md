@@ -27,7 +27,7 @@ Documents liés :
                             ┌──────────────────── crosstalk.exe — cœur Rust (src-tauri/src) ───────────────────┐
                             │                                                                                   │
  cs2.exe (audio, WASAPI) ─► │ audio ──BlockSink──► speech ──SpeechEvents──┐                                     │
-                            │ (capture)            (VAD, Whisper)          │                                    │
+                            │ (capture)            (VAD, Parakeet)         │                                    │
  console.log ─────────────► │ chat ──ChatEvents──────────────────────────┤                                     │
                             │                                              ▼                                    │
  Game State Integration ──► │ gsi                                       wiring  (composition : la seule colle   │
@@ -56,7 +56,7 @@ src-tauri/src/
   wiring.rs           colle entre services : capture → purge, transcription → locuteur → traduction, chat → traduction
   paths.rs cpu.rs version.rs          utilitaires feuilles (aucune dépendance interne)
   audio/              capture WASAPI, niveaux, plan de capture
-  speech/             VAD, segmentation, Whisper, filtre
+  speech/             VAD, segmentation, reconnaissance (sherpa-onnx), filtre
     service/          mod.rs (API) · queue.rs · stats.rs · front.rs (VAD) · asr.rs
   translation/        catalogue, glossaire, SentencePiece, Marian
     engine.rs         contrats Engine / EngineLoader, moteur pivot Chain

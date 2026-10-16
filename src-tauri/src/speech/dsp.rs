@@ -1,10 +1,10 @@
-//! Light signal conditioning before the VAD and Whisper: resampling of the
+//! Light signal conditioning before the VAD and the recogniser: resampling of the
 //! captured stream to 16 kHz mono and a high-pass filter against the rumble
-//! of explosions. No denoising: Whisper copes better with the raw voice.
+//! of explosions. No denoising: the recogniser copes better with the raw voice.
 
 use std::f64::consts::PI;
 
-/// Sample rate expected by Silero VAD and Whisper.
+/// Sample rate expected by Silero VAD and the recogniser.
 pub const SAMPLE_RATE: u32 = 16_000;
 
 /// Streaming windowed-sinc resampler (any input rate to `SAMPLE_RATE`).

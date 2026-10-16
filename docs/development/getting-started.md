@@ -7,9 +7,10 @@
 | Windows 10/11 x64 | — | lancer l'application, construire la version officielle (MSVC) |
 | Node.js | 22 | interface (Vite, Vitest) |
 | Rust stable, toolchain MSVC | — | cœur (`src-tauri`) et installateur (`src-installer`) |
-| Visual Studio Build Tools (C++), LLVM (`LIBCLANG_PATH`), CMake | — | whisper.cpp |
+| Visual Studio Build Tools (C++) | — | édition de liens MSVC |
+| Bibliothèques précompilées sherpa-onnx (API C + ONNX Runtime) | 1.13.8 | reconnaissance vocale ; téléchargées par `scripts/fetch-sherpa-onnx.sh` ou `validate.ps1` |
 
-Sous Linux, l'interface et les tests (`cargo test`, Vitest) fonctionnent. La compilation croisée vers Windows passe par `scripts/cross-build-windows-gnu.sh` (MinGW, voir l'en-tête du script). Le binaire produit n'est **pas** la version officielle.
+Sous Linux, l'interface et les tests (`cargo test`, Vitest) fonctionnent. Avant `cargo`, chargez les bibliothèques Linux de sherpa-onnx : `source <(scripts/fetch-sherpa-onnx.sh linux)` (elles vont dans `src-tauri/target/sherpa-onnx/linux/` et le script exporte `SHERPA_ONNX_LIB_DIR`). La compilation croisée vers Windows passe par `scripts/cross-build-windows-gnu.sh` (MinGW, voir l'en-tête du script). Le binaire produit n'est **pas** la version officielle.
 
 ## Premiers pas
 

@@ -1,4 +1,4 @@
-//! Languages of the app: what the players speak (Whisper) and what the user
+//! Languages of the app: what the players speak (speech recognition) and what the user
 //! reads. With an LLM, every pair translates directly: no model per pair, no
 //! route through English.
 

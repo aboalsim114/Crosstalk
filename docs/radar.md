@@ -11,7 +11,7 @@ Quand un coéquipier dit « двое на банане » ou écrit « 2 B » da
 1. **La carte** vient de l'intégration de CS2 (Game State Integration, Audio & IA › carte jouée). Sans elle, le radar ne sait pas sur quelle carte vous jouez et ne s'affiche pas.
 2. **Chaque ligne finale**, voix ou chat, est analysée deux fois : dans sa langue d'origine, puis dans sa traduction.
    - L'original passe en premier, c'est ce qui a été dit.
-   - La traduction complète : elle garde les callouts en anglais (« Banana »), même quand Whisper a mal écrit le mot russe.
+   - La traduction complète : elle garde les callouts en anglais (« Banana »), même quand la reconnaissance vocale a mal écrit le mot russe.
    - Les mots provisoires (ligne en cours) sont ignorés.
 3. **Les zones** sont reconnues par leur nom anglais et leurs formes russes, terminaisons comprises (`банан*` : банан, банане, бананом). Les sites A et B le sont aussi : « на А », « rush A », « A site », « плент Б », « 2 B ».
    - Pour A, l'article anglais (« at a corner ») et la conjonction russe (« а ты иди ») sont écartés : il faut une préposition, le mot « site », ou une ligne très courte.
@@ -69,5 +69,5 @@ Tests : `src/features/radar/radar.test.ts` (détection : russe, anglais, raccour
 ## Limites
 
 - La détection repose sur des mots-clés : une zone citée sans ennemi (« je vais en B ») s'allume aussi. Le panneau affiche « Apps ×2 » seulement quand un nombre est dit.
-- La qualité dépend de la transcription : un callout mal reconnu par Whisper n'allume rien.
+- La qualité dépend de la transcription : un callout mal reconnu par la reconnaissance vocale n'allume rien.
 - Pas encore testé en partie réelle sous Windows : les phrases des tests sont écrites à la main.

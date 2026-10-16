@@ -1,5 +1,17 @@
 [
   {
+    "id": "nouvelle-reconnaissance-vocale-parakeet",
+    "date": "2026-10-16",
+    "title": "Nouvelle reconnaissance vocale, plus fiable",
+    "items": [
+      "Crosstalk change de moteur de reconnaissance vocale : il comprend mieux les annonces courtes en russe, en anglais et en français.",
+      "Il invente beaucoup moins de phrases pendant les fusillades ou les silences.",
+      "Le nouveau modèle (environ 670 Mo) se télécharge une seule fois après la mise à jour, puis tout fonctionne hors ligne, sans compte.",
+      "Les anciens fichiers de reconnaissance ne servent plus : Audio & IA propose de les supprimer pour libérer de la place, seulement si vous le voulez.",
+      "Le choix processeur ou carte graphique disparaît : la reconnaissance tourne sur le processeur en laissant de la place au jeu."
+    ]
+  },
+  {
     "id": "reconnaissance-plus-rapide-en-partie",
     "date": "2026-10-16",
     "title": "Reconnaissance vocale bien plus rapide en partie",

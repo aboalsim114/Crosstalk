@@ -8,7 +8,7 @@
 | Architecture | `npm run check:architecture` | cycles Rust et TS, fichiers partagés, couche IPC, contrat IPC |
 | Types | `npm run typecheck` | `src/` |
 | Interface | `npm test` (Vitest + Testing Library) | `src/**/*.test.ts(x)`, à côté du code testé |
-| Cœur Rust | `cd src-tauri && cargo test --all-targets` | modules `#[cfg(test)]` ; gros fichiers : `tests.rs` du module (`speech/service/tests.rs`) |
+| Cœur Rust | `cd src-tauri && cargo test --all-targets` (sous Linux, d'abord `source <(scripts/fetch-sherpa-onnx.sh linux)`) | modules `#[cfg(test)]` ; gros fichiers : `tests.rs` du module (`speech/service/tests.rs`) |
 | Installateur | `cd src-installer && cargo test` | `install.rs`, plus les tests des fichiers partagés |
 | Style | `cargo fmt --all -- --check`, `cargo clippy --all-targets -- -D warnings` | les deux crates |
 
@@ -27,7 +27,7 @@
 
 ## Manuels (Windows, CS2)
 
-Ce qu'aucun test automatique ne couvre : la capture réelle de `cs2.exe`, Whisper sur de vraies voix, la latence, le CPU, les FPS, l'overlay en jeu, l'installateur sur une machine propre. Les protocoles sont dans [`docs/testing/`](../testing/), un par fonctionnalité.
+Ce qu'aucun test automatique ne couvre : la capture réelle de `cs2.exe`, la reconnaissance vocale sur de vraies voix, la latence, le CPU, les FPS, l'overlay en jeu, l'installateur sur une machine propre. Les protocoles sont dans [`docs/testing/`](../testing/), un par fonctionnalité.
 
 **Ils ne sont réussis que s'ils ont été exécutés.** Le rapport de PR dit lesquels l'ont été, sur quelle machine, et lesquels ne l'ont pas été.
 

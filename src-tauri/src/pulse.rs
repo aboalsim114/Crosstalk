@@ -1,6 +1,6 @@
 //! Pipeline pulse (issue #103): while a capture runs, one journal line every
 //! 30 s says what each stage did — sound received from CS2, segments found by
-//! the VAD, transcripts kept or rejected by Whisper, lines translated — and a
+//! the VAD, transcripts kept or rejected by the recogniser, lines translated — and a
 //! warning names the stage that stops, instead of a silent failure.
 //!
 //! Only counters and levels: never a transcript, a sound or a player name.
@@ -23,8 +23,8 @@ const SILENT_PEAK_DB: f32 = -60.0;
 const SOUND_RMS_DB: f32 = -50.0;
 /// Sound without a single segment for this long: the VAD hears no speech.
 const NO_SPEECH_AFTER_MS: u64 = 120_000;
-/// Segments sent to Whisper without one kept transcript before warning.
-const WHISPER_SILENT_AFTER: u64 = 3;
+/// Segments sent to the recogniser without one kept transcript before warning.
+const ASR_SILENT_AFTER: u64 = 3;
 /// Distinct translation errors written per capture (the rest are counted).
 const MAX_ERRORS_LOGGED: usize = 5;
 
@@ -94,16 +94,14 @@ fn reason(r: RejectReason) -> &'static str {
         RejectReason::Stale => "trop tard",
         RejectReason::Overflow => "file pleine",
         RejectReason::Empty => "vide",
-        RejectReason::NoSpeech => "pas de parole",
-        RejectReason::LowConfidence => "confiance faible",
         RejectReason::Hallucination => "hallucination",
         RejectReason::Repetition => "boucle",
         RejectReason::WrongScript => "mauvaise écriture",
     }
 }
 
-/// Rejections decided before Whisper (by the VAD's segmenter or the queue).
-fn before_whisper(r: RejectReason) -> bool {
+/// Rejections decided before recognition (by the VAD's segmenter or the queue).
+fn before_asr(r: RejectReason) -> bool {
     matches!(
         r,
         RejectReason::Short
@@ -279,20 +277,20 @@ impl Pulse {
                 w.peak_db.unwrap_or(-120.0)
             )
         };
-        // VAD: segments, and those dropped before Whisper.
-        let (early, early_why) = list(&d.rejected, before_whisper);
-        let (late, late_why) = list(&d.rejected, |r| !before_whisper(r));
+        // VAD: segments, and those dropped before recognition.
+        let (early, early_why) = list(&d.rejected, before_asr);
+        let (late, late_why) = list(&d.rejected, |r| !before_asr(r));
         let vad = format!(
-            "VAD : {} segment(s), écartés avant Whisper : {}",
+            "VAD : {} segment(s), écartés avant la reconnaissance : {}",
             d.segments,
             with_reasons(early, &early_why)
         );
         let mut asr = format!(
-            "Whisper : {} gardée(s), rejetées : {}",
+            "Reconnaissance : {} gardée(s), rejetées : {}",
             d.transcribed,
             with_reasons(late, &late_why)
         );
-        // Whisper's speed: above 1x, it falls behind the voices.
+        // Recognition speed: above 1x, it falls behind the voices.
         if d.asr_audio_ms > 0 {
             let rtf = d.asr_ms as f64 / d.asr_audio_ms as f64;
             asr.push_str(&format!(
@@ -336,27 +334,27 @@ impl Pulse {
                 ),
             );
         }
-        let (total_early, total_early_why) = list(&total.rejected, before_whisper);
+        let (total_early, total_early_why) = list(&total.rejected, before_asr);
         let sent = total.segments.saturating_sub(total_early);
-        if total.segments >= WHISPER_SILENT_AFTER && sent == 0 {
+        if total.segments >= ASR_SILENT_AFTER && sent == 0 {
             self.raise(
                 &mut out,
                 "all-early",
                 format!(
-                    "{} segment(s) trouvés par la VAD, tous écartés avant Whisper ({total_early_why})",
+                    "{} segment(s) trouvés par la VAD, tous écartés avant la reconnaissance ({total_early_why})",
                     total.segments
                 ),
             );
         }
-        if sent >= WHISPER_SILENT_AFTER && total.transcribed == 0 {
-            let (_, why) = list(&total.rejected, |r| !before_whisper(r));
+        if sent >= ASR_SILENT_AFTER && total.transcribed == 0 {
+            let (_, why) = list(&total.rejected, |r| !before_asr(r));
             self.raise(
                 &mut out,
-                "whisper-nothing",
+                "asr-nothing",
                 format!(
-                    "{sent} segment(s) envoyés à Whisper, aucune transcription gardée{}",
+                    "{sent} segment(s) envoyés à la reconnaissance, aucune transcription gardée{}",
                     if why.is_empty() {
-                        " (aucun résultat : Whisper bloqué ?)".to_string()
+                        " (aucun résultat : reconnaissance bloquée ?)".to_string()
                     } else {
                         format!(" (rejets : {why})")
                     }
@@ -532,12 +530,14 @@ mod tests {
             "{line}"
         );
         assert!(
-            line.contains("VAD : 5 segment(s), écartés avant Whisper : 1 (tir/explosion 1)"),
+            line.contains(
+                "VAD : 5 segment(s), écartés avant la reconnaissance : 1 (tir/explosion 1)"
+            ),
             "{line}"
         );
         assert!(
             line.contains(
-                "Whisper : 3 gardée(s), rejetées : 1 (hallucination 1), calcul 0,6× la durée de voix"
+                "Reconnaissance : 3 gardée(s), rejetées : 1 (hallucination 1), calcul 0,6× la durée de voix"
             ),
             "{line}"
         );
@@ -589,7 +589,7 @@ mod tests {
     }
 
     #[test]
-    fn segments_all_rejected_by_whisper_or_before_it_are_named_with_their_reasons() {
+    fn segments_all_rejected_by_the_recogniser_or_before_it_are_named_with_their_reasons() {
         let mut p = Pulse::default();
         p.capture(true, 0);
         sound(&mut p, 0, -25.0, -5.0);
@@ -601,7 +601,7 @@ mod tests {
         let w = p.tick(30_000);
         assert_eq!(
             warnings(&w),
-            ["3 segment(s) envoyés à Whisper, aucune transcription gardée (rejets : hallucination 3)"]
+            ["3 segment(s) envoyés à la reconnaissance, aucune transcription gardée (rejets : hallucination 3)"]
         );
 
         let mut p = Pulse::default();
@@ -610,7 +610,7 @@ mod tests {
         p.stats(stats(5, 0, &[(RejectReason::Transient, 5)]));
         assert_eq!(
             warnings(&p.tick(30_000)),
-            ["5 segment(s) trouvés par la VAD, tous écartés avant Whisper (tir/explosion 5)"]
+            ["5 segment(s) trouvés par la VAD, tous écartés avant la reconnaissance (tir/explosion 5)"]
         );
 
         // Sent but nothing came back at all.
@@ -618,7 +618,7 @@ mod tests {
         p.capture(true, 0);
         sound(&mut p, 0, -25.0, -5.0);
         p.stats(stats(3, 0, &[]));
-        assert!(warnings(&p.tick(30_000))[0].contains("Whisper bloqué"));
+        assert!(warnings(&p.tick(30_000))[0].contains("reconnaissance bloquée"));
     }
 
     #[test]

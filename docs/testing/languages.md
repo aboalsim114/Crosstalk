@@ -12,7 +12,7 @@
 | 6 | Un coéquipier parle russe | Ligne affichée telle quelle, « Déjà dans votre langue — non traduit ». |
 | 7 | Chat : « wartet, ich gehe links » | Détecté allemand, traduit en russe directement. |
 | 8 | Chat dans une langue non cochée (ex. « espera, vamos ») | Affiché tel quel, « langue non choisie (Langues) ». |
-| 9 | Répondre (Ctrl+Alt+F7) | Choix « English » / « Deutsch » ; écrire en russe ; le texte copié est en anglais ou en allemand. Dicter (Ctrl+Alt+F6) en russe : Whisper transcrit en russe. |
+| 9 | Répondre (Ctrl+Alt+F7) | Choix « English » / « Deutsch » ; écrire en russe ; le texte copié est en anglais ou en allemand. Dicter (Ctrl+Alt+F6) en russe : la reconnaissance vocale transcrit en russe. |
 | 10 | Lire en polonais ou en turc | Les traductions arrivent en polonais / turc (possible maintenant avec le LLM). |
 
 Compte rendu : pour 10 phrases par paire testée, notez juste / compréhensible / faux et le temps médian.

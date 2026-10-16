@@ -43,15 +43,11 @@ export const NAV: [PageId, string][] = [
   ['about', 'À propos'],
 ];
 
-export type ModelId = 'tiny' | 'base' | 'small' | 'medium' | 'large-v3-turbo';
-/** [id, size, description, installed by default] */
-export const MODELS: [ModelId, string, string, boolean][] = [
-  ['tiny', '75 Mo', 'Très rapide · précision faible', true],
-  ['base', '142 Mo', 'Rapide · CPU seul possible', true],
-  ['small', '466 Mo', 'Équilibré — recommandé', true],
-  ['medium', '1,5 Go', 'Précis · GPU conseillé', false],
-  ['large-v3-turbo', '1,6 Go', 'Le plus précis · GPU requis', false],
-];
+/** Speech recognition model (src-tauri/src/speech/models.rs). */
+export type ModelId = 'parakeet-tdt-0.6b-v3';
+export const DEFAULT_MODEL: ModelId = 'parakeet-tdt-0.6b-v3';
+/** [id, label, size, description] */
+export const MODELS: [ModelId, string, string, string][] = [['parakeet-tdt-0.6b-v3', 'Parakeet TDT 0.6B v3', '670 Mo', 'Russe, anglais, français et 22 autres langues · processeur']];
 
 export type GlossMode = 'Conserver' | 'Traduire';
 export type GlossEntry = [term: string, mode: GlossMode, rendering: string];
@@ -99,12 +95,12 @@ export const NEVERS = [
  */
 export const LICENSES: [string, string][] = [
   ['tauri', 'MIT / Apache-2.0'],
-  ['whisper.cpp · ggml', 'MIT'],
-  ['whisper-rs', 'Unlicense'],
+  ['sherpa-onnx', 'Apache-2.0'],
+  ['ONNX Runtime', 'MIT'],
   ['windows-rs', 'MIT / Apache-2.0'],
   ['ureq', 'MIT / Apache-2.0'],
   ['React · three.js · motion', 'MIT'],
-  ['Modèles Whisper (OpenAI)', 'MIT'],
+  ['Parakeet TDT 0.6B v3 (NVIDIA)', 'CC-BY-4.0'],
   ['Silero VAD', 'MIT'],
 ];
 

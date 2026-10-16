@@ -14,7 +14,7 @@
 
 | # | Action | Attendu |
 | --- | --- | --- |
-| 1.1 | Installation neuve | L'installateur ne télécharge que la VAD et Whisper (≈ 640 Mo), aucun `opus-mt-*`. |
+| 1.1 | Installation neuve | L'installateur ne télécharge que la VAD et Parakeet (≈ 671 Mo), aucun `opus-mt-*`. |
 | 1.2 | Après « Vos langues » | Fenêtre « Moteur de traduction » : API Cloud / Ollama sur ce PC / LM Studio sur ce PC / Configurer plus tard. |
 | 1.3 | « Configurer plus tard », puis Démarrer en partie | Transcription normale, lignes « Non traduit — aucun moteur de traduction connecté (Audio & IA › Traduction IA) ». L'Accueil indique « aucun moteur connecté ». |
 | 1.4 | Mise à jour depuis une version avec Opus-MT | Réglages conservés ; Audio & IA propose « Libérer l'espace » pour les anciens dossiers, rien n'est supprimé sans clic. |

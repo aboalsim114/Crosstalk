@@ -1,9 +1,10 @@
-//! Voice activity detection: Silero VAD v5 through its ggml port in whisper.cpp
-//! (same network as the ONNX release, no ONNX Runtime to ship).
+//! Voice activity detection: Silero VAD v5 (ONNX, MIT) run by sherpa-onnx.
 //!
 //! Silero answers "is there a human voice?" on 32 ms frames. It is robust to
 //! steady noise but not to every shot or explosion; the segmenter and the
-//! transcript filter add CS2-specific guards on top.
+//! transcript filter add CS2-specific guards on top. sherpa-onnx exposes its
+//! decision (speech or not) rather than the raw probability: each frame is
+//! given as 1.0 or 0.0 to the segmenter, which keeps its own hysteresis.
 
 use super::SpeechError;
 
@@ -17,65 +18,89 @@ pub trait VoiceDetector: Send {
     fn probabilities(&mut self, samples: &[f32]) -> Result<Vec<f32>, SpeechError>;
     /// Forgets the recurrent state (new stream, purge).
     fn reset(&mut self);
+    /// Speech probability the detector itself requires (Audio & IA slider).
+    fn set_threshold(&mut self, _threshold: f32) {}
 }
 
-/// whisper.cpp resets the Silero LSTM on every call, so each call is given
-/// this much preceding audio to warm the state up (cost: about 3x the frames).
-#[cfg(feature = "whisper")]
-const CONTEXT_FRAMES: usize = 12;
-
-#[cfg(feature = "whisper")]
+#[cfg(feature = "asr")]
 pub struct SileroVad {
-    ctx: whisper_rs::WhisperVadContext,
-    context: Vec<f32>,
-    window: Vec<f32>,
+    model: String,
+    threshold: f32,
+    vad: sherpa_onnx::VoiceActivityDetector,
 }
 
-#[cfg(feature = "whisper")]
+// Used by the VAD thread only; the handle has no thread affinity.
+#[cfg(feature = "asr")]
+unsafe impl Send for SileroVad {}
+
+#[cfg(feature = "asr")]
 impl SileroVad {
-    pub fn load(path: &std::path::Path) -> Result<Self, SpeechError> {
-        super::engine::quiet_whisper_logs();
-        let mut params = whisper_rs::WhisperVadContextParams::new();
-        params.set_n_threads(1);
-        params.set_use_gpu(false);
-        let path_str = path
+    pub fn load(path: &std::path::Path, threshold: f32) -> Result<Self, SpeechError> {
+        let model = path
             .to_str()
-            .ok_or_else(|| SpeechError::Model("chemin du modèle VAD invalide".into()))?;
-        let ctx = whisper_rs::WhisperVadContext::new(path_str, params)
-            .map_err(|e| SpeechError::Model(format!("VAD Silero illisible : {e}")))?;
+            .ok_or_else(|| SpeechError::Model("chemin du modèle VAD invalide".into()))?
+            .to_string();
+        let vad = Self::create(&model, threshold)?;
         Ok(Self {
-            ctx,
-            context: Vec::new(),
-            window: Vec::new(),
+            model,
+            threshold,
+            vad,
         })
+    }
+
+    fn create(
+        model: &str,
+        threshold: f32,
+    ) -> Result<sherpa_onnx::VoiceActivityDetector, SpeechError> {
+        let mut cfg = sherpa_onnx::VadModelConfig::default();
+        cfg.silero_vad.model = Some(model.to_string());
+        cfg.silero_vad.threshold = threshold.clamp(0.1, 0.95);
+        // Raw decisions: the segmenter adds the onset and hang-over delays.
+        // Not 0: the C API reads 0 as "default" (0.25 s of speech before the
+        // first detection, which cut the first word of short callouts).
+        cfg.silero_vad.min_silence_duration = 0.03;
+        cfg.silero_vad.min_speech_duration = 0.001;
+        cfg.silero_vad.window_size = FRAME as i32;
+        cfg.silero_vad.max_speech_duration = 30.0;
+        cfg.sample_rate = super::dsp::SAMPLE_RATE as i32;
+        cfg.num_threads = 1;
+        cfg.provider = Some("cpu".into());
+        sherpa_onnx::VoiceActivityDetector::create(&cfg, 30.0)
+            .ok_or_else(|| SpeechError::Model("VAD Silero illisible".into()))
     }
 }
 
-#[cfg(feature = "whisper")]
+#[cfg(feature = "asr")]
 impl VoiceDetector for SileroVad {
     fn probabilities(&mut self, samples: &[f32]) -> Result<Vec<f32>, SpeechError> {
-        let frames = samples.len() / FRAME;
-        if frames == 0 {
-            return Ok(Vec::new());
-        }
-        self.window.clear();
-        self.window.extend_from_slice(&self.context);
-        self.window.extend_from_slice(&samples[..frames * FRAME]);
-        self.ctx
-            .detect_speech(&self.window)
-            .map_err(|e| SpeechError::Inference(format!("VAD : {e}")))?;
-        let probs = self.ctx.probabilities();
-        let fresh = probs[probs.len().saturating_sub(frames)..].to_vec();
-
-        let keep = (CONTEXT_FRAMES * FRAME).min(self.window.len());
-        self.context.clear();
-        self.context
-            .extend_from_slice(&self.window[self.window.len() - keep..]);
-        Ok(fresh)
+        let probs = samples
+            .chunks_exact(FRAME)
+            .map(|frame| {
+                self.vad.accept_waveform(frame);
+                if self.vad.detected() {
+                    1.0
+                } else {
+                    0.0
+                }
+            })
+            .collect();
+        // Segments are cut by our segmenter: drop the detector's own copies.
+        self.vad.clear();
+        Ok(probs)
     }
 
     fn reset(&mut self) {
-        self.context.clear();
+        self.vad.reset();
+    }
+
+    fn set_threshold(&mut self, threshold: f32) {
+        if (threshold - self.threshold).abs() < 1e-3 {
+            return;
+        }
+        if let Ok(vad) = Self::create(&self.model, threshold) {
+            self.vad = vad;
+            self.threshold = threshold;
+        }
     }
 }
 

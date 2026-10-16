@@ -1,98 +1,128 @@
-//! Whisper model catalog and the files expected on disk.
+//! Speech model catalog and the files expected on disk.
 //!
-//! Models are not bundled with the installer (75 MB to 1.5 GB). They live in
+//! Models are not bundled with the installer (hundreds of MB). They live in
 //! `crate::paths::models_dir()` and are downloaded by the installer or the app
-//! (`crate::downloads`), with size and checksum verification.
+//! (`crate::downloads`), checked by exact size and SHA-256.
+//!
+//! Recognition: NVIDIA Parakeet TDT 0.6B v3 (CC-BY-4.0), int8 ONNX export of
+//! the sherpa-onnx project, run by sherpa-onnx / ONNX Runtime on the CPU.
+//! Voice activity: Silero VAD v5 (MIT), ONNX. See
+//! docs/reports/asr-engine-replacement.md for the comparison that chose them.
 
 use std::path::{Path, PathBuf};
 
 use serde::Serialize;
 
-pub const DEFAULT_MODEL: &str = "base";
+pub const DEFAULT_MODEL: &str = "parakeet-tdt-0.6b-v3";
 
-/// Silero VAD v5.1.2, ggml port published by the whisper.cpp project.
-pub const VAD_FILE: &str = "ggml-silero-v5.1.2.bin";
-pub const VAD_BYTES: u64 = 885_098;
+/// Silero VAD v5 (ONNX), as published with the sherpa-onnx models.
+pub const VAD_FILE: &str = "silero_vad.onnx";
+pub const VAD_BYTES: u64 = 643_854;
+pub const VAD_SHA256: &str = "9e2449e1087496d8d4caba907f23e0bd3f78d91fa552479bb9c23ac09cbb1fd6";
 pub const VAD_URL: &str =
-    "https://huggingface.co/ggml-org/whisper-vad/resolve/main/ggml-silero-v5.1.2.bin";
+    "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/silero_vad.onnx";
+
+/// How sherpa-onnx runs the model.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ModelKind {
+    /// NeMo transducer (encoder, decoder, joiner, tokens).
+    NemoTransducer,
+}
+
+pub struct ModelFile {
+    pub name: &'static str,
+    /// Exact published size: a shorter file is an interrupted download.
+    pub bytes: u64,
+    pub sha256: &'static str,
+}
 
 pub struct ModelSpec {
     pub id: &'static str,
-    pub file: &'static str,
-    pub size_mb: u32,
-    /// Exact file size on Hugging Face: a shorter file is an interrupted download.
-    pub bytes: u64,
-    /// SHA-1 published in whisper.cpp's `models/README.md`.
-    pub sha1: &'static str,
+    /// Shown in the interface.
+    pub label: &'static str,
+    /// Folder inside the models directory.
+    pub dir: &'static str,
+    pub kind: ModelKind,
+    /// Base download address; each file is `<base>/<name>`.
+    pub base_url: &'static str,
+    pub files: &'static [ModelFile],
     pub note: &'static str,
+    pub license: &'static str,
 }
 
-pub const CATALOG: &[ModelSpec] = &[
-    ModelSpec {
-        id: "tiny",
-        bytes: 77691713,
-        file: "ggml-tiny.bin",
-        size_mb: 75,
-        sha1: "bd577a113a864445d4c299885e0cb97d4ba92b5f",
-        note: "Très rapide · russe peu fiable",
-    },
-    ModelSpec {
-        id: "base",
-        bytes: 147951465,
-        file: "ggml-base.bin",
-        size_mb: 142,
-        sha1: "465707469ff3a37a2b9b8d8f89f2f99de7299dac",
-        note: "Rapide · CPU seul · défaut",
-    },
-    ModelSpec {
-        id: "small",
-        bytes: 487601967,
-        file: "ggml-small.bin",
-        size_mb: 466,
-        sha1: "55356645c2b361a969dfd0ef2c5a50d530afd8d5",
-        note: "Meilleur russe · CPU récent conseillé",
-    },
-    ModelSpec {
-        id: "medium",
-        bytes: 1533763059,
-        file: "ggml-medium.bin",
-        size_mb: 1500,
-        sha1: "fd9727b6e1217c2f614f9b698455c4ffd82463b4",
-        note: "Précis · trop lent sur CPU pendant une partie",
-    },
-    ModelSpec {
-        id: "large-v3-turbo",
-        bytes: 574041195,
-        file: "ggml-large-v3-turbo-q5_0.bin",
-        size_mb: 547,
-        sha1: "e050f7970618a659205450ad97eb95a18d69c9ee",
-        note: "Le plus précis · GPU requis (pas dans cette version)",
-    },
-];
+impl ModelSpec {
+    pub fn bytes(&self) -> u64 {
+        self.files.iter().map(|f| f.bytes).sum()
+    }
+
+    pub fn size_mb(&self) -> u32 {
+        (self.bytes() / 1_000_000) as u32
+    }
+
+    pub fn url(&self, file: &ModelFile) -> String {
+        format!("{}/{}", self.base_url, file.name)
+    }
+}
+
+pub const CATALOG: &[ModelSpec] = &[ModelSpec {
+    id: "parakeet-tdt-0.6b-v3",
+    label: "Parakeet TDT 0.6B v3",
+    dir: "parakeet-tdt-0.6b-v3-int8",
+    kind: ModelKind::NemoTransducer,
+    base_url:
+        "https://huggingface.co/csukuangfj/sherpa-onnx-nemo-parakeet-tdt-0.6b-v3-int8/resolve/main",
+    files: &[
+        ModelFile {
+            name: "encoder.int8.onnx",
+            bytes: 652_184_281,
+            sha256: "acfc2b4456377e15d04f0243af540b7fe7c992f8d898d751cf134c3a55fd2247",
+        },
+        ModelFile {
+            name: "decoder.int8.onnx",
+            bytes: 11_845_275,
+            sha256: "179e50c43d1a9de79c8a24149a2f9bac6eb5981823f2a2ed88d655b24248db4e",
+        },
+        ModelFile {
+            name: "joiner.int8.onnx",
+            bytes: 6_355_277,
+            sha256: "3164c13fc2821009440d20fcb5fdc78bff28b4db2f8d0f0b329101719c0948b3",
+        },
+        ModelFile {
+            name: "tokens.txt",
+            bytes: 93_939,
+            sha256: "d58544679ea4bc6ac563d1f545eb7d474bd6cfa467f0a6e2c1dc1c7d37e3c35d",
+        },
+    ],
+    note: "Russe, anglais, français et 22 autres langues · processeur",
+    license: "CC-BY-4.0 (NVIDIA)",
+}];
 
 pub fn spec(id: &str) -> Option<&'static ModelSpec> {
     CATALOG.iter().find(|m| m.id == id)
 }
 
-pub fn url(spec: &ModelSpec) -> String {
-    format!(
-        "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/{}",
-        spec.file
-    )
+/// The catalog entry for `id`, or the default one (settings of an older
+/// version name a Whisper model that no longer exists).
+pub fn spec_or_default(id: &str) -> &'static ModelSpec {
+    spec(id).unwrap_or(&CATALOG[0])
 }
 
-/// A model file is usable if it exists with its exact published size
-/// (integrity is checked by SHA-1 in the download script).
+/// A file is usable if it exists with its exact published size (its SHA-256
+/// is checked once, by the download).
 fn installed(path: &Path, bytes: u64) -> bool {
     std::fs::metadata(path)
         .map(|m| m.is_file() && m.len() == bytes)
         .unwrap_or(false)
 }
 
+/// The model's folder, when every file is in place.
 pub fn model_path(dir: &Path, id: &str) -> Option<PathBuf> {
     let spec = spec(id)?;
-    let path = dir.join(spec.file);
-    installed(&path, spec.bytes).then_some(path)
+    let folder = dir.join(spec.dir);
+    spec.files
+        .iter()
+        .all(|f| installed(&folder.join(f.name), f.bytes))
+        .then_some(folder)
 }
 
 pub fn vad_path(dir: &Path) -> Option<PathBuf> {
@@ -104,11 +134,11 @@ pub fn vad_path(dir: &Path) -> Option<PathBuf> {
 #[serde(rename_all = "camelCase")]
 pub struct ModelInfo {
     pub id: String,
-    pub file: String,
+    pub label: String,
     pub size_mb: u32,
     pub note: String,
+    pub license: String,
     pub installed: bool,
-    pub url: String,
 }
 
 pub fn list(dir: &Path) -> Vec<ModelInfo> {
@@ -116,11 +146,11 @@ pub fn list(dir: &Path) -> Vec<ModelInfo> {
         .iter()
         .map(|m| ModelInfo {
             id: m.id.into(),
-            file: m.file.into(),
-            size_mb: m.size_mb,
+            label: m.label.into(),
+            size_mb: m.size_mb(),
             note: m.note.into(),
+            license: m.license.into(),
             installed: model_path(dir, m.id).is_some(),
-            url: url(m),
         })
         .collect()
 }
@@ -129,20 +159,27 @@ pub fn list(dir: &Path) -> Vec<ModelInfo> {
 mod tests {
     use super::*;
 
-    /// scripts/download-models.ps1 copies this catalogue (offline install).
     #[test]
-    fn the_powershell_download_script_has_the_same_models() {
-        let ps = include_str!("../../../scripts/download-models.ps1");
+    fn the_offline_download_script_has_the_same_files() {
+        let script = include_str!("../../../scripts/download-models.ps1");
+        assert!(script.contains(VAD_SHA256) && script.contains(VAD_URL));
         for m in CATALOG {
-            let row = ps
-                .lines()
-                .find(|l| l.contains(&format!("File = '{}'", m.file)))
-                .unwrap_or_else(|| panic!("{} absent du script", m.file));
-            assert!(row.contains(&format!("'{}'", m.id)), "{row}");
-            assert!(row.contains(&format!("Size = {};", m.bytes)), "{row}");
-            assert!(row.contains(&format!("Sha1 = '{}'", m.sha1)), "{row}");
+            assert!(script.contains(m.base_url), "{}", m.id);
+            for f in m.files {
+                assert!(script.contains(f.sha256), "{}", f.name);
+                assert!(
+                    script.contains(&format!("Size = {};", f.bytes)),
+                    "{}",
+                    f.name
+                );
+                assert!(
+                    script.contains(&format!("{}\\{}", m.dir, f.name)),
+                    "{}",
+                    f.name
+                );
+            }
         }
-        assert!(ps.contains(&format!("File = '{VAD_FILE}'; Size = {VAD_BYTES} ")));
+        assert!(!script.to_lowercase().contains("whisper"));
     }
 
     fn temp_dir(name: &str) -> PathBuf {
@@ -154,34 +191,53 @@ mod tests {
     }
 
     #[test]
-    fn catalog_has_the_default_and_unique_ids() {
+    fn catalog_has_the_default_and_checksums() {
         assert!(spec(DEFAULT_MODEL).is_some());
-        let mut ids: Vec<_> = CATALOG.iter().map(|m| m.id).collect();
-        ids.dedup();
-        assert_eq!(ids.len(), CATALOG.len());
-        assert!(CATALOG.iter().all(|m| m.sha1.len() == 40));
         assert_eq!(
-            url(spec("base").unwrap()),
-            "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.bin"
+            spec_or_default("small").id,
+            DEFAULT_MODEL,
+            "old Whisper ids"
         );
+        for m in CATALOG {
+            assert!(m.files.iter().all(|f| f.sha256.len() == 64 && f.bytes > 0));
+            assert!(m.base_url.starts_with("https://"));
+        }
+        let p = spec(DEFAULT_MODEL).unwrap();
+        assert!(p.size_mb() > 600);
+        assert_eq!(
+            p.url(&p.files[3]),
+            "https://huggingface.co/csukuangfj/sherpa-onnx-nemo-parakeet-tdt-0.6b-v3-int8/resolve/main/tokens.txt"
+        );
+        assert_eq!(VAD_SHA256.len(), 64);
     }
 
     #[test]
     fn detects_installed_and_truncated_files() {
         let d = temp_dir("detect");
-        assert!(model_path(&d, "tiny").is_none());
+        let p = spec(DEFAULT_MODEL).unwrap();
+        assert!(model_path(&d, p.id).is_none());
         assert!(vad_path(&d).is_none());
-        std::fs::write(d.join("ggml-tiny.bin"), vec![0u8; 1024]).unwrap();
-        assert!(model_path(&d, "tiny").is_none(), "truncated");
-        let f = std::fs::File::create(d.join("ggml-tiny.bin")).unwrap();
-        f.set_len(77_691_713).unwrap();
-        assert!(model_path(&d, "tiny").is_some());
-        let f = std::fs::File::create(d.join(VAD_FILE)).unwrap();
-        f.set_len(VAD_BYTES).unwrap();
+        let folder = d.join(p.dir);
+        std::fs::create_dir_all(&folder).unwrap();
+        for f in p.files {
+            std::fs::File::create(folder.join(f.name))
+                .unwrap()
+                .set_len(f.bytes)
+                .unwrap();
+        }
+        assert_eq!(model_path(&d, p.id).as_deref(), Some(folder.as_path()));
+        // One truncated file: not installed.
+        std::fs::File::create(folder.join("tokens.txt"))
+            .unwrap()
+            .set_len(10)
+            .unwrap();
+        assert!(model_path(&d, p.id).is_none());
+        std::fs::File::create(d.join(VAD_FILE))
+            .unwrap()
+            .set_len(VAD_BYTES)
+            .unwrap();
         assert!(vad_path(&d).is_some());
-        let l = list(&d);
-        assert!(l.iter().find(|m| m.id == "tiny").unwrap().installed);
-        assert!(!l.iter().find(|m| m.id == "base").unwrap().installed);
+        assert!(!list(&d)[0].installed);
         assert!(model_path(&d, "unknown").is_none());
         let _ = std::fs::remove_dir_all(&d);
     }

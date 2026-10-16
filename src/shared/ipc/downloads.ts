@@ -1,5 +1,5 @@
 // First-run download of the speech models (src-tauri/src/downloads.rs):
-// Whisper and Silero. Translation needs no download (it is done by the LLM).
+// The recognition model and Silero. Translation needs no download (it is done by the LLM).
 
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';

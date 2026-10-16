@@ -1,4 +1,4 @@
-//! The queue between the VAD thread and the Whisper thread.
+//! The queue between the VAD thread and the recognition thread.
 
 use std::collections::VecDeque;
 use std::sync::{Condvar, Mutex};

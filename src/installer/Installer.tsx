@@ -652,10 +652,10 @@ export function Installer({ startScreen = 0 }: { startScreen?: number }) {
                   <span style={{ color: '#F2F1EE' }}>Logiciel tiers.</span> Crosstalk n'est ni affilié à Valve, ni approuvé par Valve. Il ne lit pas la mémoire du jeu et ne modifie aucun fichier de Counter-Strike 2.
                 </p>
                 <p style={{ margin: 0 }}>
-                  <span style={{ color: '#F2F1EE' }}>Audio.</span> La reconnaissance vocale (Whisper) s'exécute sur ce PC : aucune voix n'est envoyée en ligne. La traduction utilise le LLM que vous choisirez au premier lancement : un fournisseur cloud avec votre propre clé (seul le texte des phrases lui est envoyé), ou Ollama / LM Studio déjà installés sur ce PC.
+                  <span style={{ color: '#F2F1EE' }}>Audio.</span> La reconnaissance vocale (Parakeet, via sherpa-onnx) s'exécute sur ce PC, hors ligne : aucune voix n'est envoyée en ligne. La traduction utilise le LLM que vous choisirez au premier lancement : un fournisseur cloud avec votre propre clé (seul le texte des phrases lui est envoyé), ou Ollama / LM Studio déjà installés sur ce PC.
                 </p>
                 <p style={{ margin: 0 }}>
-                  <span style={{ color: '#F2F1EE' }}>Données.</span> Aucun historique n'est conservé par défaut. Les modèles de reconnaissance vocale (Whisper, Silero) sont téléchargés une fois depuis Hugging Face. Aucun modèle de traduction n'est téléchargé.
+                  <span style={{ color: '#F2F1EE' }}>Données.</span> Aucun historique n'est conservé par défaut. Le modèle de reconnaissance vocale (Parakeet TDT 0.6B v3, licence CC-BY-4.0) et la détection de voix (Silero) sont téléchargés une fois depuis Hugging Face et GitHub, avec vérification SHA-256. Aucun modèle de traduction n'est téléchargé.
                 </p>
               </div>
               <div style={css('display:flex;justify-content:flex-end;padding-top:6px')}>

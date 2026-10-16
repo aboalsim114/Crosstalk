@@ -11,13 +11,13 @@
 | `version` | Numéro de build (`CROSSTALK_BUILD`) | — | — |
 | `audio` | Capture WASAPI de `cs2.exe` (par processus, repli périphérique), niveaux, micro de la dictée | `audio-capture` (un par démarrage) | `audio://status`, `audio://level` |
 | `game` | Détection de `cs2.exe` (noms et PID uniquement) | `cs2-watcher` | `cs2://status` |
-| `speech` | Conditionnement, VAD Silero, segmentation, Whisper, filtre anti-hallucinations, statistiques | `speech-vad`, `speech-asr` (priorité normale), `speech-load` | `speech://status`, `speech://stats`, `speech://retract` (+ ceux de `wiring`) |
+| `speech` | Conditionnement, VAD Silero, segmentation, reconnaissance Parakeet (sherpa-onnx), filtre anti-hallucinations, statistiques, anciens fichiers Whisper (`legacy.rs`) | `speech-vad`, `speech-asr` (priorité normale), `speech-load` | `speech://status`, `speech://stats`, `speech://retract` (+ ceux de `wiring`) |
 | `translation` | Catalogue Opus-MT, routage (direct ou pivot anglais), SentencePiece, Marian (candle), glossaire, lexique d'annonces, cache | `translate` (priorité basse) | `translation://status`, `translation://result` |
 | `chat` | Détection Steam / CS2, `-condebug`, suivi de `console.log`, analyse, langue du message | `chat-tail` | `chat://status` (+ `chat://message` via `wiring`) |
 | `gsi` | Serveur local Game State Integration : carte, phase de round | `gsi` | `gsi://status` |
 | `speaker` | « Qui parle ? » : indicateur vocal de CS2, OCR (désactivé par défaut) | `speaker` | `speaker://status` |
 | `reply` | « Répondre » : traduction de la langue de l'utilisateur vers celle des coéquipiers, fenêtre pop-up | à la demande | `reply://open` |
-| `dictation` | Dictée de la réponse (micro → Whisper) | `dictation` | `dictation://state` |
+| `dictation` | Dictée de la réponse (micro → reconnaissance vocale) | `dictation` | `dictation://state` |
 | `downloads`, `download_commands` | Téléchargements reprenables, vérifiés par taille et empreinte | `downloads` | `models://download` |
 | `updater` | Mise à jour intégrée : flux, téléchargement vérifié, installation silencieuse | `update` | `update://status` |
 | `history` | Historique local, texte seulement, désactivé par défaut | — | — |
@@ -60,13 +60,13 @@ Ces traits existent et sont testés avec des implémentations factices ([D-12](d
 
 | Rôle | Trait | Fichier | Implémentation réelle | Faux (tests) |
 |---|---|---|---|---|
-| Détection de voix | `VoiceDetector` | `speech/vad.rs` | `SileroVad` (Silero v5, portage ggml de whisper.cpp), repli `EnergyDetector` | `GatedDetector`, `EnergyDetector` |
-| Reconnaissance | `Recognizer` | `speech/engine.rs` | `WhisperRecognizer` (whisper.cpp via `whisper-rs`) | `EchoRecognizer`, `Script`, `CheckThreads` |
-| Chargement ASR, CPU/GPU | `speech::service::EngineLoader` | `speech/service/mod.rs` | `WhisperLoader` (`speech/mod.rs`) + `gpu_guard` (test du GPU dans un processus séparé) | `FakeLoader`, `GatedLoader` |
+| Détection de voix | `VoiceDetector` | `speech/vad.rs` | `SileroVad` (Silero v5 ONNX, via sherpa-onnx), repli `EnergyDetector` | `GatedDetector`, `EnergyDetector` |
+| Reconnaissance | `Recognizer` | `speech/engine.rs` | `SherpaRecognizer` (Parakeet TDT 0.6B v3 via `sherpa-onnx`, processeur seul) | `EchoRecognizer`, `Script`, `CheckThreads` |
+| Chargement ASR | `speech::service::EngineLoader` | `speech/service/mod.rs` | `SherpaLoader` (`speech/mod.rs`) | `FakeLoader`, `GatedLoader` |
 | Amélioration du signal | `Conditioner` (struct) | `speech/dsp.rs` | passe-bande, rééchantillonnage 16 kHz | — (pur, déterministe) |
 | Traduction | `Engine` | `translation/engine.rs` | `Marian` Opus-MT (`translation/marian.rs`) ; `Chain` pour le pivot anglais | `Upper`, `Dash`, `Echo` (reply) |
 | Chargement traduction | `translation::EngineLoader` | `translation/engine.rs` | `OpusLoader` (`translation/opus.rs`) | `Loader` (tests) |
-| Catalogue de modèles | données | `speech/models.rs`, `translation/models.rs` | Hugging Face, tailles et SHA-1 figés | — |
+| Catalogue de modèles | données | `speech/models.rs`, `translation/models.rs` | Hugging Face, tailles et SHA-256 figés | — |
 | Téléchargement | `Fetcher`, `DownloadEvents` | `downloads.rs` | `HttpFetcher` (ureq) | `Fake`, `Serve` (updater) |
 | Capture audio | `CaptureBackend`, `CaptureStream`, `BlockSink` | `audio/backend.rs`, `audio/service.rs` | `WasapiBackend` (`audio/wasapi.rs`) ; `SpeechSink` | `FakeBackend`, `Count` |
 | Diagnostic | `SpeechStats`, `TranslationStatus`, `logs::summarize` | — | journal et rapport | — |

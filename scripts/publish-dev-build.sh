@@ -59,7 +59,7 @@ cp "$root/$setup" "$setup_asset"
   echo "| SHA-256 de l'installateur | \`$setup_sha\` |"
   echo "| SHA-256 des outils (zip) | \`$zip_sha\` |"
   echo
-  echo "Installateur Windows (x64), design « Crosstalk Installer » : installe Crosstalk (menu Démarrer, bureau) et télécharge tous ses modèles pendant l'installation (Whisper base et small, traduction ru/en → fr et fr → en/ru : environ 1,9 Go, une seule fois). Whisper utilise la carte graphique (Vulkan) si elle est compatible, sinon le processeur. Compilé avec MinGW/gcc (\`scripts/cross-build-windows-gnu.sh\`). La version officielle reste celle compilée avec MSVC par \`scripts\\validate.ps1\`. Non signée : SmartScreen affiche un avertissement (« Informations complémentaires » > « Exécuter quand même »)."
+  echo "Installateur Windows (x64), design « Crosstalk Installer » : installe Crosstalk (menu Démarrer, bureau) et télécharge le modèle de reconnaissance vocale pendant l'installation (Parakeet TDT 0.6B v3 et la détection de voix Silero : environ 671 Mo, une seule fois, puis tout fonctionne hors ligne). La reconnaissance tourne sur le processeur (sherpa-onnx, ONNX Runtime) ; la traduction passe par le LLM choisi au premier lancement. Compilé avec MinGW/gcc (\`scripts/cross-build-windows-gnu.sh\`). La version officielle reste celle compilée avec MSVC par \`scripts\\validate.ps1\`. Non signée : SmartScreen affiche un avertissement (« Informations complémentaires » > « Exécuter quand même »)."
   echo
   echo "Tout est local : aucune clé API, aucun abonnement, aucun envoi en ligne. Le zip contient les outils de test en ligne de commande (\`LISEZMOI-TEST.txt\`)."
 } > VERSION.md

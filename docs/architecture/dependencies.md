@@ -39,7 +39,7 @@ Aucun cycle. Les arêtes principales (`A → B` : A utilise B) :
 
 ```
 wiring ──► audio, chat, paths, reply, speaker, speech, translation
-gsi ──► chat, history, reply, speech, translation
+gsi ──► chat, history, reply, translation
 dictation ──► audio, clipboard, logs, reply, speech
 speech ──► audio, cpu, logs, settings, version
 translation ──► cpu, paths
@@ -62,9 +62,9 @@ Relevé par `crate::<module>` hors tests (commande dans [refactoring-report.md](
 |---|---|
 | `tauri` 2 + `single-instance`, `autostart`, `global-shortcut` | fenêtres, IPC, plateau, raccourcis |
 | `windows` / `windows-core` | WASAPI, fenêtres, OCR, registre, priorité des threads |
-| `whisper-rs` | reconnaissance vocale (whisper.cpp), VAD Silero |
+| `sherpa-onnx` 1.13.8 (+ `sherpa-onnx-sys`, Apache-2.0), fonctionnalité Cargo `asr` (par défaut) | reconnaissance vocale (Parakeet) et VAD Silero, par l'API C des bibliothèques précompilées `sherpa-onnx-c-api.dll` et ONNX Runtime `onnxruntime.dll` (MIT), livrées à côté de `crosstalk.exe`. `sherpa-onnx-sys` est copié dans `src-tauri/vendor/` (`[patch.crates-io]`) pour un seul changement : dépendance de build `zip` 2 → 9, les versions 2.x étant retirées |
 | `candle-core`, `candle-nn`, `candle-transformers` | Marian Opus-MT en Rust pur |
-| `ureq`, `sha1_smol`, `sha2` | téléchargements et vérification |
+| `ureq`, `sha2` | téléchargements et vérification (SHA-256) |
 | `serde`, `serde_json`, `thiserror`, `regex` | données et erreurs |
 
 `src-installer` y ajoute `flate2` (extraction), `winreg` et `mslnk` (registre, raccourcis), et le plugin `dialog`. Le frontend dépend de React 19, Zustand 5, `motion`, `three` et `@tauri-apps/api`.

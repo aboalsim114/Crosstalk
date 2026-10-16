@@ -7,20 +7,22 @@ Environnement : Windows 11 Famille 26200 (i7-1165G7, sans GPU dédié), CS2 ouve
 - **Pilotage** : clics dans la vraie interface, via le protocole de débogage de WebView2 (CDP), et lecture des fenêtres par Win32.
 - **Installation personnelle** : l'instance Crosstalk 0.2.0 de l'utilisateur, en cours d'exécution, n'a pas été touchée. En conséquence, le port GSI et les raccourcis globaux étaient déjà pris par elle.
 
+> **Depuis [D-14](../architecture/decisions.md)**, Whisper est retiré : la reconnaissance vocale est Parakeet TDT 0.6B v3 via sherpa-onnx, sur le processeur seul. Les lignes Whisper ci-dessous gardent le résultat de cette campagne ; elles sont sans objet pour le moteur actuel, qui n'a pas encore été testé dans l'application avec CS2 lancé.
+
 Légende : ✅ vérifié en exécution réelle · 🧪 vérifié par test automatisé seulement · ⚠️ partiel · ❌ défaut ouvert · — non testé (raison donnée).
 
 | Fonctionnalité | Comportement attendu | Test exécuté | Résultat | Bug / correction |
 |---|---|---|---|---|
-| Lancement | Fenêtre, intro, services prêts | 3 lancements chronométrés | ✅ interface en 2,2 à 3,6 s ; Whisper prêt en ~3 s | CT-003 (version « V0.2 ») corrigé |
+| Lancement | Fenêtre, intro, services prêts | 3 lancements chronométrés | ✅ interface en 2,2 à 3,6 s ; Whisper prêt en ~3 s (avant D-14) | CT-003 (version « V0.2 ») corrigé |
 | Premier lancement | Dialogue « Vos langues » | Clic « Entrer » sur un profil vierge | ✅ dialogue affiché, langue de Windows présélectionnée | — |
 | Pages (7) | Aucune page vide, aucune erreur | Visite automatisée et captures, écoute de la console | ✅ 0 exception, 0 erreur de console, pas de défilement horizontal | — |
 | Capture CS2 (process loopback) | Son de cs2.exe uniquement | Session démarrée, CS2 ouvert | ✅ « Son de cs2.exe uniquement (PID 25872) · 48 kHz », 1,3 % CPU au repos | — |
 | Capture périphérique (repli) | Tout le son de la sortie | Session, corpus joué sur la sortie | ✅ | — |
 | Test de capture 10 s | — | — | — non rejoué dans l'application (couvert par F2 / #67) | — |
 | VAD + segmentation | Voix détectée, bruits rejetés | Banc `--noise-only 120` | ✅ 0 fausse transcription | — |
-| Whisper base (CPU) | Transcription en / fr | Banc et application | ✅ 12/12 dans l'application après correction | CT-001, CT-008 corrigés |
-| Whisper small | — | Banc | ✅ WER en 14,3 % (propre), RTF ≈ 0,9 | — |
-| Whisper GPU / Auto | Inférence sur la carte graphique | — | ❌ absent de la version MSVC | CT-002 ouvert |
+| Whisper base (CPU) | Transcription en / fr | Banc et application | ✅ 12/12 dans l'application après correction · sans objet depuis D-14 | CT-001, CT-008 corrigés |
+| Whisper small | — | Banc | ✅ WER en 14,3 % (propre), RTF ≈ 0,9 · sans objet depuis D-14 | — |
+| Whisper GPU / Auto | Inférence sur la carte graphique | — | ❌ absent de la version MSVC · sans objet depuis D-14 (reconnaissance sur processeur seul) | CT-002 sans objet |
 | Russe (voix) | — | — | — aucune voix russe disponible pour générer un corpus | — |
 | Traduction ru/en → fr | Lignes traduites | Outil `translate` ; application (en→fr) | ✅ voir performance.md | CT-005 (faux « absents ») corrigé |
 | Traduction provisoire | Texte rapide, remplacé ensuite | Outil `--greedy` | ⚠️ outil seulement | — |

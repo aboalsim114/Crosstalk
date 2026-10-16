@@ -15,7 +15,7 @@ pub(super) struct StatsAcc {
     pub(super) rejected: BTreeMap<RejectReason, u64>,
     pub(super) latencies: VecDeque<u32>,
     pub(super) last_rtf: Option<f32>,
-    /// Whisper time and audio duration of every final segment transcribed.
+    /// Recogniser time and audio duration of every final segment transcribed.
     pub(super) asr_ms: u64,
     pub(super) asr_audio_ms: u64,
     pub(super) cpu: CpuMeter,

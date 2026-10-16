@@ -17,7 +17,7 @@ Après **chaque fusion** d'une Pull Request (dans `develop`, ou une release dans
 
 L'application lit ce `latest.json` : la section **À propos** propose alors la mise à jour, installée depuis l'application. Une fusion non publiée n'arrive pas chez l'utilisateur.
 
-Le premier échec de `whisper-rs-sys` (« ggml not found ») pendant `scripts/cross-build-windows-gnu.sh` est attendu : le script renomme les bibliothèques ggml et recompile. Si l'espace disque manque, supprimer `src-tauri/target/debug` et les anciens paquets de `dist-test/`.
+`scripts/cross-build-windows-gnu.sh` télécharge les bibliothèques Windows précompilées de sherpa-onnx (`scripts/fetch-sherpa-onnx.sh windows`) et copie leurs DLL à côté de `crosstalk.exe`. Si l'espace disque manque, supprimer `src-tauri/target/debug` et les anciens paquets de `dist-test/`.
 
 ## Nouveautés pour les joueurs
 

@@ -50,7 +50,7 @@ impl Line {
 }
 
 /// Disk writes go through the `journal` thread: the threads that log (VAD,
-/// Whisper, capture) never wait for the disk, nor hold a lock during it.
+/// recognition, capture) never wait for the disk, nor hold a lock during it.
 pub struct Logger {
     dir: Option<PathBuf>,
     inner: Mutex<Inner>,
@@ -382,14 +382,11 @@ pub fn summarize(event: &str, v: &Value) -> Vec<(String, &'static str, &'static 
         }
         "speech://status" => {
             let state = s(v, &["state"]).unwrap_or("?");
-            let chosen = s(v, &["config", "model"]).unwrap_or("?");
-            // Automatic fallback: whisper-base runs in place of the chosen model.
-            let model = match s(v, &["fallbackFrom"]) {
-                Some(from) => format!("base (remplace {from}, trop lent)"),
-                None => chosen.to_string(),
-            };
+            let model = s(v, &["modelLabel"])
+                .or_else(|| s(v, &["config", "model"]))
+                .unwrap_or("?");
             let mut msg = format!(
-                "whisper-{model} : {state} · {} · {} thread(s){}",
+                "reconnaissance {model} : {state} · {} · {} thread(s){}",
                 s(v, &["backend"]).unwrap_or("?"),
                 n(v, &["threads"]).unwrap_or(0),
                 if v.get("vadReady").and_then(Value::as_bool) == Some(false) {
@@ -836,38 +833,23 @@ mod tests {
 
         let speech = SpeechStatus {
             state: EngineState::Ready,
-            config: SpeechConfig {
-                model: "small".into(),
-                ..SpeechConfig::default()
-            },
+            config: SpeechConfig::default(),
             model_path: None,
             vad_ready: false,
             models_dir: "models".into(),
             error: Some("lent".into()),
             load_ms: Some(900),
-            backend: "CPU · AVX2".into(),
+            backend: "CPU · ONNX Runtime".into(),
             threads: 4,
-            fallback_from: None,
+            model_label: "Parakeet TDT 0.6B v3".into(),
         };
         let line = &summarize("speech://status", &serde_json::to_value(&speech).unwrap())[0];
         assert_eq!(
             (line.1, line.3.as_str()),
             (
                 "INFO",
-                "whisper-small : ready · CPU · AVX2 · 4 thread(s) · VAD absente · chargé en 900 ms · lent"
+                "reconnaissance Parakeet TDT 0.6B v3 : ready · CPU · ONNX Runtime · 4 thread(s) · VAD absente · chargé en 900 ms · lent"
             )
-        );
-        // Automatic fallback: the journal names the model that really runs.
-        let fallback = SpeechStatus {
-            fallback_from: Some("small".into()),
-            error: None,
-            vad_ready: true,
-            ..speech
-        };
-        let line = &summarize("speech://status", &serde_json::to_value(&fallback).unwrap())[0];
-        assert_eq!(
-            line.3,
-            "whisper-base (remplace small, trop lent) : ready · CPU · AVX2 · 4 thread(s) · chargé en 900 ms"
         );
 
         let translation = TranslationStatus {
@@ -924,10 +906,10 @@ mod tests {
             (e.1, e.3.as_str()),
             ("WARN", "capture impossible [processLoopback] : refusé")
         );
-        let sp = json!({"state":"ready","config":{"model":"small"},"backend":"CPU","threads":4,"vadReady":true,"loadMs":900,"error":null});
+        let sp = json!({"state":"ready","config":{"model":"parakeet-tdt-0.6b-v3"},"modelLabel":"Parakeet TDT 0.6B v3","backend":"CPU","threads":4,"vadReady":true,"loadMs":900,"error":null});
         assert_eq!(
             summarize("speech://status", &sp)[0].3,
-            "whisper-small : ready · CPU · 4 thread(s) · chargé en 900 ms"
+            "reconnaissance Parakeet TDT 0.6B v3 : ready · CPU · 4 thread(s) · chargé en 900 ms"
         );
         let tr = json!({"ready":false,"problem":"clé refusée par le fournisseur","queued":3});
         let t = summarize("translation://status", &tr);
@@ -962,7 +944,12 @@ mod tests {
     fn report_holds_versions_tests_and_journal_without_the_user_name() {
         let dir = tempdir("report");
         std::fs::create_dir_all(dir.join("opus-mt-ru-fr")).unwrap();
-        std::fs::write(dir.join("ggml-small.bin"), vec![0u8; 2_000_000]).unwrap();
+        std::fs::create_dir_all(dir.join("parakeet-tdt-0.6b-v3-int8")).unwrap();
+        std::fs::write(
+            dir.join("parakeet-tdt-0.6b-v3-int8").join("tokens.txt"),
+            vec![0u8; 2_000_000],
+        )
+        .unwrap();
         std::fs::write(dir.join("opus-mt-ru-fr").join("config.json"), "{}").unwrap();
         let rows = vec![DiagRow {
             name: "Journal console.log".into(),
@@ -977,7 +964,7 @@ mod tests {
         }];
         let r = report_text(&rows, &lines, &dir, NOW);
         assert!(r.contains("build "));
-        assert!(r.contains("ggml-small.bin · 2.0 Mo"));
+        assert!(r.contains("tokens.txt · 2.0 Mo"));
         assert!(r.contains("config.json"));
         assert!(r.contains(r"[OK] Journal console.log — C:\Users\[utilisateur]\cs2\console.log"));
         assert!(r.contains("2026-10-13 12:00:00 UTC INFO  asr: prêt"));

@@ -94,8 +94,7 @@ fn route_chat(
 }
 
 /// Capture events go to the UI; a capture that stops also purges the speech and
-/// translation pipelines (nothing survives a stop, an emergency stop or CS2 closing),
-/// and ends an automatic fallback to whisper-base.
+/// translation pipelines (nothing survives a stop, an emergency stop or CS2 closing).
 pub struct CaptureEvents {
     pub ui: audio::TauriEvents,
     pub speech: Arc<SpeechService>,
@@ -106,7 +105,6 @@ impl AudioEvents for CaptureEvents {
     fn status(&self, status: &CaptureStatus) {
         if status.state != CaptureState::Capturing {
             self.speech.purge();
-            self.speech.end_session();
             self.translation.purge();
         }
         self.ui.status(status);
@@ -157,11 +155,11 @@ impl SpeechEvents for SpeechBridge {
     }
 }
 
-/// Starts the speech service with the whisper.cpp models.
+/// Starts the speech service with the sherpa-onnx models.
 pub fn start_speech(app: &AppHandle) -> Arc<SpeechService> {
     SpeechService::start(
         Arc::new(SpeechBridge(app.clone())),
-        Arc::new(speech::WhisperLoader),
+        Arc::new(speech::SherpaLoader),
         crate::paths::models_dir(),
         SpeechConfig::default(),
     )
@@ -248,8 +246,6 @@ mod tests {
             audio_ms: 900,
             latency_ms: 400,
             asr_ms: 300,
-            avg_logprob: -0.2,
-            no_speech_prob: 0.01,
             model: "base".into(),
             speaker: None,
         }

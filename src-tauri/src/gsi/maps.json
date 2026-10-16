@@ -1,5 +1,5 @@
 {
-  "_comment": "Callouts per CS2 map: 'prompt' is given to Whisper (A-06), 'keep' is kept as spoken in translations (F-36). Names are the usual English callouts.",
+  "_comment": "Callouts per CS2 map: 'prompt' lists the map's callouts (formerly the Whisper prompt, A-06), 'keep' is kept as spoken in translations (F-36). Names are the usual English callouts.",
   "de_mirage": {
     "name": "Mirage",
     "prompt": ["A site", "B site", "Palace", "Ramp", "Tetris", "Jungle", "Connector", "Stairs", "Firebox", "Ticket", "Sandwich", "CT spawn", "Top mid", "Window", "Short", "Underpass", "Apps", "Market", "Kitchen", "Van", "Bench", "Catwalk", "Triple"],

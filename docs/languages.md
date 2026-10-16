@@ -19,8 +19,9 @@ Vient ensuite le choix du moteur de traduction (API Cloud, Ollama, LM Studio ou 
 | Dans votre propre langue | Affichée telle quelle, jamais traduite |
 | Dans une autre langue | Affichée telle quelle, avec « langue non choisie » |
 
-- Whisper ne reconnaît que les langues choisies et la vôtre : il confond moins les langues sur les annonces courtes.
-- Le chat écrit reconnaît les mêmes huit langues, d'après l'alphabet, les lettres propres à chaque langue (ukrainien « і ї є ґ », polonais « ą ę ł », turc « ğ ı ş »…) et des mots fréquents. Un message trop court pour savoir reste tel quel.
+- La reconnaissance vocale (Parakeet) écrit ce qu'elle entend ; Crosstalk lit ensuite la langue dans le texte, parmi les langues choisies et la vôtre.
+- Le **turc n'est pas reconnu à la voix** : il ne fait pas partie des 25 langues du modèle. Audio & IA le signale ; le chat écrit en turc reste traduit.
+- Le chat écrit reconnaît les huit langues, d'après l'alphabet, les lettres propres à chaque langue (ukrainien « і ї є ґ », polonais « ą ę ł », turc « ğ ı ş »…) et des mots fréquents. Un message trop court pour savoir reste tel quel.
 - Les annonces CS du lexique (« rush B », « two on A »…) restent instantanées **quand vous lisez en français** : leur traduction est écrite en français. Dans les autres langues, le LLM les traduit.
 - Les termes du glossaire marqués « Conserver » sont gardés dans toutes les langues. Les rendus imposés fournis avec Crosstalk sont en français : ils ne sont appliqués qu'en français. Ceux que vous ajoutez sont appliqués partout.
 
