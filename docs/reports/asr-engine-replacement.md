@@ -12,8 +12,9 @@ moteur de secours.
   pas du PC de référence (i7-1165G7, 16 Go).
 - Le corpus est synthétique : voix Piper, bruit de combat généré, et deux
   vrais enregistrements de démonstration.
-- Le paquet Windows est compilé, mais `crosstalk.exe` n'a pas été lancé sur
-  Windows (voir G).
+- Le paquet Windows est compilé. Son banc d'essai tourne sous Wine avec les
+  DLL livrées, mais l'interface `crosstalk.exe` n'a pas été lancée sur un
+  vrai Windows (voir G).
 
 ## A. Audit
 
@@ -276,8 +277,9 @@ couvrent passent.
 | `npm run check:anticheat` | OK : aucune lecture mémoire, injection ou hook de `cs2.exe` |
 | `npm run check:architecture` | OK (contrat IPC régénéré : +2 commandes) |
 | `npm run check:release-notes` | OK |
-| Build Windows MinGW (`scripts/cross-build-windows-gnu.sh`) | voir la PR |
-| Lancement de `crosstalk.exe` sous Windows | **Non vérifié** |
+| Build Windows MinGW (`scripts/cross-build-windows-gnu.sh`) | OK : installateur et dossier portable, avec les 3 DLL ; `crosstalk.exe` importe `sherpa-onnx-c-api.dll` |
+| `crosstalk-asr-bench.exe` (Windows) sous Wine, 9 annonces russes | OK : DLL chargées, modèle chargé, transcriptions identiques à Linux à un mot près, reconnaissance p50 260 ms |
+| Lancement de l'interface `crosstalk.exe` sur un vrai Windows | **Non vérifié** |
 | Build MSVC (`scripts/validate.ps1`) | **Non lancé** (pas de machine Windows) |
 | Reconnaissance avec CS2 lancé, FPS, sessions longues | **Non vérifié** |
 
