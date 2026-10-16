@@ -7,6 +7,7 @@ import { EASE } from '../shared/ui/atoms';
 import { Intro, Letterbox, Toast } from './shell/Intro';
 import { PageHeader } from './shell/PageHeader';
 import { SetupBanner } from '../features/setup/SetupBanner';
+import { WhatsNew } from '../features/update/WhatsNew';
 import { UpdateBanner } from '../features/update/UpdateBanner';
 import { startUpdateBridge } from '../features/update/update';
 import { startHistoryRecorder } from '../features/history/history';
@@ -24,7 +25,7 @@ import { DiagPage } from '../features/diagnostics/DiagPage';
 import { HistoryPage } from '../features/history/HistoryPage';
 import { LangPage } from '../features/languages/LangPage';
 import { LanguageSetup } from '../features/languages/LanguagesCard';
-import { EngineSetup } from '../features/translation/EngineSetup';
+import { EngineSetup, engineSetupShown } from '../features/translation/EngineSetup';
 import { OverlayPage } from '../features/overlay/OverlayPage';
 import { Stage } from './scene/Stage';
 import type { PageId } from './state/data';
@@ -56,6 +57,8 @@ export default function App() {
   const entered = useApp((s) => s.entered);
   const showIntro = useApp((s) => s.showIntro);
   const Page = PAGES[page];
+  // "What's new" waits for the first-launch choices (languages, engine).
+  const setupDone = useApp((s) => s.langSetupDone && !engineSetupShown(s));
 
   useEffect(() => {
     const stopMeter = startMeter();
@@ -129,6 +132,7 @@ export default function App() {
 
         {entered && <LanguageSetup />}
         {entered && <EngineSetup />}
+        {entered && !showIntro && setupDone && <WhatsNew />}
         {showIntro && <Intro />}
         <Letterbox />
       </div>
