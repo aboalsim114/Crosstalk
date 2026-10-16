@@ -1,5 +1,16 @@
 [
   {
+    "id": "overlay-affiche-les-vraies-phrases",
+    "date": "2026-10-16",
+    "title": "L'overlay en jeu affiche enfin les phrases",
+    "items": [
+      "Les voix et les messages du chat traduits s'affichent maintenant dans l'overlay par-dessus CS2 : avant, ils n'apparaissaient que dans la fenêtre Crosstalk.",
+      "Le radar des annonces s'allume aussi pour les vraies annonces de vos coéquipiers.",
+      "Quand la traduction arrive, la phrase reste affichée le temps choisi dans Overlay.",
+      "Pensez à lancer CS2 en « Plein écran fenêtré » et à démarrer une session depuis l'Accueil."
+    ]
+  },
+  {
     "id": "nouvelle-reconnaissance-vocale-parakeet",
     "date": "2026-10-16",
     "title": "Nouvelle reconnaissance vocale, plus fiable",

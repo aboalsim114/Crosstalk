@@ -100,6 +100,11 @@ describe('pings over time', () => {
     expect(p).toMatchObject({ zone: 'apps', count: 2, at: now - 1000 });
   });
 
+  it('lights zones from real lines, whose ids are counters', () => {
+    const feed = [line(7, 'двое на апах', null, { at: now - 2000 }), line(2 ** 40 + 1, 'один в паласе', null, { at: now - 30000 })];
+    expect(pingsFrom(feed, mirage, now, 12)).toEqual([{ zone: 'apps', count: 2, at: now - 2000, kind: 'voice' }]);
+  });
+
   it('has a sample for the preview', () => {
     const s = samplePings(now);
     expect(layoutOf(s.map)).not.toBeNull();

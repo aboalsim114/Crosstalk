@@ -4,7 +4,7 @@ import { overlayWindow } from '../../shared/ipc';
 import { useLocale, useTargetLang } from '../../shared/i18n';
 import type { OverlayPayload } from '../../app/native';
 import { OverlayStack } from '../../features/overlay/OverlayPage';
-import type { FeedEntry } from '../../app/state/store';
+import { arrivedAt, type FeedEntry } from '../../app/state/store';
 import { RadarPanel } from '../../features/radar/RadarView';
 import { layoutOf, pingLife, samplePings, type RadarPayload } from '../../features/radar/radar';
 
@@ -16,9 +16,9 @@ export function visibleRadar(r: RadarPayload | null | undefined, repos: boolean,
   return pings.length && layoutOf(r.map) ? { ...r, pings } : null;
 }
 
-/** Lines younger than `duration` seconds. Feed ids are arrival timestamps (ms). */
+/** Lines younger than `duration` seconds (arrival time, see `arrivedAt`). */
 export function visibleLines(feed: FeedEntry[], duration: number, now: number): FeedEntry[] {
-  return feed.filter((f) => now - f.id < duration * 1000);
+  return feed.filter((f) => now - arrivedAt(f) < duration * 1000);
 }
 
 /** Content of the transparent, click-through, always-on-top overlay window. */
