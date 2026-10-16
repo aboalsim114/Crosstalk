@@ -94,7 +94,8 @@ fn route_chat(
 }
 
 /// Capture events go to the UI; a capture that stops also purges the speech and
-/// translation pipelines (nothing survives a stop, an emergency stop or CS2 closing).
+/// translation pipelines (nothing survives a stop, an emergency stop or CS2 closing),
+/// and ends an automatic fallback to whisper-base.
 pub struct CaptureEvents {
     pub ui: audio::TauriEvents,
     pub speech: Arc<SpeechService>,
@@ -105,6 +106,7 @@ impl AudioEvents for CaptureEvents {
     fn status(&self, status: &CaptureStatus) {
         if status.state != CaptureState::Capturing {
             self.speech.purge();
+            self.speech.end_session();
             self.translation.purge();
         }
         self.ui.status(status);

@@ -222,6 +222,9 @@ pub struct SpeechStatus {
     /// "GPU · NVIDIA GeForce RTX 3060 (Vulkan)".
     pub backend: String,
     pub threads: u32,
+    /// The chosen model while whisper-base replaces it because it could not
+    /// keep up (until the capture stops).
+    pub fallback_from: Option<String>,
 }
 
 /// Rolling counters for the UI and the diagnostic page.
@@ -237,6 +240,12 @@ pub struct SpeechStats {
     pub latency_p95_ms: Option<u32>,
     /// Whisper compute time / audio duration of the last segment.
     pub last_rtf: Option<f32>,
+    /// Whisper compute time and audio duration of every final segment
+    /// transcribed (cumulative): their ratio says if Whisper keeps up.
+    #[serde(default)]
+    pub asr_ms: u64,
+    #[serde(default)]
+    pub asr_audio_ms: u64,
     /// CPU used by the Crosstalk core process, in % of the whole machine.
     pub cpu_percent: Option<f32>,
     /// "Focus voix": game sound removed over the last second, in dB

@@ -762,3 +762,189 @@ fn purge_during_vad_cannot_restore_old_speaking_activity() {
     assert!(!svc.inner.speaking.load(Ordering::SeqCst));
     assert_eq!(svc.stats().segments, 0);
 }
+
+/// Loads the installed models among `installed` and records every load.
+struct ModelsLoader {
+    installed: Vec<&'static str>,
+    loads: Arc<Mutex<Vec<String>>>,
+}
+impl EngineLoader for ModelsLoader {
+    fn load_detector(&self, _dir: &Path) -> Result<Box<dyn VoiceDetector>, SpeechError> {
+        Ok(Box::new(EnergyDetector {
+            threshold_db: -40.0,
+        }))
+    }
+    fn load_recognizer(
+        &self,
+        _dir: &Path,
+        model: &str,
+        _accel: crate::speech::types::Accel,
+    ) -> Result<Box<dyn Recognizer>, SpeechError> {
+        if !self.installed.contains(&model) {
+            return Err(SpeechError::NotInstalled(model.into()));
+        }
+        self.loads.lock().unwrap().push(model.into());
+        Ok(Box::new(EchoRecognizer {
+            text: "Двое на B".into(),
+            delay: Duration::ZERO,
+            calls: Arc::new(AtomicU64::new(0)),
+        }))
+    }
+    fn model_path(&self, dir: &Path, model: &str) -> Option<PathBuf> {
+        self.installed.contains(&model).then(|| dir.join(model))
+    }
+    fn backend(&self) -> String {
+        "test".into()
+    }
+}
+
+fn models_service(
+    model: &str,
+    installed: Vec<&'static str>,
+) -> (Arc<SpeechService>, Receiver<Ev>, Arc<Mutex<Vec<String>>>) {
+    let (tx, rx) = channel();
+    let loads = Arc::new(Mutex::new(Vec::new()));
+    let svc = SpeechService::start(
+        Arc::new(Events(Mutex::new(tx))),
+        Arc::new(ModelsLoader {
+            installed,
+            loads: loads.clone(),
+        }),
+        PathBuf::from("models"),
+        SpeechConfig {
+            model: model.into(),
+            languages: vec![Lang::Ru],
+            ..SpeechConfig::default()
+        },
+    );
+    (svc, rx, loads)
+}
+
+/// Waits until `model` is loaded and the engine is ready.
+fn wait_loaded(svc: &SpeechService, model: &str) {
+    let end = Instant::now() + Duration::from_secs(5);
+    loop {
+        let loaded = svc.inner.engine.lock().unwrap().loaded_model.clone();
+        if loaded.as_deref() == Some(model) && svc.status().state == EngineState::Ready {
+            return;
+        }
+        assert!(
+            Instant::now() < end,
+            "{model} not loaded: {:?}",
+            svc.status()
+        );
+        std::thread::sleep(Duration::from_millis(5));
+    }
+}
+
+#[test]
+fn a_heavy_model_that_lags_falls_back_to_base_until_the_capture_stops() {
+    let (svc, rx, loads) = models_service("small", vec!["small", "base"]);
+    wait_loaded(&svc, "small");
+    // Two signs are not enough.
+    svc.inner.note_lag(Lag::Stale);
+    svc.inner.note_lag(Lag::Overflow);
+    svc.inner.check_fallback();
+    assert_eq!(svc.status().fallback_from, None);
+    svc.inner.note_lag(Lag::Slow);
+    svc.inner.check_fallback();
+    assert_eq!(svc.status().fallback_from.as_deref(), Some("small"));
+    wait_loaded(&svc, "base");
+    let status = svc.status();
+    assert_eq!(status.config.model, "small", "the user's choice is kept");
+    assert_eq!(status.fallback_from.as_deref(), Some("small"));
+
+    // Transcripts now come from whisper-base.
+    let mut sink = svc.sink();
+    feed(&mut sink, 800, 700);
+    let t = next_transcript(&rx).expect("transcript");
+    assert_eq!(t.model, "base");
+
+    // Lag signs no longer count while falling back.
+    for _ in 0..5 {
+        svc.inner.note_lag(Lag::Stale);
+    }
+    assert!(!svc.inner.lag.lock().unwrap().lagging());
+
+    svc.purge();
+    svc.end_session();
+    wait_loaded(&svc, "small");
+    assert_eq!(svc.status().fallback_from, None);
+    assert_eq!(*loads.lock().unwrap(), vec!["small", "base", "small"]);
+}
+
+#[test]
+fn choosing_a_model_ends_the_fallback() {
+    let (svc, _rx, _) = models_service("small", vec!["small", "base", "tiny"]);
+    wait_loaded(&svc, "small");
+    for _ in 0..3 {
+        svc.inner.note_lag(Lag::Stale);
+    }
+    svc.inner.check_fallback();
+    wait_loaded(&svc, "base");
+    let config = svc.status().config;
+    svc.configure(SpeechConfig {
+        model: "tiny".into(),
+        ..config
+    });
+    wait_loaded(&svc, "tiny");
+    assert_eq!(svc.status().fallback_from, None);
+    svc.end_session();
+    std::thread::sleep(Duration::from_millis(50));
+    wait_loaded(&svc, "tiny");
+}
+
+#[test]
+fn no_fallback_without_base_or_with_a_light_model() {
+    let (svc, _rx, loads) = models_service("small", vec!["small"]);
+    wait_loaded(&svc, "small");
+    for _ in 0..3 {
+        svc.inner.note_lag(Lag::Stale);
+    }
+    svc.inner.check_fallback();
+    assert_eq!(svc.status().fallback_from, None);
+    assert_eq!(*loads.lock().unwrap(), vec!["small"]);
+
+    let (svc, _rx, _) = models_service("base", vec!["base"]);
+    wait_loaded(&svc, "base");
+    for _ in 0..3 {
+        svc.inner.note_lag(Lag::Stale);
+    }
+    assert!(!svc.inner.lag.lock().unwrap().lagging());
+    svc.inner.check_fallback();
+    assert_eq!(svc.status().fallback_from, None);
+}
+
+#[test]
+fn a_whisper_slower_than_the_voice_is_a_lag_sign() {
+    let (tx, _rx) = channel();
+    let svc = SpeechService::start(
+        Arc::new(Events(Mutex::new(tx))),
+        Arc::new(FakeLoader {
+            text: "Двое на B".into(),
+            delay: Duration::from_millis(1_800),
+            calls: Arc::new(AtomicU64::new(0)),
+            has_model: true,
+        }),
+        PathBuf::from("models"),
+        SpeechConfig {
+            model: "small".into(),
+            languages: vec![Lang::Ru],
+            ..SpeechConfig::default()
+        },
+    );
+    wait_ready(&svc);
+    let mut sink = svc.sink();
+    feed(&mut sink, 800, 700);
+    let end = Instant::now() + Duration::from_secs(8);
+    while svc.stats().asr_audio_ms == 0 {
+        assert!(Instant::now() < end, "segment never transcribed");
+        std::thread::sleep(Duration::from_millis(10));
+    }
+    let s = svc.stats();
+    assert!(s.asr_ms > s.asr_audio_ms, "{s:?}");
+    assert_eq!(
+        svc.inner.lag.lock().unwrap().summary(),
+        "1 calcul plus long que la voix"
+    );
+}

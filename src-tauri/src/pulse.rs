@@ -127,6 +127,8 @@ fn delta(now: &SpeechStats, base: &SpeechStats) -> SpeechStats {
         transcribed: now.transcribed.saturating_sub(base.transcribed),
         rejected,
         dropped_blocks: now.dropped_blocks.saturating_sub(base.dropped_blocks),
+        asr_ms: now.asr_ms.saturating_sub(base.asr_ms),
+        asr_audio_ms: now.asr_audio_ms.saturating_sub(base.asr_audio_ms),
         ..Default::default()
     }
 }
@@ -285,11 +287,19 @@ impl Pulse {
             d.segments,
             with_reasons(early, &early_why)
         );
-        let asr = format!(
+        let mut asr = format!(
             "Whisper : {} gardée(s), rejetées : {}",
             d.transcribed,
             with_reasons(late, &late_why)
         );
+        // Whisper's speed: above 1x, it falls behind the voices.
+        if d.asr_audio_ms > 0 {
+            let rtf = d.asr_ms as f64 / d.asr_audio_ms as f64;
+            asr.push_str(&format!(
+                ", calcul {}× la durée de voix",
+                format!("{rtf:.1}").replace('.', ",")
+            ));
+        }
         let tr = format!(
             "traduction : {} ok, {} laissée(s) telle(s) quelle(s), {} erreur(s)",
             w.tr_ok, w.tr_quiet, w.tr_err
@@ -498,14 +508,16 @@ mod tests {
         p.stats(stats(10, 4, &[(RejectReason::Transient, 1)]));
         assert!(p.capture(true, 0).is_empty());
         sound(&mut p, 0, -30.0, -6.0);
-        p.stats(stats(
+        let mut now = stats(
             15,
             7,
             &[
                 (RejectReason::Transient, 2),
                 (RejectReason::Hallucination, 1),
             ],
-        ));
+        );
+        (now.asr_ms, now.asr_audio_ms) = (2_400, 4_000);
+        p.stats(now);
         assert!(p.translation(true, None).is_empty());
         assert!(p
             .translation(false, Some("langue non choisie (Langues)"))
@@ -524,7 +536,9 @@ mod tests {
             "{line}"
         );
         assert!(
-            line.contains("Whisper : 3 gardée(s), rejetées : 1 (hallucination 1)"),
+            line.contains(
+                "Whisper : 3 gardée(s), rejetées : 1 (hallucination 1), calcul 0,6× la durée de voix"
+            ),
             "{line}"
         );
         assert!(
