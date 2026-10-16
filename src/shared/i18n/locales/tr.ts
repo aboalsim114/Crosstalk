@@ -180,6 +180,7 @@ export const tr: Messages = {
   'eng.loaded': '{backend} · {threads} iş parçacığı · {ms} içinde yüklendi',
   'eng.threads': '{backend} · {threads} iş parçacığı',
   'eng.loading': 'Yükleniyor…',
+  'eng.fallback': 'whisper {from} maç sırasında çok yavaş: yakalama durana kadar base kullanılıyor',
   'eng.error': 'Hata',
   'eng.unavailable': 'Motor kullanılamıyor',
   'eng.noVad': 'VAD eksik',

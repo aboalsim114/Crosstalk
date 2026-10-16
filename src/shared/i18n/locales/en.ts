@@ -180,6 +180,7 @@ export const en: Messages = {
   'eng.loaded': '{backend} · {threads} threads · loaded in {ms}',
   'eng.threads': '{backend} · {threads} threads',
   'eng.loading': 'Loading…',
+  'eng.fallback': 'whisper {from} too slow during the match: base used until the capture stops',
   'eng.error': 'Error',
   'eng.unavailable': 'Engine unavailable',
   'eng.noVad': 'VAD missing',

@@ -180,6 +180,7 @@ export const ptBR: Messages = {
   'eng.loaded': '{backend} · {threads} threads · carregado em {ms}',
   'eng.threads': '{backend} · {threads} threads',
   'eng.loading': 'Carregando…',
+  'eng.fallback': 'whisper {from} lento demais na partida: base usado até a captura parar',
   'eng.error': 'Erro',
   'eng.unavailable': 'Mecanismo indisponível',
   'eng.noVad': 'VAD ausente',

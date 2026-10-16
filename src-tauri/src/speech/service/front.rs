@@ -7,6 +7,7 @@ use std::sync::mpsc::{Receiver, RecvTimeoutError, SyncSender, TrySendError};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
+use super::fallback::Lag;
 use super::{
     diagnostic_rejection, FrontMsg, Inner, Job, PARTIAL_MAX_RTF, PARTIAL_MIN_FRAMES,
     PARTIAL_STEP_FRAMES, VAD_HOP_FRAMES,
@@ -253,6 +254,7 @@ fn run_vad(inner: &Inner, det: &mut dyn VoiceDetector, st: &mut Front) {
                         );
                         inner.stats.lock().unwrap().reject(RejectReason::Overflow);
                         inner.publish_stats();
+                        inner.note_lag(Lag::Overflow);
                     }
                 }
             }

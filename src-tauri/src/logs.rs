@@ -382,7 +382,12 @@ pub fn summarize(event: &str, v: &Value) -> Vec<(String, &'static str, &'static 
         }
         "speech://status" => {
             let state = s(v, &["state"]).unwrap_or("?");
-            let model = s(v, &["config", "model"]).unwrap_or("?");
+            let chosen = s(v, &["config", "model"]).unwrap_or("?");
+            // Automatic fallback: whisper-base runs in place of the chosen model.
+            let model = match s(v, &["fallbackFrom"]) {
+                Some(from) => format!("base (remplace {from}, trop lent)"),
+                None => chosen.to_string(),
+            };
             let mut msg = format!(
                 "whisper-{model} : {state} · {} · {} thread(s){}",
                 s(v, &["backend"]).unwrap_or("?"),
@@ -842,6 +847,7 @@ mod tests {
             load_ms: Some(900),
             backend: "CPU · AVX2".into(),
             threads: 4,
+            fallback_from: None,
         };
         let line = &summarize("speech://status", &serde_json::to_value(&speech).unwrap())[0];
         assert_eq!(
@@ -850,6 +856,18 @@ mod tests {
                 "INFO",
                 "whisper-small : ready · CPU · AVX2 · 4 thread(s) · VAD absente · chargé en 900 ms · lent"
             )
+        );
+        // Automatic fallback: the journal names the model that really runs.
+        let fallback = SpeechStatus {
+            fallback_from: Some("small".into()),
+            error: None,
+            vad_ready: true,
+            ..speech
+        };
+        let line = &summarize("speech://status", &serde_json::to_value(&fallback).unwrap())[0];
+        assert_eq!(
+            line.3,
+            "whisper-base (remplace small, trop lent) : ready · CPU · AVX2 · 4 thread(s) · chargé en 900 ms"
         );
 
         let translation = TranslationStatus {

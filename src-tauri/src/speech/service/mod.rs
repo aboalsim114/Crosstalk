@@ -17,6 +17,10 @@
 //! id, replaces them; if the segment is finally rejected, `retract` removes
 //! the line. Final segments always go first.
 //!
+//! When a heavy model cannot keep up during a capture (CS2 taking the
+//! processor), the service switches to whisper-base until the capture stops
+//! (`fallback`).
+//!
 //! Nothing is written to disk. `purge` (stop, emergency, CS2 closed) drops the
 //! open segment, the queue and any result still being computed.
 
@@ -38,11 +42,13 @@ use super::SpeechError;
 use crate::cpu::lower_current_thread_priority;
 
 mod asr;
+mod fallback;
 mod front;
 mod queue;
 mod stats;
 
 use asr::asr_loop;
+use fallback::{is_light, Lag, LagWatch, FALLBACK_MODEL};
 use front::front_loop;
 pub use front::SpeechSink;
 use queue::JobQueue;
@@ -160,9 +166,81 @@ struct Inner {
     /// "Focus voix" on (read by the capture thread).
     focus: AtomicBool,
     focus_db: Mutex<Option<f32>>,
+    /// Signs that Whisper cannot keep up, during the current capture.
+    lag: Mutex<LagWatch>,
+    /// The chosen model while whisper-base replaces it (until the capture stops).
+    fallback: Mutex<Option<String>>,
+    /// whisper-base missing when a fallback was needed: said once.
+    fallback_missing_said: AtomicBool,
 }
 
 impl Inner {
+    /// The model that should be loaded: the chosen one, or whisper-base
+    /// while it replaces it.
+    fn wanted_model(&self, config: &SpeechConfig) -> String {
+        match self.fallback.lock().unwrap().as_ref() {
+            Some(_) => FALLBACK_MODEL.to_string(),
+            None => config.model.clone(),
+        }
+    }
+
+    /// The loaded model, if it may transcribe: the wanted one, or the chosen
+    /// one while whisper-base is still loading to replace it.
+    fn usable_model(&self, config: &SpeechConfig) -> Option<String> {
+        let loaded = self.engine.lock().unwrap().loaded_model.clone()?;
+        let falling_back = self.fallback.lock().unwrap().is_some();
+        (loaded == self.wanted_model(config) || (falling_back && loaded == config.model))
+            .then_some(loaded)
+    }
+
+    /// Records a sign that Whisper cannot keep up with a heavy model.
+    fn note_lag(&self, lag: Lag) {
+        if is_light(&self.config.lock().unwrap().model) || self.fallback.lock().unwrap().is_some() {
+            return;
+        }
+        self.lag.lock().unwrap().note(lag, Instant::now());
+    }
+
+    /// Switches to whisper-base when the chosen model keeps lagging.
+    fn check_fallback(self: &Arc<Self>) {
+        let summary = {
+            let mut lag = self.lag.lock().unwrap();
+            if !lag.lagging() {
+                return;
+            }
+            let summary = lag.summary();
+            lag.clear();
+            summary
+        };
+        let chosen = self.config.lock().unwrap().model.clone();
+        if is_light(&chosen) || self.fallback.lock().unwrap().is_some() {
+            return;
+        }
+        if self
+            .loader
+            .model_path(&self.models_dir, FALLBACK_MODEL)
+            .is_none()
+        {
+            if !self.fallback_missing_said.swap(true, Ordering::SeqCst) {
+                crate::logs::warn(
+                    "asr",
+                    &format!(
+                        "whisper-{chosen} trop lent sur ce PC ({summary} en 1 min), et whisper-{FALLBACK_MODEL} n'est pas installé : installez-le (Audio & IA)"
+                    ),
+                );
+            }
+            return;
+        }
+        *self.fallback.lock().unwrap() = Some(chosen.clone());
+        crate::logs::warn(
+            "asr",
+            &format!(
+                "whisper-{chosen} trop lent sur ce PC ({summary} en 1 min) : bascule sur whisper-{FALLBACK_MODEL} jusqu'à l'arrêt de la capture"
+            ),
+        );
+        load_models(self, None);
+    }
+
     fn stats_snapshot(&self) -> SpeechStats {
         let mut s = self
             .stats
@@ -177,7 +255,8 @@ impl Inner {
         let config = self.config.lock().unwrap().clone();
         let e = self.engine.lock().unwrap();
         let model_path = self.loader.model_path(&self.models_dir, &config.model);
-        let recognizer_ready = e.loaded_model.as_deref() == Some(config.model.as_str());
+        let wanted = self.wanted_model(&config);
+        let recognizer_ready = e.loaded_model.as_deref() == Some(wanted.as_str());
         let state = if e.loading {
             EngineState::Loading
         } else if e.error.is_some() {
@@ -199,6 +278,7 @@ impl Inner {
                 .clone()
                 .unwrap_or_else(|| self.loader.backend()),
             threads: self.threads as u32,
+            fallback_from: self.fallback.lock().unwrap().clone(),
             config,
         }
     }
@@ -275,6 +355,9 @@ impl SpeechService {
         let inner = Arc::new(Inner {
             focus: AtomicBool::new(focus),
             focus_db: Mutex::new(None),
+            lag: Mutex::new(LagWatch::default()),
+            fallback: Mutex::new(None),
+            fallback_missing_said: AtomicBool::new(false),
             events,
             loader,
             models_dir,
@@ -367,6 +450,8 @@ impl SpeechService {
             changed
         };
         if model_changed {
+            // An explicit choice ends any automatic fallback.
+            *self.inner.fallback.lock().unwrap() = None;
             self.purge();
             self.reload(false);
         }
@@ -382,76 +467,20 @@ impl SpeechService {
     }
 
     fn reload(&self, with_vad: bool) {
-        let inner = self.inner.clone();
-        let front = self.front.clone();
-        {
-            let mut e = inner.engine.lock().unwrap();
-            if e.loading {
-                return;
-            }
-            e.loading = true;
-            e.error = None;
-        }
-        inner.publish_status();
-        std::thread::Builder::new()
-            .name("speech-load".into())
-            .spawn(move || {
-                let started = Instant::now();
-                let mut detector_error = None;
-                if with_vad {
-                    match inner.loader.load_detector(&inner.models_dir) {
-                        Ok(d) => {
-                            if front.send(FrontMsg::Detector(d)).is_ok() {
-                                inner.engine.lock().unwrap().vad_ready = true;
-                            }
-                        }
-                        Err(e) => detector_error = Some(e),
-                    }
-                }
-                loop {
-                    let (model, accel) = {
-                        let c = inner.config.lock().unwrap();
-                        (c.model.clone(), c.accel)
-                    };
-                    let result = inner
-                        .loader
-                        .load_recognizer(&inner.models_dir, &model, accel);
-                    // Configuration may change during a slow load. Never install a
-                    // superseded model, and keep loading until the current one wins.
-                    // Wait for in-flight inference without holding the settings
-                    // lock: status/configure must remain responsive.
-                    let mut recognizer = inner.recognizer.lock().unwrap();
-                    let config = inner.config.lock().unwrap();
-                    if config.model != model || config.accel != accel {
-                        continue;
-                    }
-                    let mut error = detector_error.take();
-                    match result {
-                        Ok(r) => {
-                            let backend = r.backend();
-                            *recognizer = Some(r);
-                            let mut e = inner.engine.lock().unwrap();
-                            e.loaded_model = Some(model);
-                            e.loaded_backend = backend;
-                            e.load_ms = Some(started.elapsed().as_millis() as u32);
-                        }
-                        Err(err) => {
-                            *recognizer = None;
-                            inner.engine.lock().unwrap().loaded_model = None;
-                            error.get_or_insert(err);
-                        }
-                    }
-                    let mut e = inner.engine.lock().unwrap();
-                    e.loading = false;
-                    e.error = match error {
-                        Some(SpeechError::NotInstalled(_)) | None => None,
-                        Some(err) => Some(err.to_string()),
-                    };
-                    break;
-                }
-                inner.publish_status();
-            })
-            .expect("spawn speech-load thread");
+        load_models(&self.inner, with_vad.then(|| self.front.clone()));
+    }
+
+    /// The capture stopped: back to the chosen model after a fallback.
+    pub fn end_session(&self) {
+        self.inner.lag.lock().unwrap().clear();
+        let Some(chosen) = self.inner.fallback.lock().unwrap().take() else {
+            return;
+        };
+        crate::logs::info(
+            "asr",
+            &format!("capture arrêtée : retour à whisper-{chosen}"),
+        );
+        self.reload(false);
     }
 
     /// Drops everything in flight: open segment, queued segments, running result.
@@ -459,6 +488,7 @@ impl SpeechService {
         let _publication = self.inner.publication.lock().unwrap();
         self.inner.generation.fetch_add(1, Ordering::SeqCst);
         self.inner.queue.clear();
+        self.inner.lag.lock().unwrap().clear();
         let shown: Vec<u64> = {
             let mut live = self.inner.live.lock().unwrap();
             live.last.clear();
@@ -480,6 +510,78 @@ impl SpeechService {
             focus_frames: 0,
         }
     }
+}
+
+fn load_models(inner: &Arc<Inner>, front: Option<SyncSender<FrontMsg>>) {
+    let inner = inner.clone();
+    {
+        let mut e = inner.engine.lock().unwrap();
+        if e.loading {
+            return;
+        }
+        e.loading = true;
+        e.error = None;
+    }
+    inner.publish_status();
+    std::thread::Builder::new()
+        .name("speech-load".into())
+        .spawn(move || {
+            let started = Instant::now();
+            let mut detector_error = None;
+            if let Some(front) = front {
+                match inner.loader.load_detector(&inner.models_dir) {
+                    Ok(d) => {
+                        if front.send(FrontMsg::Detector(d)).is_ok() {
+                            inner.engine.lock().unwrap().vad_ready = true;
+                        }
+                    }
+                    Err(e) => detector_error = Some(e),
+                }
+            }
+            loop {
+                let (model, accel) = {
+                    let c = inner.config.lock().unwrap();
+                    (inner.wanted_model(&c), c.accel)
+                };
+                let result = inner
+                    .loader
+                    .load_recognizer(&inner.models_dir, &model, accel);
+                // Configuration may change during a slow load. Never install a
+                // superseded model, and keep loading until the current one wins.
+                // Wait for in-flight inference without holding the settings
+                // lock: status/configure must remain responsive.
+                let mut recognizer = inner.recognizer.lock().unwrap();
+                let config = inner.config.lock().unwrap();
+                if inner.wanted_model(&config) != model || config.accel != accel {
+                    continue;
+                }
+                let mut error = detector_error.take();
+                match result {
+                    Ok(r) => {
+                        let backend = r.backend();
+                        *recognizer = Some(r);
+                        let mut e = inner.engine.lock().unwrap();
+                        e.loaded_model = Some(model);
+                        e.loaded_backend = backend;
+                        e.load_ms = Some(started.elapsed().as_millis() as u32);
+                    }
+                    Err(err) => {
+                        *recognizer = None;
+                        inner.engine.lock().unwrap().loaded_model = None;
+                        error.get_or_insert(err);
+                    }
+                }
+                let mut e = inner.engine.lock().unwrap();
+                e.loading = false;
+                e.error = match error {
+                    Some(SpeechError::NotInstalled(_)) | None => None,
+                    Some(err) => Some(err.to_string()),
+                };
+                break;
+            }
+            inner.publish_status();
+        })
+        .expect("spawn speech-load thread");
 }
 
 impl Drop for SpeechService {

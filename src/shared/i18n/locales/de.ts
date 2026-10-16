@@ -180,6 +180,7 @@ export const de: Messages = {
   'eng.loaded': '{backend} · {threads} Threads · geladen in {ms}',
   'eng.threads': '{backend} · {threads} Threads',
   'eng.loading': 'Wird geladen…',
+  'eng.fallback': 'whisper {from} im Match zu langsam: base wird bis zum Ende der Aufnahme verwendet',
   'eng.error': 'Fehler',
   'eng.unavailable': 'Engine nicht verfügbar',
   'eng.noVad': 'VAD fehlt',

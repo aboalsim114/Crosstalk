@@ -2,8 +2,10 @@
 //! inference, hallucination filter, then the transcript event.
 
 use std::sync::atomic::Ordering;
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 
+use super::fallback::{Lag, SLOW_RTF};
 use super::{diagnostic_rejection, Inner, Job, LIVE_FALLBACK_AFTER, STALE_AFTER};
 use crate::speech::engine::RecognizeOptions;
 use crate::speech::filter::{judge, prompt_with, Recognition};
@@ -12,10 +14,11 @@ use crate::speech::types::{RejectReason, Transcript};
 /// Statistics are published this often while audio flows.
 const STATS_EVERY: Duration = Duration::from_secs(2);
 
-pub(super) fn asr_loop(inner: &Inner) {
+pub(super) fn asr_loop(inner: &Arc<Inner>) {
     let mut last_stats = Instant::now();
     while !inner.shutdown.load(Ordering::SeqCst) {
         let job = inner.queue.pop(Duration::from_millis(500));
+        inner.check_fallback();
         if last_stats.elapsed() >= STATS_EVERY {
             last_stats = Instant::now();
             let active = inner
@@ -51,6 +54,7 @@ pub(super) fn asr_loop(inner: &Inner) {
             );
             inner.stats.lock().unwrap().reject(RejectReason::Stale);
             inner.publish_stats();
+            inner.note_lag(Lag::Stale);
             continue;
         }
         transcribe(inner, job);
@@ -101,10 +105,10 @@ pub(super) fn transcribe(inner: &Inner, job: Job) {
     let config = inner.config.lock().unwrap().clone();
     let prompt = prompt_with(&config.glossary, &inner.map_prompt.lock().unwrap());
     let mut slot = inner.recognizer.lock().unwrap();
-    if inner.engine.lock().unwrap().loaded_model.as_deref() != Some(config.model.as_str()) {
+    let Some(model) = inner.usable_model(&config) else {
         inner.close_utterance(job.utterance);
         return;
-    }
+    };
     let Some(recognizer) = slot.as_mut() else {
         inner.close_utterance(job.utterance);
         return; // model not installed or loading
@@ -123,6 +127,9 @@ pub(super) fn transcribe(inner: &Inner, job: Job) {
         );
         inner.stats.lock().unwrap().reject(RejectReason::Stale);
         inner.publish_stats();
+        drop(publication);
+        drop(slot);
+        inner.note_lag(Lag::Stale);
         return;
     }
     let queue_ms = job.queued_at.elapsed().as_millis();
@@ -147,8 +154,14 @@ pub(super) fn transcribe(inner: &Inner, job: Job) {
         return; // purged while transcribing
     }
     let audio_ms = job.segment.duration_ms();
+    let rtf = asr_ms as f32 / audio_ms.max(1) as f32;
+    if rtf > SLOW_RTF {
+        inner.note_lag(Lag::Slow);
+    }
     let mut stats = inner.stats.lock().unwrap();
-    stats.last_rtf = Some(asr_ms as f32 / audio_ms.max(1) as f32);
+    stats.last_rtf = Some(rtf);
+    stats.asr_ms += asr_ms as u64;
+    stats.asr_audio_ms += audio_ms as u64;
     let rec = match result {
         Ok(r) => r,
         Err(e) => {
@@ -168,9 +181,12 @@ pub(super) fn transcribe(inner: &Inner, job: Job) {
         job.voice_end.elapsed()
     };
     let outcome = judge_current(&rec, audio_ms, age);
+    if outcome == Err(RejectReason::Stale) {
+        inner.note_lag(Lag::Stale);
+    }
     if std::env::var_os("CROSSTALK_SPEECH_DIAGNOSTICS").is_some_and(|v| v == "1") {
         eprintln!("crosstalk speech diagnostic: model={} encoder={} audio_ms={} queue_ms={} inference_ms={} timing={:?} lang={:?} lang_prob={} logprob={} no_speech={} outcome={:?} raw={:?}",
-            config.model, if config.fast_encoder { "reduced" } else { "full" }, audio_ms, queue_ms,
+            model, if config.fast_encoder { "reduced" } else { "full" }, audio_ms, queue_ms,
             asr_ms, timing, rec.lang, rec.lang_prob, rec.avg_logprob, rec.no_speech_prob, outcome, rec.text);
     }
     match outcome {
@@ -199,7 +215,7 @@ pub(super) fn transcribe(inner: &Inner, job: Job) {
                 asr_ms,
                 avg_logprob: rec.avg_logprob,
                 no_speech_prob: rec.no_speech_prob,
-                model: config.model.clone(),
+                model,
                 speaker: None,
             });
         }
@@ -213,9 +229,9 @@ pub(super) fn transcribe_partial(inner: &Inner, job: Job) {
     let config = inner.config.lock().unwrap().clone();
     let prompt = prompt_with(&config.glossary, &inner.map_prompt.lock().unwrap());
     let mut slot = inner.recognizer.lock().unwrap();
-    if inner.engine.lock().unwrap().loaded_model.as_deref() != Some(config.model.as_str()) {
+    let Some(model) = inner.usable_model(&config) else {
         return;
-    }
+    };
     let Some(recognizer) = slot.as_mut() else {
         return;
     };
@@ -264,7 +280,7 @@ pub(super) fn transcribe_partial(inner: &Inner, job: Job) {
         asr_ms,
         avg_logprob: rec.avg_logprob,
         no_speech_prob: rec.no_speech_prob,
-        model: config.model.clone(),
+        model,
         speaker: None,
     };
     inner

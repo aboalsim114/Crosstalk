@@ -41,6 +41,8 @@ export interface SpeechStatus {
   loadMs: number | null;
   backend: string;
   threads: number;
+  /** The chosen model while whisper-base replaces it, too slow during the match (until the capture stops). */
+  fallbackFrom?: string | null;
 }
 
 /** A transcription in the speaker's language (not a translation). */
@@ -70,6 +72,9 @@ export interface SpeechStats {
   latencyP50Ms: number | null;
   latencyP95Ms: number | null;
   lastRtf: number | null;
+  /** Whisper time and audio duration of every final segment (cumulative, ms). */
+  asrMs?: number;
+  asrAudioMs?: number;
   cpuPercent: number | null;
   /** Game sound removed by "Focus voix" over the last second (dB); null when off or mono. */
   focusDb?: number | null;

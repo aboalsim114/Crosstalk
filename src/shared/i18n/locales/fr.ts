@@ -187,6 +187,7 @@ export const fr = {
   'eng.loaded': '{backend} · {threads} threads · chargé en {ms}',
   'eng.threads': '{backend} · {threads} threads',
   'eng.loading': 'Chargement…',
+  'eng.fallback': 'whisper {from} trop lent pendant la partie : base utilisé jusqu’à l’arrêt de la capture',
   'eng.error': 'Erreur',
   'eng.unavailable': 'Moteur indisponible',
   'eng.noVad': 'VAD absente',

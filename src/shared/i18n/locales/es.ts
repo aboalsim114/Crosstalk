@@ -180,6 +180,7 @@ export const es: Messages = {
   'eng.loaded': '{backend} · {threads} hilos · cargado en {ms}',
   'eng.threads': '{backend} · {threads} hilos',
   'eng.loading': 'Cargando…',
+  'eng.fallback': 'whisper {from} demasiado lento en la partida: se usa base hasta detener la captura',
   'eng.error': 'Error',
   'eng.unavailable': 'Motor no disponible',
   'eng.noVad': 'Falta el VAD',

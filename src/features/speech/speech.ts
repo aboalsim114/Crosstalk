@@ -69,12 +69,16 @@ export interface EngineSummary {
 
 export function engineSummary(st: SpeechStatus | null): EngineSummary {
   if (!st) return { value: '…', detail: t('eng.starting'), color: '#8f8a83' };
-  const model = `whisper ${st.config.model}`;
+  // Automatic fallback: whisper-base runs in place of a model too slow during the match.
+  const running = st.fallbackFrom ? 'base' : st.config.model;
+  const model = `whisper ${running}`;
   switch (st.state) {
     case 'ready':
       return {
-        value: `Whisper ${st.config.model}`,
-        detail: st.loadMs != null ? t('eng.loaded', { backend: st.backend, threads: st.threads, ms: formatMs(st.loadMs) }) : t('eng.threads', { backend: st.backend, threads: st.threads }),
+        value: `Whisper ${running}`,
+        detail: st.fallbackFrom
+          ? t('eng.fallback', { from: st.fallbackFrom })
+          : st.loadMs != null ? t('eng.loaded', { backend: st.backend, threads: st.threads, ms: formatMs(st.loadMs) }) : t('eng.threads', { backend: st.backend, threads: st.threads }),
         color: '#7fe0a8',
       };
     case 'loading':

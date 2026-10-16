@@ -180,6 +180,7 @@ export const pl: Messages = {
   'eng.loaded': '{backend} · wątki: {threads} · wczytano w {ms}',
   'eng.threads': '{backend} · wątki: {threads}',
   'eng.loading': 'Wczytywanie…',
+  'eng.fallback': 'whisper {from} za wolny w trakcie meczu: base używany do zatrzymania przechwytywania',
   'eng.error': 'Błąd',
   'eng.unavailable': 'Silnik niedostępny',
   'eng.noVad': 'Brak VAD',
