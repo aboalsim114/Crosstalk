@@ -30,10 +30,12 @@ setup_bytes=$(stat -c %s "$setup")
 # Same number as the one compiled into the app (src-tauri/build.rs).
 build_no=$(git rev-list --count HEAD)
 version=$(node -p "require('./src-tauri/tauri.conf.json').version")
-# Titles of the last merged pull requests (GitHub puts them in the merge body).
-notes_json=$(git log --first-parent --merges -n 6 --format='%b%x1e' | node -e '
-  const t = require("fs").readFileSync(0, "utf8").split("\x1e").map((b) => b.trim().split("\n")[0]).filter(Boolean);
-  process.stdout.write(JSON.stringify(t));')
+# What's new, for the players (release-notes.json, written with each pull
+# request): each entry gets the build that first shipped it, remembered in
+# news.json on the downloads branch. No commit, no pull request number.
+git fetch -q origin "$branch" 2>/dev/null || true
+prev_news=$(git show "origin/$branch:news.json" 2>/dev/null || echo '[]')
+news_json=$(node scripts/release-notes.mjs "$build_no" "$prev_news")
 date=$(date -u '+%Y-%m-%d %H:%M UTC')
 
 tmp=$(mktemp -d)
@@ -63,11 +65,13 @@ cp "$root/$setup" "$setup_asset"
 } > VERSION.md
 # Update feed read by the app (src-tauri/src/updater.rs).
 node -e '
-  const [build, version, commit, date, sha256, bytes, url, notes] = process.argv.slice(1);
-  const feed = { build: Number(build), version, commit, date, notes: JSON.parse(notes), setup: { url, sha256, bytes: Number(bytes) } };
+  const [build, version, commit, date, sha256, bytes, url, newsArg] = process.argv.slice(1);
+  const { notes, news } = JSON.parse(newsArg);
+  const feed = { build: Number(build), version, commit, date, notes, news: news.slice(0, 12), setup: { url, sha256, bytes: Number(bytes) } };
   require("fs").writeFileSync("latest.json", JSON.stringify(feed, null, 1) + "\n");
-' "$build_no" "$version" "$commit" "$date" "$setup_sha" "$setup_bytes" "https://raw.githubusercontent.com/$repo/$branch/$setup_asset" "$notes_json"
-git add "$asset" "$setup_asset" VERSION.md latest.json
+  require("fs").writeFileSync("news.json", JSON.stringify(news, null, 1) + "\n");
+' "$build_no" "$version" "$commit" "$date" "$setup_sha" "$setup_bytes" "https://raw.githubusercontent.com/$repo/$branch/$setup_asset" "$news_json"
+git add "$asset" "$setup_asset" VERSION.md latest.json news.json
 git commit -qm "Version de test $commit ($date)"
 git push -qf origin "HEAD:refs/heads/$branch"
 cd "$root"
