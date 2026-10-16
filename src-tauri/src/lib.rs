@@ -40,6 +40,7 @@ mod shortcuts;
 mod speaker;
 pub mod speech;
 mod stream;
+mod tap_keys;
 pub mod translation;
 mod tray;
 mod updater;

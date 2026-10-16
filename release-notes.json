@@ -1,5 +1,16 @@
 [
   {
+    "id": "raccourcis-alt-et-alt-gr",
+    "date": "2026-10-16",
+    "title": "Répondre et dicter d'une seule touche",
+    "items": [
+      "Tapez Alt seul pour ouvrir la fenêtre Répondre (avant : Ctrl+Alt+F7).",
+      "Tapez Alt Gr seul pour lancer la dictée, et encore Alt Gr pour la terminer (avant : Ctrl+Alt+F6).",
+      "Seul un appui bref compte : Alt+Tab, Alt Gr+E pour l'euro ou une touche Alt gardée enfoncée n'ouvrent rien, et vous pouvez continuer à avancer pendant l'appui.",
+      "Si votre touche vocale CS2 est Alt dans Voix IA, choisissez-en une autre (K, V ou une touche de souris) : Crosstalk vous le signale."
+    ]
+  },
+  {
     "id": "overlay-affiche-les-vraies-phrases",
     "date": "2026-10-16",
     "title": "L'overlay en jeu affiche enfin les phrases",

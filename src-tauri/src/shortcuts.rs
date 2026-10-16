@@ -1,7 +1,8 @@
 //! System-wide hotkeys, active even while CS2 has the focus.
 //!
 //! Registered with `RegisterHotKey` through tauri-plugin-global-shortcut: no keyboard
-//! hook and nothing touches the game process.
+//! hook and nothing touches the game process. Répondre (Alt) and the dictation
+//! (Alt Gr) are one-key taps, which `RegisterHotKey` cannot do: see tap_keys.rs.
 
 use std::sync::Mutex;
 
@@ -11,9 +12,7 @@ use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut,
 
 use crate::actions::{self, Action};
 
-pub const BINDINGS: [(Code, Action, &str); 5] = [
-    (Code::F6, Action::Dictate, "Ctrl+Alt+F6"),
-    (Code::F7, Action::Reply, "Ctrl+Alt+F7"),
+pub const BINDINGS: [(Code, Action, &str); 3] = [
     (Code::F8, Action::Overlay, "Ctrl+Alt+F8"),
     (Code::F9, Action::Pause, "Ctrl+Alt+F9"),
     (Code::F10, Action::Emergency, "Ctrl+Alt+F10"),
@@ -58,20 +57,29 @@ pub fn plugin() -> tauri::plugin::TauriPlugin<Wry> {
 /// Registers every binding; a conflict with another app is reported, not fatal.
 pub fn register_all(app: &AppHandle) {
     let gs = app.global_shortcut();
-    let statuses = BINDINGS
-        .iter()
-        .map(|(code, _, keys)| match gs.register(shortcut(*code)) {
-            Ok(()) => ShortcutStatus {
-                keys,
-                registered: true,
-                error: None,
-            },
-            Err(e) => ShortcutStatus {
-                keys,
-                registered: false,
-                error: Some(e.to_string()),
-            },
-        })
+    let taps = crate::tap_keys::start(app.clone());
+    let tap_statuses = crate::tap_keys::TAP_KEYS.iter().map(|k| ShortcutStatus {
+        keys: k.label,
+        registered: taps,
+        error: (!taps).then(|| "lecture du clavier impossible".to_string()),
+    });
+    let statuses = tap_statuses
+        .chain(
+            BINDINGS
+                .iter()
+                .map(|(code, _, keys)| match gs.register(shortcut(*code)) {
+                    Ok(()) => ShortcutStatus {
+                        keys,
+                        registered: true,
+                        error: None,
+                    },
+                    Err(e) => ShortcutStatus {
+                        keys,
+                        registered: false,
+                        error: Some(e.to_string()),
+                    },
+                }),
+        )
         .collect();
     *app.state::<ShortcutRegistry>().0.lock().unwrap() = statuses;
 }

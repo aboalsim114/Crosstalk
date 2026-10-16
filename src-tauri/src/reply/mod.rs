@@ -244,7 +244,7 @@ pub fn reply_models(reply: tauri::State<'_, Arc<ReplyService>>) -> Vec<ReplyTarg
     reply.models()
 }
 
-/// Opens the reply window (from the main window: button or Ctrl+Alt+F7).
+/// Opens the reply window (from the main window: button or Alt).
 #[tauri::command]
 pub fn reply_open(
     app: AppHandle,

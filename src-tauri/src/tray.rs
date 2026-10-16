@@ -28,14 +28,14 @@ pub fn create(app: &AppHandle) -> tauri::Result<()> {
     let reply = MenuItem::with_id(
         app,
         "reply",
-        "Répondre dans leur langue\tCtrl+Alt+F7",
+        "Répondre dans leur langue\tAlt",
         true,
         None::<&str>,
     )?;
     let dictate = MenuItem::with_id(
         app,
         "dictate",
-        "Dicter une réponse\tCtrl+Alt+F6",
+        "Dicter une réponse\tAlt Gr",
         true,
         None::<&str>,
     )?;

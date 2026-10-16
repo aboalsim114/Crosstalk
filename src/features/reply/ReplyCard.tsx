@@ -27,7 +27,7 @@ export function ReplyCard() {
     <div className="glass flex flex-col gap-3.5 p-5" data-testid="reply-card">
       <div className="flex items-baseline justify-between">
         <span className="lbl">RÉPONDRE DANS LEUR LANGUE</span>
-        <span style={{ font: fnt(400, 10, 'mono'), color: '#5a5650' }}>en jeu : Ctrl+Alt+F7</span>
+        <span style={{ font: fnt(400, 10, 'mono'), color: '#5a5650' }}>en jeu : Alt</span>
       </div>
       <span style={{ font: fnt(400, 11.5, 'sans', 1.5), color: '#6e6961' }}>
         Écrivez dans votre langue : le moteur de « Traduction IA » traduit et Crosstalk copie le message. Dans CS2, ouvrez le chat (Y ou U), collez (Ctrl+V), Entrée. Rien n’est tapé dans le jeu à votre place.
