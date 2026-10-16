@@ -7,8 +7,7 @@
 //! from or written to the game's process. The file is written only when the
 //! user clicks "Activer" and removed by "Retirer".
 //!
-//! The map's callouts are then given to Whisper (initial prompt) and kept as
-//! spoken in translations.
+//! The map's callouts are then kept as spoken in translations.
 
 use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
@@ -34,7 +33,7 @@ const CS2_APPID: u64 = 730;
 #[derive(Debug, Clone, Deserialize)]
 pub struct MapInfo {
     pub name: String,
-    /// Callouts given to Whisper.
+    /// Callouts of the map (counted in the GSI status).
     pub prompt: Vec<String>,
     /// Callouts kept as spoken in translations.
     pub keep: Vec<String>,
@@ -435,7 +434,6 @@ impl GsiService {
 
 pub struct TauriGsiEvents {
     pub app: tauri::AppHandle,
-    pub speech: Arc<crate::speech::SpeechService>,
     pub translation: Arc<crate::translation::TranslationService>,
     pub reply: Arc<crate::reply::ReplyService>,
 }
@@ -448,8 +446,6 @@ impl GsiEvents for TauriGsiEvents {
 
     fn map(&self, map: Option<&str>) {
         let info = map.and_then(|m| maps().get(m));
-        self.speech
-            .set_map_prompt(info.map(|i| i.prompt.clone()).unwrap_or_default());
         let keep = info.map(|i| i.keep.clone()).unwrap_or_default();
         self.reply.set_map_terms(keep.clone());
         self.translation.set_map_terms(keep);

@@ -1,6 +1,6 @@
 //! Language of a short chat message (F-31): one of the languages Crosstalk
 //! can translate (fr, en, ru, de, es, uk, pl, tr), or another ISO code for
-//! scripts it cannot. Whisper gives the language of voices; chat messages are
+//! scripts it cannot. The recogniser gives the language of voices; chat messages are
 //! a few words, so the guess relies on the alphabet, letters only one
 //! language uses and frequent words. When nothing tells, the message is shown
 //! as is rather than risking a wrong translation.

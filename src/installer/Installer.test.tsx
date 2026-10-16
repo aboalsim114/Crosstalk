@@ -62,8 +62,8 @@ describe('Installer', () => {
     fireEvent.click(screen.getByText('INSTALLER CROSSTALK'));
     expect(h.calls).toContainEqual(['install', { dir: 'D:\\Jeux\\Crosstalk', desktop: false }]);
 
-    act(() => h.emit(progress({ detail: 'Transcription (Whisper base) · 120 / 776 Mo' })));
-    expect(await screen.findByText('Transcription (Whisper base) · 120 / 776 Mo')).toBeInTheDocument();
+    act(() => h.emit(progress({ detail: 'Reconnaissance vocale (Parakeet TDT 0.6B v3) · 120 / 671 Mo' })));
+    expect(await screen.findByText('Reconnaissance vocale (Parakeet TDT 0.6B v3) · 120 / 671 Mo')).toBeInTheDocument();
     expect(screen.getByText('EN COURS')).toBeInTheDocument();
   });
 

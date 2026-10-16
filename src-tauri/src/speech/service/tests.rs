@@ -47,14 +47,7 @@ struct EchoRecognizer {
     calls: Arc<AtomicU64>,
 }
 impl Recognizer for EchoRecognizer {
-    fn transcribe_in(
-        &mut self,
-        samples: &[f32],
-        lang: &str,
-        prompt: &str,
-        _threads: usize,
-    ) -> Result<String, SpeechError> {
-        assert!(prompt.contains("rush B"), "CS words help the dictation too");
+    fn transcribe_in(&mut self, samples: &[f32], lang: &str) -> Result<String, SpeechError> {
         Ok(format!("{lang}:{}", samples.len()))
     }
     fn recognize(
@@ -64,14 +57,10 @@ impl Recognizer for EchoRecognizer {
     ) -> Result<Recognition, SpeechError> {
         self.calls.fetch_add(1, Ordering::SeqCst);
         std::thread::sleep(self.delay);
-        assert!(opts.prompt.contains("rush B"));
-        assert!(opts.fast_encoder);
         Ok(Recognition {
             text: self.text.clone(),
             lang: opts.languages[0],
             lang_prob: 1.0,
-            avg_logprob: -0.2,
-            no_speech_prob: 0.01,
         })
     }
 }
@@ -92,7 +81,7 @@ impl EngineLoader for FakeLoader {
         &self,
         _dir: &Path,
         model: &str,
-        _accel: crate::speech::types::Accel,
+        _threads: usize,
     ) -> Result<Box<dyn Recognizer>, SpeechError> {
         if !self.has_model {
             return Err(SpeechError::NotInstalled(model.into()));
@@ -348,8 +337,6 @@ impl Recognizer for Script {
             text: text.into(),
             lang: opts.languages[0],
             lang_prob: 1.0,
-            avg_logprob: -0.2,
-            no_speech_prob: 0.01,
         })
     }
 }
@@ -429,8 +416,6 @@ fn a_late_final_segment_takes_its_live_text() {
         audio_ms: 2000,
         latency_ms: 300,
         asr_ms: 300,
-        avg_logprob: -0.2,
-        no_speech_prob: 0.01,
         model: "base".into(),
         speaker: None,
     };
@@ -457,9 +442,9 @@ fn a_late_final_segment_takes_its_live_text() {
     let t = next_transcript(&rx).unwrap();
     assert_eq!((t.id, t.partial, t.text.as_str()), (42, false, "Двое идут"));
     assert!(t.latency_ms >= 4000);
-    assert_eq!(calls.load(Ordering::SeqCst), 0, "no Whisper pass");
+    assert_eq!(calls.load(Ordering::SeqCst), 0, "no recogniser pass");
     assert_eq!(svc.stats().transcribed, 1);
-    // Without a live line, Whisper is needed.
+    // Without a live line, the recogniser is needed.
     assert!(!finalize_from_live(
         &svc.inner,
         &Job {
@@ -470,10 +455,10 @@ fn a_late_final_segment_takes_its_live_text() {
 }
 
 #[test]
-fn live_lines_stop_when_whisper_cannot_keep_up() {
+fn live_lines_stop_when_the_recogniser_cannot_keep_up() {
     let (svc, rx, calls) = service("Двое на B", 0, true);
     wait_ready(&svc);
-    // The last live line took 3 s of Whisper for 2 s of audio.
+    // The last live line took 3 s of recognition for 2 s of audio.
     svc.inner.live.lock().unwrap().partial_ms = 3000;
     let mut sink = svc.sink();
     // Two halves: the capture → VAD buffer holds 256 blocks of 10 ms.
@@ -535,8 +520,6 @@ fn result_expiring_during_inference_is_rejected() {
         text: "Двое на B".into(),
         lang: Lang::Ru,
         lang_prob: 1.0,
-        avg_logprob: -0.2,
-        no_speech_prob: 0.01,
     };
     assert!(judge_current(&rec, 800, STALE_AFTER).is_ok());
     assert_eq!(
@@ -552,15 +535,12 @@ fn explicit_live_threads_are_preserved() {
         fn recognize(
             &mut self,
             _: &[f32],
-            opts: &RecognizeOptions,
+            _: &RecognizeOptions,
         ) -> Result<Recognition, SpeechError> {
-            assert_eq!(opts.threads, sanitize_threads(2));
             Ok(Recognition {
                 text: "Двое на B".into(),
                 lang: Lang::Ru,
                 lang_prob: 1.0,
-                avg_logprob: -0.2,
-                no_speech_prob: 0.01,
             })
         }
     }
@@ -601,7 +581,7 @@ fn explicit_live_threads_are_preserved() {
 }
 
 #[test]
-fn reload_follows_configuration_changed_during_load() {
+fn an_old_model_id_during_the_load_keeps_the_current_model() {
     struct GatedLoader {
         entered: Mutex<Sender<()>>,
         release: Mutex<Receiver<()>>,
@@ -617,7 +597,7 @@ fn reload_follows_configuration_changed_during_load() {
             &self,
             _: &Path,
             model: &str,
-            _: crate::speech::types::Accel,
+            _: usize,
         ) -> Result<Box<dyn Recognizer>, SpeechError> {
             let first = {
                 let mut models = self.models.lock().unwrap();
@@ -659,18 +639,19 @@ fn reload_follows_configuration_changed_during_load() {
         .recv_timeout(Duration::from_secs(5))
         .expect("first load entered");
     let initial = svc.status().config.model;
-    let next = if initial == "tiny" { "base" } else { "tiny" };
+    // A Whisper id from an older version during the load: still the same
+    // model, no second load.
     svc.configure(SpeechConfig {
-        model: next.into(),
+        model: "small".into(),
         ..svc.status().config
     });
     release_tx.send(()).unwrap();
     wait_ready(&svc);
     assert_eq!(
         svc.inner.engine.lock().unwrap().loaded_model.as_deref(),
-        Some(next)
+        Some(initial.as_str())
     );
-    assert_eq!(*loader.models.lock().unwrap(), vec![initial, next.into()]);
+    assert_eq!(*loader.models.lock().unwrap(), vec![initial]);
 }
 
 #[test]

@@ -1,43 +1,17 @@
 import { config } from '../../app/config';
 import { capturesDuring } from '../../app/native';
-import { useState } from 'react';
-import { isTauri, translation as nativeTranslation, type Translation } from '../../shared/ipc';
+import { useEffect, useState } from 'react';
+import { isTauri, speech, translation as nativeTranslation, type LegacyModels, type LegacyWhisper, type SpeechLang, type Translation } from '../../shared/ipc';
 import { Radio, Seg, Slider, Toggle, ToggleRow, fnt } from '../../shared/ui/atoms';
 import { LevelMeter } from '../../shared/ui/LevelMeter';
 import { SpeakerCard } from '../speaker/SpeakerCard';
 import { captureSummary, cs2Summary, isCapturing, refreshDevices, runCaptureTest, testMessage, useAudio } from './audio';
 import { MODELS, type ModelId } from '../../app/state/data';
 import { engineSummary, formatMs, rescanModels, statsLine, useSpeech } from '../speech/speech';
-import { useApp, type Accel, type CaptureSource } from '../../app/state/store';
-import { pairSummary, percentile, rescanTranslation, useTranslation } from '../translation/translation';
+import { useApp, type CaptureSource } from '../../app/state/store';
+import { percentile, refreshTranslation, translationSummary, useTranslation } from '../translation/translation';
 import { engineLabel } from '../translation/llm';
 import { LlmCard } from '../translation/LlmCard';
-
-const ACCELS: [Accel, string][] = [
-  ['auto', 'AUTO'],
-  ['gpu', 'GPU'],
-  ['cpu', 'CPU'],
-];
-
-/** What the engine card says about where Whisper runs. */
-export function accelNote(accel: Accel, backend: string | undefined): string {
-  if (accel === 'auto') {
-    if (!backend) return 'Auto : mesure de la carte graphique et du processeur…';
-    const gpu = /^GPU · (.+?) \(Vulkan\) · auto : (.+)$/.exec(backend);
-    if (gpu) return `Auto : carte graphique ${gpu[1]}, ${gpu[2]}.`;
-    const slow = /auto : carte graphique pas assez rapide \((.+)\)$/.exec(backend);
-    if (slow) return `Auto : processeur (carte graphique pas assez rapide, ${slow[1]}).`;
-    const why = /auto \((.+)\)$/.exec(backend);
-    if (why) return `Auto : processeur (${why[1]}).`;
-    return 'Auto : processeur.';
-  }
-  const refused = /GPU \((.+)\)$/.exec(backend ?? '');
-  if (accel === 'gpu' && refused) return `Carte graphique non utilisée : ${refused[1]}. Whisper tourne sur le processeur.`;
-  if (accel === 'cpu') return 'Processeur choisi : la carte graphique reste au jeu.';
-  if (backend?.startsWith('GPU')) return 'Carte graphique : transcription bien plus rapide, modèle plus précis possible.';
-  if (!backend) return 'Carte graphique demandée…';
-  return 'Aucune carte graphique Vulkan utilisable : Whisper tourne sur le processeur.';
-}
 
 function CaptureCard() {
   const s = useApp();
@@ -231,27 +205,83 @@ function VadCard() {
   );
 }
 
+const mb = (bytes: number) => `${Math.round(bytes / 1_000_000)} Mo`;
+
+const LANG_NAMES: Record<SpeechLang, string> = { fr: 'français', en: 'anglais', ru: 'russe', de: 'allemand', es: 'espagnol', uk: 'ukrainien', pl: 'polonais', tr: 'turc' };
+
+/** Languages Parakeet TDT 0.6B v3 does not recognise (it knows 25 European languages). */
+export const UNSUPPORTED_LANGS: SpeechLang[] = ['tr'];
+
+/** Languages the recogniser listens for, e.g. "russe, anglais, français". */
+export function languagesNote(langs: SpeechLang[] | undefined): string {
+  return langs?.length ? langs.map((l) => LANG_NAMES[l] ?? l).join(', ') : '—';
+}
+
+/** Whisper files left by earlier versions: shown, deleted only on the user's request. */
+function LegacyWhisperBlock() {
+  const [legacy, setLegacy] = useState<LegacyWhisper | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  useEffect(() => {
+    speech
+      .legacyWhisper()
+      .then(setLegacy)
+      .catch(() => setLegacy(null));
+  }, []);
+  if (!legacy?.files) return null;
+  const cleanup = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      setLegacy(await speech.legacyCleanup());
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div className="flex flex-col gap-2 rounded-lg px-3 py-2.5" style={{ border: '1px solid rgba(255,255,255,.07)' }} data-testid="legacy-whisper">
+      <span style={{ font: fnt(400, 11, 'sans', 1.5), color: '#8f8a83' }}>
+        Anciens fichiers Whisper encore présents : {legacy.files} fichier{legacy.files > 1 ? 's' : ''}, {mb(legacy.bytes)}. Crosstalk ne les utilise plus.
+      </span>
+      <div className="flex items-center gap-2">
+        <div className="pill pill-ghost flex-none px-3.5 py-[7px]" role="button" aria-disabled={busy} onClick={() => !busy && cleanup()} style={{ font: fnt(500, 11.5) }}>
+          {busy ? 'Suppression…' : 'Libérer l’espace'}
+        </div>
+      </div>
+      {error && <span style={{ font: fnt(400, 11, 'sans', 1.5), color: '#ff8a7a' }}>{error}</span>}
+    </div>
+  );
+}
+
 /** Desktop app: the real model files found on disk and the engine state. */
 function NativeModelCard() {
   const s = useApp();
   const sp = useSpeech();
   const engine = engineSummary(sp.status);
   const stats = sp.stats;
+  const st = sp.status;
   return (
     <div className="glass flex flex-col gap-2 p-5">
       <div className="flex items-center justify-between pb-1">
-        <span className="lbl">MODÈLE LOCAL · WHISPER</span>
-        <Seg options={ACCELS} value={s.accel} onChange={(v) => s.set({ accel: v })} item={{ padding: '3px 11px', font: fnt(500, 10.5, 'mono') }} />
+        <span className="lbl">RECONNAISSANCE VOCALE · LOCALE</span>
+        <span style={{ font: fnt(500, 9.5, 'mono'), letterSpacing: '.12em', color: '#6e6961' }}>HORS LIGNE</span>
       </div>
-      <span data-testid="accel-note" style={{ font: fnt(400, 10.5, 'sans', 1.45), color: '#6e6961' }}>
-        {sp.status?.state === 'loading' ? 'Chargement du modèle…' : accelNote(s.accel, sp.status?.backend)}
-      </span>
       <div className="flex items-baseline justify-between gap-3 pb-1" data-testid="engine-state">
         <span style={{ font: fnt(500, 12.5), color: engine.color }}>{engine.value}</span>
-        <span className="truncate text-right" style={{ font: fnt(400, 11), color: '#6e6961' }}>
+        <span className="truncate text-right" title={engine.detail} style={{ font: fnt(400, 11), color: '#6e6961' }}>
           {engine.detail}
         </span>
       </div>
+      <span data-testid="engine-langs" style={{ font: fnt(400, 10.5, 'sans', 1.45), color: '#6e6961' }}>
+        Langues écoutées : {languagesNote(st?.config.languages)} · moteur sherpa-onnx (ONNX Runtime, processeur) · détection de voix Silero
+      </span>
+      {st?.config.languages.some((l) => UNSUPPORTED_LANGS.includes(l)) && (
+        <span data-testid="unsupported-langs" style={{ font: fnt(400, 10.5, 'sans', 1.45), color: '#ffa24a' }}>
+          Le turc n’est pas reconnu par ce modèle : les voix turques ne seront pas transcrites correctement (le chat écrit reste traduit).
+        </span>
+      )}
       {sp.models.map((m) => {
         const on = s.model === m.id;
         return (
@@ -273,8 +303,10 @@ function NativeModelCard() {
           >
             <Radio on={on} size={13} dot={5} />
             <div className="flex min-w-0 flex-col gap-0.5">
-              <span style={{ font: fnt(500, 12.5, 'mono'), color: '#ece6dc' }}>whisper-{m.id}</span>
-              <span style={{ font: fnt(400, 11), color: '#6e6961' }}>{m.note}</span>
+              <span style={{ font: fnt(500, 12.5, 'mono'), color: '#ece6dc' }}>{m.label}</span>
+              <span style={{ font: fnt(400, 11), color: '#6e6961' }}>
+                {m.note} · {m.license}
+              </span>
             </div>
             <div className="flex flex-col items-end gap-0.5">
               <span style={{ font: fnt(400, 11, 'mono'), color: '#8f8a83' }}>{m.sizeMb >= 1000 ? `${(m.sizeMb / 1000).toFixed(1).replace('.', ',')} Go` : `${m.sizeMb} Mo`}</span>
@@ -294,13 +326,14 @@ function NativeModelCard() {
         <div className="pill pill-ghost flex-none px-3.5 py-[7px]" role="button" onClick={() => rescanModels()} style={{ font: fnt(500, 11.5) }}>
           Rechercher les modèles
         </div>
-        <span className="min-w-0 truncate" title={sp.status?.modelsDir} style={{ font: fnt(400, 10.5, 'mono'), color: '#5a5650' }}>
-          {sp.status?.modelsDir ?? '%LOCALAPPDATA%\\Crosstalk\\models'}
+        <span className="min-w-0 truncate" title={st?.modelsDir} style={{ font: fnt(400, 10.5, 'mono'), color: '#5a5650' }}>
+          {st?.modelsDir ?? '%LOCALAPPDATA%\\Crosstalk\\models'}
         </span>
       </div>
       <div style={{ font: fnt(400, 10.5, 'sans', 1.5), color: '#5a5650' }}>
-        Les modèles se téléchargent automatiquement (Hugging Face, vérification SHA-1) : choisissez-en un autre pour le récupérer.
+        Le modèle se télécharge une seule fois (reprise possible, vérification SHA-256), puis tout fonctionne hors ligne, sans compte ni clé.
       </div>
+      <LegacyWhisperBlock />
     </div>
   );
 }
@@ -312,20 +345,17 @@ function ModelCard() {
   return (
     <div className="glass flex flex-col gap-2 p-5">
       <div className="flex items-center justify-between pb-1">
-        <span className="lbl">MODÈLE LOCAL · WHISPER</span>
-        <Seg options={ACCELS} value={s.accel} onChange={(v) => s.set({ accel: v })} item={{ padding: '3px 11px', font: fnt(500, 10.5, 'mono') }} />
+        <span className="lbl">RECONNAISSANCE VOCALE · LOCALE</span>
+        <span style={{ font: fnt(500, 9.5, 'mono'), letterSpacing: '.12em', color: '#6e6961' }}>HORS LIGNE</span>
       </div>
-      {MODELS.map(([id, size, desc, installed]) => {
+      {MODELS.map(([id, label, size, desc]) => {
         const on = s.model === id;
-        const d = s.dl[id];
-        const ok = installed || d === 100;
-        const st = on ? 'Actif' : ok ? 'Installé' : d ? `${d} %` : 'Télécharger';
         return (
           <div
             key={id}
             role="radio"
             aria-checked={on}
-            onClick={() => s.pickModel(id, installed)}
+            onClick={() => s.set({ model: id })}
             className="grid cursor-pointer items-center gap-3 rounded-[10px] px-3 py-2.5"
             style={{
               gridTemplateColumns: '15px minmax(0,1fr) auto',
@@ -336,18 +366,18 @@ function ModelCard() {
           >
             <Radio on={on} size={13} dot={5} />
             <div className="flex min-w-0 flex-col gap-0.5">
-              <span style={{ font: fnt(500, 12.5, 'mono'), color: '#ece6dc' }}>whisper-{id}</span>
+              <span style={{ font: fnt(500, 12.5, 'mono'), color: '#ece6dc' }}>{label}</span>
               <span style={{ font: fnt(400, 11), color: '#6e6961' }}>{desc}</span>
             </div>
             <div className="flex flex-col items-end gap-0.5">
               <span style={{ font: fnt(400, 11, 'mono'), color: '#8f8a83' }}>{size}</span>
-              <span style={{ font: fnt(500, 10.5), color: on ? '#ffa24a' : ok ? '#7fe0a8' : '#7fd4ff' }}>{st}</span>
+              <span style={{ font: fnt(500, 10.5), color: on ? '#ffa24a' : '#7fe0a8' }}>{on ? 'Actif' : 'Installé'}</span>
             </div>
           </div>
         );
       })}
       <div className="pt-1" style={{ font: fnt(400, 10.5, 'sans', 1.5), color: '#5a5650' }}>
-        whisper.cpp via whisper-rs · licence MIT · %LOCALAPPDATA%\Crosstalk\models
+        sherpa-onnx · ONNX Runtime · modèle NVIDIA CC-BY-4.0 · %LOCALAPPDATA%\Crosstalk\models
       </div>
     </div>
   );
@@ -358,7 +388,45 @@ const TEST_SAMPLES: Record<'ru' | 'en', string> = {
   en: 'Two players on B, they have an AWP.',
 };
 
-/** Local translation: Opus-MT on this PC, no API key, nothing sent online. */
+/** Opus-MT folders left by earlier versions: shown, deleted only on the user's request. */
+function LegacyModelsBlock() {
+  const [legacy, setLegacy] = useState<LegacyModels | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  useEffect(() => {
+    nativeTranslation
+      .legacyModels()
+      .then(setLegacy)
+      .catch(() => setLegacy(null));
+  }, []);
+  if (!legacy?.folders) return null;
+  const cleanup = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      setLegacy(await nativeTranslation.legacyCleanup());
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div className="flex flex-col gap-2 rounded-lg px-3 py-2.5" style={{ border: '1px solid rgba(255,255,255,.07)' }} data-testid="legacy-models">
+      <span style={{ font: fnt(400, 11, 'sans', 1.5), color: '#8f8a83' }}>
+        Anciens modèles de traduction locale (Opus-MT) encore présents : {legacy.folders} dossier{legacy.folders > 1 ? 's' : ''}, {mb(legacy.bytes)}. Crosstalk ne les utilise plus.
+      </span>
+      <div className="flex items-center gap-2">
+        <div className="pill pill-ghost flex-none px-3.5 py-[7px]" role="button" aria-disabled={busy} onClick={() => !busy && cleanup()} style={{ font: fnt(500, 11.5) }}>
+          {busy ? 'Suppression…' : 'Libérer l’espace'}
+        </div>
+      </div>
+      {error && <span style={{ font: fnt(400, 11, 'sans', 1.5), color: '#ff8a7a' }}>{error}</span>}
+    </div>
+  );
+}
+
+/** Translation of the games: on/off, state of the engine chosen below, a manual test. */
 export function TranslationCard() {
   const on = useApp((s) => s.tg.translate);
   const toggle = useApp((s) => s.toggle);
@@ -369,6 +437,7 @@ export function TranslationCard() {
   const [result, setResult] = useState<Translation | null>(null);
   const p50 = percentile(tr.times, 0.5);
   const p95 = percentile(tr.times, 0.95);
+  const summary = translationSummary(tr.status);
   const test = async () => {
     setBusy(true);
     setResult(null);
@@ -381,26 +450,26 @@ export function TranslationCard() {
   return (
     <div className="glass flex flex-col gap-3 p-5" data-testid="translation-card">
       <div className="flex items-center justify-between">
-        <span className="lbl">TRADUCTION LOCALE · OPUS-MT</span>
-        <span style={{ font: fnt(500, 9.5, 'mono'), letterSpacing: '.12em', color: '#6e6961' }}>CPU · SANS CLÉ API</span>
+        <span className="lbl">TRADUCTION DES PARTIES</span>
+        <span style={{ font: fnt(500, 9.5, 'mono'), letterSpacing: '.12em', color: '#6e6961' }}>VOIX · CHAT · RÉPONSES</span>
       </div>
       <div style={{ font: fnt(400, 11, 'sans', 1.5), color: '#8f8a83' }}>
-        Les voix et le chat des joueurs sont traduits dans votre langue sur ce PC (Langues › Mes langues). Aucune clé API, aucun abonnement : rien n’est envoyé en ligne, sauf si vous activez la traduction en ligne ci-dessous.
+        Les voix et le chat des joueurs sont traduits dans votre langue (Langues › Mes langues) par le moteur choisi dans « Traduction IA ». Sans moteur connecté, les phrases restent dans leur langue d’origine.
       </div>
       <ToggleRow title="Traduire les voix et le chat" sub="Sinon, la transcription reste en langue originale" on={on} onClick={() => toggle('translate')} />
       {tr.native ? (
         <>
-          {(tr.status?.pairs ?? []).map((p) => {
-            const sum = pairSummary(p);
-            return (
-              <div key={p.source} className="flex items-baseline justify-between gap-3" data-testid={`pair-${p.source}`}>
-                <span style={{ font: fnt(500, 12.5), color: '#ece6dc' }}>{sum.label}</span>
-                <span className="truncate text-right" title={p.repo} style={{ font: fnt(400, 11), color: sum.color }}>
-                  {sum.value}
-                </span>
-              </div>
-            );
-          })}
+          <div className="flex items-baseline justify-between gap-3" data-testid="translation-state">
+            <span style={{ font: fnt(500, 12.5), color: '#ece6dc' }}>{summary.label}</span>
+            <span className="truncate text-right" title={tr.status?.problem ?? undefined} style={{ font: fnt(400, 11), color: summary.color }}>
+              {summary.value}
+            </span>
+          </div>
+          {tr.status?.config.enabled && !tr.status.ready && tr.status.problem && (
+            <div style={{ font: fnt(400, 11, 'sans', 1.5), color: '#ffa24a' }} data-testid="translation-problem">
+              {tr.status.problem}
+            </div>
+          )}
           {p50 != null && (
             <div style={{ font: fnt(400, 11, 'sans', 1.5), color: '#8f8a83' }} data-testid="translation-metrics">
               Traduction p50 {formatMs(p50)} · p95 {formatMs(p95 ?? p50)} · {tr.times.length} phrases
@@ -435,19 +504,14 @@ export function TranslationCard() {
             )}
           </div>
           <div className="flex items-center gap-3">
-            <div className="pill pill-ghost flex-none px-3.5 py-[7px]" role="button" onClick={() => rescanTranslation()} style={{ font: fnt(500, 11.5) }}>
-              Rechercher les modèles
+            <div className="pill pill-ghost flex-none px-3.5 py-[7px]" role="button" onClick={() => refreshTranslation()} style={{ font: fnt(500, 11.5) }}>
+              Actualiser l’état
             </div>
-            <span className="min-w-0 truncate" style={{ font: fnt(400, 10.5, 'mono'), color: '#5a5650' }}>
-              opus-mt-ru-fr · opus-mt-en-fr
-            </span>
           </div>
-          <div style={{ font: fnt(400, 10.5, 'sans', 1.5), color: '#5a5650' }}>
-            Modèles téléchargés automatiquement au premier lancement (environ 620 Mo). Helsinki-NLP Opus-MT, licence Apache-2.0.
-          </div>
+          <LegacyModelsBlock />
         </>
       ) : (
-        <div style={{ font: fnt(400, 11, 'sans', 1.5), color: '#6e6961' }}>Disponible dans l’application Windows : modèles Opus-MT installés sur le PC.</div>
+        <div style={{ font: fnt(400, 11, 'sans', 1.5), color: '#6e6961' }}>Disponible dans l’application Windows, avec le moteur choisi dans « Traduction IA ».</div>
       )}
     </div>
   );
@@ -463,8 +527,8 @@ export function AudioPage() {
       </div>
       <div className="flex flex-col gap-4">
         <ModelCard />
-        <TranslationCard />
         <LlmCard />
+        <TranslationCard />
       </div>
     </div>
   );

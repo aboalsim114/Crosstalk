@@ -30,14 +30,29 @@ pub const LEVEL_EVENT: &str = "audio://level";
 
 /// The OS backend: WASAPI on Windows, an "unsupported" backend elsewhere (so
 /// the app still builds and runs for UI work on other platforms).
-/// The default microphone (reply dictation only, opened on demand).
-pub fn open_microphone() -> Result<Box<dyn backend::CaptureStream>, AudioError> {
+/// A microphone, the default one when `id` is None (reply dictation and the
+/// AI voice only, opened on demand).
+pub fn open_microphone(id: Option<&str>) -> Result<Box<dyn backend::CaptureStream>, AudioError> {
     #[cfg(windows)]
     {
-        wasapi::open_microphone()
+        wasapi::open_microphone(id)
     }
     #[cfg(not(windows))]
     {
+        let _ = id;
+        Err(AudioError::Unsupported)
+    }
+}
+
+/// Microphones (`capture`) or outputs, for the AI voice settings.
+pub fn list_endpoints(capture: bool) -> Result<Vec<AudioDevice>, AudioError> {
+    #[cfg(windows)]
+    {
+        wasapi::list_endpoints(capture)
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = capture;
         Err(AudioError::Unsupported)
     }
 }

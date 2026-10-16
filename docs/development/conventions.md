@@ -19,7 +19,7 @@
 - **Temps réel** :
   - files bornées avec une politique d'abandon écrite en commentaire ;
   - purge par numéro de génération ;
-  - threads de calcul en priorité basse (`crate::cpu::lower_current_thread_priority`) ;
+  - threads de calcul en priorité basse (`crate::cpu::lower_current_thread_priority`), sauf la reconnaissance vocale (`speech-asr`) : les fils de travail de la bibliothèque d'inférence attendent le fil appelant à chaque étape, qui doit rester en priorité normale ([D-13](../architecture/decisions.md)) ;
   - aucune allocation nouvelle sur le thread de capture ;
   - jamais de calcul long dans une commande Tauri synchrone (`#[tauri::command(async)]`).
 - **Erreurs** :

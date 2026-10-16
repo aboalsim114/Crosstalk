@@ -27,7 +27,7 @@ describe('Home and Overlay in other languages', () => {
     expect(sub.text).toBe('“Deux sur B.”');
     expect(feedRow(line({ kind: 'chat', ch: 'CT', status: 'transcrit', shown: null, src: 'en' })).tag).toBe('CHAT · CT TEAM');
     expect(feedRow(line({ status: 'original', shown: null })).note).toBe('Already in your language — not translated');
-    expect(latencyAdvice(5000, 'small')).toMatch(/^Too slow for live use with whisper-small/);
+    expect(latencyAdvice(5000)).toMatch(/^High delay: the processor/);
     useLocale.setState({ locale: 'de' });
     expect(subtitle(undefined, false).text).toBe('Stille, vorerst.');
     expect(subtitle(line({}), true).text).toBe('„Deux sur B.“');

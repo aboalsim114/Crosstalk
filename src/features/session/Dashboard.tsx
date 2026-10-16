@@ -78,15 +78,15 @@ function Pipeline() {
   const stages: [string, string][] = [
     [t('dash.stage.capture'), captureSub],
     [t('dash.stage.vad'), audio.native ? `Silero · ${threshold}` : threshold],
-    [t('dash.stage.asr'), audio.native ? `whisper ${s.model} · ${sp.status?.state === 'ready' ? t('dash.ready') : engineSummary(sp.status).value.toLowerCase()}` : `whisper ${s.model}`],
-    [t('dash.stage.translation'), audio.native ? translationSummary(tr).value : 'opus-mt → fr'],
+    [t('dash.stage.asr'), audio.native ? `parakeet · ${sp.status?.state === 'ready' ? t('dash.ready') : engineSummary(sp.status).value.toLowerCase()}` : 'parakeet'],
+    [t('dash.stage.translation'), audio.native ? translationSummary(tr).value : 'LLM → fr'],
     [t('dash.stage.overlay'), t(`ov.fmt.${s.fmt}`)],
   ];
   return (
     <div className="flex items-center px-2 pb-[22px]">
       {stages.map(([name, sub], i) => {
         const running = live && !s.paused;
-        // Desktop app: real states (capture, voice detected, Whisper running, a line awaiting its translation).
+        // Desktop app: real states (capture, voice detected, recogniser running, a line awaiting its translation).
         const nativeActive = [isCapturing(audio.status), sp.activity.speaking, sp.activity.transcribing, translating, false][i];
         const active = audio.native ? running && nativeActive : running && (i === 0 || s.stage === i);
         const done = !audio.native && running && i > 0 && s.stage > i;
@@ -135,12 +135,12 @@ function StatusCards() {
         },
     audio.native
       ? { label: t('dash.card.asr'), value: engine.value, sub: t('dash.asr.sub', { detail: engine.detail, tr: trSum.value }), dot: engine.color }
-      : { label: t('dash.card.engines'), value: `Whisper ${s.model}`, sub: `${s.accel.toUpperCase()} · Opus-MT${down ? ` ${t('dash.demo.unavailable')}` : ''}`, dot: down ? '#ff8a7a' : '#7fe0a8' },
+      : { label: t('dash.card.engines'), value: 'Parakeet TDT 0.6B v3', sub: `CPU · LLM${down ? ` ${t('dash.demo.unavailable')}` : ''}`, dot: down ? '#ff8a7a' : '#7fe0a8' },
     {
       label: t('dash.card.latency'),
       value: lat ? `p50 ${fmtSeconds(lat.p50)}` : '—',
-      sub: lat ? (latencyAdvice(lat.p50, s.model) ?? t('dash.latency.sub', { p95: fmtSeconds(lat.p95), count: lat.n })) : t('dash.latency.goal'),
-      dot: !lat ? '#3d3a36' : latencyAdvice(lat.p50, s.model) ? '#ffa24a' : '#7fe0a8',
+      sub: lat ? (latencyAdvice(lat.p50) ?? t('dash.latency.sub', { p95: fmtSeconds(lat.p95), count: lat.n })) : t('dash.latency.goal'),
+      dot: !lat ? '#3d3a36' : latencyAdvice(lat.p50) ? '#ffa24a' : '#7fe0a8',
     },
   ];
   return (

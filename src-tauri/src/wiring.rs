@@ -23,7 +23,7 @@ use crate::speech::{
     self, SpeechConfig, SpeechEvents, SpeechService, SpeechStats, SpeechStatus, Transcript,
     VoiceActivity,
 };
-use crate::translation::{models, TranslationConfig, TranslationService, TranslationStatus};
+use crate::translation::{languages, TranslationConfig, TranslationService, TranslationStatus};
 
 /// Where transcripts and chat lines go to be translated.
 trait Translate {
@@ -82,7 +82,11 @@ fn route_chat(
 ) {
     show(message);
     sender(&message.sender);
-    if let Some(lang) = message.lang.as_deref().filter(|l| models::is_language(l)) {
+    if let Some(lang) = message
+        .lang
+        .as_deref()
+        .filter(|l| languages::is_language(l))
+    {
         if let Some(t) = translation {
             t.submit(message.id, lang, &message.message);
         }
@@ -151,11 +155,11 @@ impl SpeechEvents for SpeechBridge {
     }
 }
 
-/// Starts the speech service with the whisper.cpp models.
+/// Starts the speech service with the sherpa-onnx models.
 pub fn start_speech(app: &AppHandle) -> Arc<SpeechService> {
     SpeechService::start(
         Arc::new(SpeechBridge(app.clone())),
-        Arc::new(speech::WhisperLoader),
+        Arc::new(speech::SherpaLoader),
         crate::paths::models_dir(),
         SpeechConfig::default(),
     )
@@ -242,8 +246,6 @@ mod tests {
             audio_ms: 900,
             latency_ms: 400,
             asr_ms: 300,
-            avg_logprob: -0.2,
-            no_speech_prob: 0.01,
             model: "base".into(),
             speaker: None,
         }

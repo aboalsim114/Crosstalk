@@ -20,7 +20,7 @@ export function introStatus(
   engine: { value: string },
   translation: { value: string },
 ): string[] {
-  if (!native) return ['CS2 DÉTECTÉ', 'CONSOLE.LOG ACTIF', 'WHISPER SMALL PRÊT'];
+  if (!native) return ['CS2 DÉTECTÉ', 'CONSOLE.LOG ACTIF', 'PARAKEET PRÊT'];
   return [cs2Running ? 'CS2 DÉTECTÉ' : 'CS2 NON LANCÉ', engine.value.toUpperCase(), `TRADUCTION ${translation.value.toUpperCase()}`];
 }
 

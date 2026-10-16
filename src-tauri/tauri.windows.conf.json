@@ -1,0 +1,10 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "bundle": {
+    "resources": {
+      "target/sherpa-onnx/windows/sherpa-onnx-v1.13.8-win-x64-shared-MT-Release-lib/lib/sherpa-onnx-c-api.dll": "sherpa-onnx-c-api.dll",
+      "target/sherpa-onnx/windows/sherpa-onnx-v1.13.8-win-x64-shared-MT-Release-lib/lib/onnxruntime.dll": "onnxruntime.dll",
+      "target/sherpa-onnx/windows/sherpa-onnx-v1.13.8-win-x64-shared-MT-Release-lib/lib/onnxruntime_providers_shared.dll": "onnxruntime_providers_shared.dll"
+    }
+  }
+}

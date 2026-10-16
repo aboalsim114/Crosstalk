@@ -20,19 +20,13 @@ use tauri::{Emitter, Manager};
 #[allow(dead_code)]
 #[path = "../../src-tauri/src/downloads.rs"]
 mod downloads;
-#[allow(dead_code)]
-#[path = "../../src-tauri/src/translation/models.rs"]
-mod opus_models;
 #[path = "../../src-tauri/src/paths.rs"]
 mod paths;
 #[allow(dead_code)]
 #[path = "../../src-tauri/src/speech/models.rs"]
-mod whisper_models;
+mod speech_models;
 mod speech {
-    pub(crate) use crate::whisper_models as models;
-}
-mod translation {
-    pub(crate) use crate::opus_models as models;
+    pub(crate) use crate::speech_models as models;
 }
 
 mod install;

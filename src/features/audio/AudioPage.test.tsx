@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { IDLE_CAPTURE } from '../../shared/ipc';
 import { useAudio } from './audio';
 import { useSpeech } from '../speech/speech';
@@ -51,38 +51,62 @@ describe('speech recognition cards in the desktop app', () => {
   const speech0 = useSpeech.getState();
   beforeEach(() => useSpeech.setState(speech0, true));
 
-  it('lists the real model files and the engine state', () => {
+  it('shows the recognition model, its state, languages and licence', () => {
     useSpeech.setState({
       native: true,
       status: {
         state: 'missing',
-        config: { model: 'base', languages: ['ru', 'en'], vadThreshold: 0.55, glossary: [], accel: 'auto' },
+        config: { model: 'parakeet-tdt-0.6b-v3', languages: ['ru', 'en', 'fr'], vadThreshold: 0.55 },
         modelPath: null,
         vadReady: true,
         modelsDir: 'C:\\Users\\x\\AppData\\Local\\Crosstalk\\models',
         error: null,
         loadMs: null,
-        backend: 'CPU · AVX2',
+        backend: 'CPU · ONNX Runtime',
         threads: 4,
+        modelLabel: 'Parakeet TDT 0.6B v3',
       },
-      models: [
-        { id: 'tiny', file: 'ggml-tiny.bin', sizeMb: 75, note: 'Très rapide', installed: true, url: '' },
-        { id: 'base', file: 'ggml-base.bin', sizeMb: 142, note: 'Défaut', installed: false, url: '' },
-      ],
+      models: [{ id: 'parakeet-tdt-0.6b-v3', label: 'Parakeet TDT 0.6B v3', sizeMb: 670, note: 'Russe, anglais, français', license: 'CC-BY-4.0 (NVIDIA)', installed: false }],
     });
-    useApp.setState({ model: 'base' });
     render(<AudioPage />);
     expect(screen.getByTestId('engine-state')).toHaveTextContent('Modèle absent');
+    expect(screen.getByTestId('engine-state')).toHaveTextContent('Parakeet TDT 0.6B v3 non installé');
+    expect(screen.getByTestId('engine-langs')).toHaveTextContent('Langues écoutées : russe, anglais, français');
+    expect(screen.queryByTestId('unsupported-langs')).toBeNull();
     expect(screen.getByText('Sélectionné · téléchargement')).toBeInTheDocument();
-    expect(screen.getByText('Installé')).toBeInTheDocument();
+    expect(screen.getByText(/CC-BY-4.0/)).toBeInTheDocument();
     expect(screen.getByText('Rechercher les modèles')).toBeInTheDocument();
-    // Auto asked, CPU in use (backend from the engine): said plainly.
-    expect(screen.getByTestId('accel-note')).toHaveTextContent(/processeur/i);
-    // Picking a model selects it; a missing one is then downloaded by the app.
-    fireEvent.click(screen.getByText('whisper-tiny'));
-    expect(useApp.getState().model).toBe('tiny');
-    fireEvent.click(screen.getByText('whisper-base'));
-    expect(useApp.getState().model).toBe('base');
+    // Nothing about Whisper or a CPU / GPU choice any more.
+    expect(screen.queryByText(/whisper/i)).toBeNull();
+    expect(screen.queryByText('GPU')).toBeNull();
+  });
+
+  it('says when the model is loaded, with its backend and load time', () => {
+    useSpeech.setState({
+      native: true,
+      status: {
+        state: 'ready',
+        config: { model: 'parakeet-tdt-0.6b-v3', languages: ['ru', 'en'], vadThreshold: 0.55 },
+        modelPath: 'C:\\models\\parakeet-tdt-0.6b-v3-int8',
+        vadReady: true,
+        modelsDir: 'C:\\models',
+        error: null,
+        loadMs: 6100,
+        backend: 'CPU · ONNX Runtime',
+        threads: 4,
+        modelLabel: 'Parakeet TDT 0.6B v3',
+      },
+      models: [{ id: 'parakeet-tdt-0.6b-v3', label: 'Parakeet TDT 0.6B v3', sizeMb: 670, note: '', license: 'CC-BY-4.0 (NVIDIA)', installed: true }],
+    });
+    render(<AudioPage />);
+    expect(screen.getByTestId('engine-state')).toHaveTextContent('Parakeet TDT 0.6B v3');
+    expect(screen.getByTestId('engine-state')).toHaveTextContent('chargé en 6,1 s');
+    // Turkish is not among the model's languages: said plainly.
+    cleanup();
+    useSpeech.setState({ status: { ...useSpeech.getState().status!, config: { model: 'parakeet-tdt-0.6b-v3', languages: ['tr', 'en'], vadThreshold: 0.55 } } });
+    render(<AudioPage />);
+    expect(screen.getByTestId('unsupported-langs')).toHaveTextContent('Le turc n’est pas reconnu');
+    expect(screen.getByText('Actif')).toBeInTheDocument();
   });
 
   it('shows the real VAD activity and rejection counters', () => {
@@ -98,30 +122,39 @@ describe('speech recognition cards in the desktop app', () => {
   });
 });
 
-describe('local translation card', () => {
-  it('shows the model pairs in the desktop app and no API key field', async () => {
+describe('translation card', () => {
+  it('shows the state of the engine, its metrics and no other translation engine', async () => {
     const { useTranslation } = await import('../translation/translation');
-    useTranslation.setState({
-      native: true,
-      status: {
-        config: { enabled: true, glossary: [] },
-        pairs: [
-          { source: 'ru', repo: 'Helsinki-NLP/opus-mt-ru-fr', state: 'ready', error: null, loadMs: 1200 },
-          { source: 'en', repo: 'Helsinki-NLP/opus-mt-en-fr', state: 'missing', error: null, loadMs: null },
-        ],
-        modelsDir: 'C:\\m',
-        queued: 0,
-      },
-      times: [310, 420],
-    });
+    useTranslation.setState({ native: true, status: { config: { enabled: true, glossary: [], target: 'fr', sources: ['ru', 'en'] }, ready: true, problem: null, queued: 0 }, times: [310, 420] });
     render(<AudioPage />);
-    expect(screen.getByTestId('pair-ru')).toHaveTextContent('prêt · chargé en 1200 ms');
-    expect(screen.getByTestId('pair-en')).toHaveTextContent('modèle absent');
+    expect(screen.getByTestId('translation-state')).toHaveTextContent('RU, EN → FR');
     expect(screen.getByTestId('translation-metrics')).toHaveTextContent('Traduction p50 420 ms');
-    expect(screen.getByTestId('translation-card')).toHaveTextContent('Aucune clé API');
-    expect(screen.queryByText(/DeepL|Azure|cloud/i)).not.toBeInTheDocument();
+    expect(screen.getByTestId('translation-card').textContent).not.toMatch(/opus|helsinki|DeepL|Azure/i);
     fireEvent.click(screen.getByRole('switch', { name: 'Traduire les voix et le chat' }));
     expect(useApp.getState().tg.translate).toBe(false);
+  });
+
+  it('says why nothing is translated without an engine', async () => {
+    const { useTranslation } = await import('../translation/translation');
+    useTranslation.setState({ native: true, status: { config: { enabled: true, glossary: [] }, ready: false, problem: 'aucun moteur de traduction connecté (Audio & IA › Traduction IA)', queued: 0 }, times: [] });
+    render(<AudioPage />);
+    expect(screen.getByTestId('translation-state')).toHaveTextContent('aucun moteur connecté');
+    expect(screen.getByTestId('translation-problem')).toHaveTextContent('Audio & IA › Traduction IA');
+  });
+
+  it('offers to delete the old Opus-MT folders, only on request', async () => {
+    const { useTranslation } = await import('../translation/translation');
+    const ipc = await import('../../shared/ipc');
+    useTranslation.setState({ native: true, status: { config: { enabled: true, glossary: [] }, ready: true, problem: null, queued: 0 }, times: [] });
+    vi.spyOn(ipc.translation, 'legacyModels').mockResolvedValue({ folders: 2, bytes: 612_000_000 });
+    const cleanup = vi.spyOn(ipc.translation, 'legacyCleanup').mockResolvedValue({ folders: 0, bytes: 0 });
+    render(<AudioPage />);
+    expect(await screen.findByTestId('legacy-models')).toHaveTextContent('2 dossiers, 612 Mo');
+    expect(cleanup).not.toHaveBeenCalled();
+    await act(async () => fireEvent.click(screen.getByText('Libérer l’espace')));
+    expect(cleanup).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(screen.queryByTestId('legacy-models')).toBeNull());
+    vi.restoreAllMocks();
   });
 });
 
@@ -129,31 +162,17 @@ describe('translation test', () => {
   it('says which engine translated the sentence', async () => {
     const { useTranslation } = await import('../translation/translation');
     const ipc = await import('../../shared/ipc');
-    useTranslation.setState({ native: true, status: { config: { enabled: true, glossary: [] }, pairs: [], modelsDir: '', queued: 0 }, times: [] });
+    useTranslation.setState({ native: true, status: { config: { enabled: true, glossary: [] }, ready: true, problem: null, queued: 0 }, times: [] });
     const result = { id: 0, lang: 'ru', original: 'Двое идут на B', translated: 'Deux joueurs arrivent sur B.', error: null, ms: 640, queueMs: 0, cached: false, glossary: true, target: 'fr' };
-    const spy = vi.spyOn(ipc.translation, 'test').mockResolvedValueOnce({ ...result, engine: 'llm' }).mockResolvedValueOnce({ ...result, ms: 210, engine: 'opus-mt' });
+    const spy = vi.spyOn(ipc.translation, 'test').mockResolvedValueOnce({ ...result, engine: 'llm' }).mockResolvedValueOnce({ ...result, ms: 2, engine: 'lexicon' });
     render(<AudioPage />);
-    await act(async () => fireEvent.click(screen.getByText('Traduire')));
-    expect(await screen.findByTestId('translation-result')).toHaveTextContent('« Deux joueurs arrivent sur B. » · 640 ms · LLM en ligne');
-    await act(async () => fireEvent.click(screen.getByText('Traduire')));
-    await waitFor(() => expect(screen.getByTestId('translation-result')).toHaveTextContent('210 ms · Opus-MT local'));
+    const translate = () => within(screen.getByTestId('translation-card')).getByText('Traduire');
+    await act(async () => fireEvent.click(translate()));
+    expect(await screen.findByTestId('translation-result')).toHaveTextContent('« Deux joueurs arrivent sur B. » · 640 ms · LLM');
+    await act(async () => fireEvent.click(translate()));
+    await waitFor(() => expect(screen.getByTestId('translation-result')).toHaveTextContent('lexique Counter-Strike'));
     expect(spy).toHaveBeenCalledTimes(2);
     spy.mockRestore();
-  });
-});
-
-describe('where Whisper runs', () => {
-  it('explains the CPU / GPU choice from the real backend', async () => {
-    const { accelNote } = await import('./AudioPage');
-    expect(accelNote('gpu', 'GPU · NVIDIA GeForce RTX 3060 (Vulkan)')).toMatch(/^Carte graphique/);
-    expect(accelNote('gpu', 'CPU · AVX2')).toMatch(/Aucune carte graphique/);
-    expect(accelNote('cpu', 'CPU · AVX2')).toMatch(/Processeur choisi/);
-    expect(accelNote('auto', 'GPU · NVIDIA GeForce RTX 3060 (Vulkan) · auto : 4,2× plus rapide que le processeur')).toBe('Auto : carte graphique NVIDIA GeForce RTX 3060, 4,2× plus rapide que le processeur.');
-    expect(accelNote('auto', 'CPU · AVX2 · auto : carte graphique pas assez rapide (1,1×)')).toBe('Auto : processeur (carte graphique pas assez rapide, 1,1×).');
-    expect(accelNote('auto', 'CPU · AVX2 · auto (aucune carte graphique Vulkan)')).toBe('Auto : processeur (aucune carte graphique Vulkan).');
-    // The driver crashed in the separate test process: said plainly.
-    expect(accelNote('auto', 'CPU · AVX2 · auto (le pilote graphique a planté pendant le test)')).toBe('Auto : processeur (le pilote graphique a planté pendant le test).');
-    expect(accelNote('gpu', 'CPU · AVX2 · GPU (Crosstalk s\'est fermé brutalement en utilisant la carte graphique)')).toMatch(/^Carte graphique non utilisée : Crosstalk s'est fermé brutalement/);
   });
 });
 

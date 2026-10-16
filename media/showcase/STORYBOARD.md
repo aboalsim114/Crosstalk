@@ -23,7 +23,7 @@ Principes : lumière douce et additive, pas de néon ni de glitch ; profondeur p
 - Les fenêtres de l'application sont de **vraies captures** de l'interface (`scripts/capture-app.mjs`, version web en mode démonstration).
 - Les blocs de l'overlay reprennent les styles exacts de `OverlayStack` (`src/features/overlay/OverlayPage.tsx`) : en-tête mono, original en mono gris, traduction en Geist, état « (PROVISOIRE) » avant la version finale.
 - Les répliques viennent des données de démonstration de l'app (`src/app/state/data.ts`).
-- Les étapes du pipeline sont celles de l'app : capture WASAPI de cs2.exe → Silero VAD → whisper.cpp → Opus-MT → overlay.
+- Les étapes du pipeline sont celles de l'app : capture WASAPI de cs2.exe → Silero VAD → whisper.cpp → LLM (cloud ou local) → overlay.
 - Aucun chiffre de performance n'est affiché comme une promesse ; les fonctions expérimentales (Qui parle ?, Focus voix) ne sont pas montrées.
 - Le jeu n'est pas filmé : il est évoqué comme dans l'aperçu de l'overlay de l'app (zone sombre, rayures diagonales, réticule vert). Aucun asset de Counter-Strike 2 n'est utilisé.
 
@@ -42,7 +42,7 @@ Travelling latéral à travers cinq stations, avec une barre d'étapes en bas re
 1. **Capture audio** · WASAPI, son de cs2.exe uniquement : onde brute, tirs (gris) et voix (ambre).
 2. **Détection vocale** · Silero VAD : les bruits tombent et s'éteignent, la parole est encadrée.
 3. **Transcription** · whisper.cpp : les particules se condensent en « Двое идут на B, двое на B ».
-4. **Traduction** · Opus-MT, sur le PC : les caractères se réorganisent en « Deux joueurs arrivent sur B, deux sur B. »
+4. **Traduction** · le LLM connecté (cloud ou local) : les caractères se réorganisent en « Deux joueurs arrivent sur B, deux sur B. »
 5. **Sous-titres** · overlay : la phrase se pose dans un bloc d'overlay.
 Titre : « Tout se passe *sur votre PC.* »
 *Son : rythme léger, tics à chaque station.*

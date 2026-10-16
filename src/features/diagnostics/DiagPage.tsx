@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { chat, diagnostics, getShortcutStatus, type LogLine, type ShortcutStatus } from '../../shared/ipc';
+import { chat, diagnostics, getShortcutStatus, type LogLine, type PulseView, type ShortcutStatus } from '../../shared/ipc';
 import { config } from '../../app/config';
 import { fnt } from '../../shared/ui/atoms';
 import { useAudio, type AudioState } from '../audio/audio';
@@ -11,10 +11,9 @@ import type { ChatStatus } from '../../shared/ipc';
 
 type DiagState = 'OK' | 'AVERT.' | 'ÉCHEC';
 
-/** Diagnostic verdict of the local translation, from its state (never from a display colour). */
+/** Diagnostic verdict of the translation, from its state (never from a display colour). */
 export function translationDiag(health: TranslationHealth): DiagState {
   if (health === 'ready') return 'OK';
-  if (health === 'error') return 'ÉCHEC';
   return 'AVERT.';
 }
 
@@ -65,6 +64,14 @@ export function nativeLog(chat: ChatStatus | null, lines: [string, string][]): [
   return out;
 }
 
+/** "Voix → texte" row: the stage that stops during this capture, else the last 30 s summary. */
+export function pulseDiag(p: PulseView | null): [string, DiagState] {
+  if (!p || (!p.capturing && !p.summary)) return ['Démarrez une session : bilan toutes les 30 s (son, VAD, reconnaissance, traduction)', 'AVERT.'];
+  const last = p.alerts[p.alerts.length - 1];
+  if (last) return [last, 'ÉCHEC'];
+  return [p.summary ?? 'Capture en cours : premier bilan dans 30 s', 'OK'];
+}
+
 /** Journal lines as shown on screen (local time). */
 export function journalRows(lines: LogLine[]): [string, string, string][] {
   return lines.map((l) => [new Date(l.ts).toLocaleTimeString('fr-FR'), l.level, `${l.source}: ${l.message}`]);
@@ -82,6 +89,7 @@ export function DiagPage() {
   }, [s.diag]);
   const keysFailed = keys?.filter((k) => !k.registered) ?? [];
   const [journal, setJournal] = useState<LogLine[]>([]);
+  const [pulse, setPulse] = useState<PulseView | null>(null);
   const [exported, setExported] = useState<string | null>(null);
   const audio = useAudio();
   const [captureDetail, captureState] = audio.native
@@ -90,15 +98,15 @@ export function DiagPage() {
   const sp = useSpeech();
   const engine = engineSummary(sp.status);
   const asrRow: [string, string, DiagState] = sp.native
-    ? ['Modèle whisper-' + s.model, `${engine.value} · ${engine.detail}`, sp.status?.state === 'ready' ? 'OK' : sp.status?.state === 'error' ? 'ÉCHEC' : 'AVERT.']
-    : ['Modèle whisper-' + s.model, 'Chargé en 1,8 s · ' + s.accel.toUpperCase(), 'OK'];
+    ? ['Reconnaissance vocale', `${engine.value} · ${engine.detail}`, sp.status?.state === 'ready' ? 'OK' : sp.status?.state === 'error' ? 'ÉCHEC' : 'AVERT.']
+    : ['Reconnaissance vocale', 'Parakeet TDT 0.6B v3 · chargé en 6,1 s · CPU', 'OK'];
   const trStatus = useTranslation((x) => x.status);
   const trTimes = useTranslation((x) => x.times);
   const trSum = translationSummary(trStatus);
   const p50 = percentile(trTimes, 0.5);
   const trRow: [string, string, DiagState] = sp.native
-    ? ['Traduction locale · Opus-MT', `${trSum.value}${p50 != null ? ` · p50 ${p50} ms` : ''}`, translationDiag(translationHealth(trStatus))]
-    : ['Traduction locale · Opus-MT', down ? 'Délai dépassé (5 s) — repli sur l’original' : 'Réponse en 210 ms', down ? 'ÉCHEC' : 'OK'];
+    ? ['Traduction IA · LLM', `${trSum.value}${p50 != null ? ` · p50 ${p50} ms` : ''}`, translationDiag(translationHealth(trStatus))]
+    : ['Traduction IA · LLM', down ? 'Délai dépassé (8 s) — repli sur l’original' : 'Réponse en 210 ms', down ? 'ÉCHEC' : 'OK'];
   const chatStatus = useChat((x) => x.status);
   const chatRows: [string, string, DiagState][] = sp.native
     ? chatDiag(chatStatus)
@@ -111,6 +119,7 @@ export function DiagPage() {
     ...chatRows,
     ['Process loopback', captureDetail, captureState],
     asrRow,
+    ...(sp.native ? [['Voix → texte', ...pulseDiag(pulse)] as [string, string, DiagState]] : []),
     trRow,
     keysFailed.length
       ? ['Raccourcis globaux', `${keysFailed.map((k) => k.keys).join(', ')} déjà utilisé par une autre application`, 'AVERT.']
@@ -121,15 +130,18 @@ export function DiagPage() {
     ['14:02:11', 'INFO', 'cs2-detect: 2 bibliothèques Steam'],
     ['14:02:12', 'INFO', 'chat-ingest: suivi depuis offset 1 284 330'],
     ['14:02:12', fb ? 'WARN' : 'INFO', fb ? 'audio-win: repli endpoint loopback' : 'audio-win: process loopback pid=18244'],
-    ['14:02:13', 'INFO', 'asr: whisper-small chargé (GPU)'],
-    ['14:02:13', 'INFO', 'translation: opus-mt-ru-fr chargé (local, CPU)'],
+    ['14:02:13', 'INFO', 'asr: Parakeet TDT 0.6B v3 chargé (CPU)'],
+    ['14:02:13', 'INFO', 'traduction : LLM prêt → fr'],
     ['14:03:40', 'DEBUG', 'audio-pipeline: segment 3,1 s → asr'],
     ['14:03:41', 'WARN', 'audio-pipeline: segment périmé abandonné'],
     ['14:03:44', 'INFO', 'overlay: 2 blocs affichés'],
   ];
   useEffect(() => {
     if (!sp.native) return;
-    const load = () => diagnostics.recent(80).then(setJournal);
+    const load = () => {
+      diagnostics.recent(80).then(setJournal);
+      diagnostics.pulse().then(setPulse);
+    };
     load();
     const t = setInterval(load, 2000);
     return () => clearInterval(t);

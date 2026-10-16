@@ -76,7 +76,7 @@ struct Vad {
 
 fn vad(mono: &[f32], det: &mut SileroVad, voice_spans: &[(u32, u32)]) -> Vad {
     let cfg = SpeechConfig::default();
-    let segs = run_pipeline(mono, RATE, det, None, &cfg, 1).expect("pipeline");
+    let segs = run_pipeline(mono, RATE, det, None, &cfg).expect("pipeline");
     let segs: Vec<_> = segs.into_iter().filter(|s| s.audio_ms > 0).collect();
     let overlaps = |s: u32, e: u32| voice_spans.iter().any(|&(a, b)| s < b && a < e);
     let on_voice = segs
@@ -181,7 +181,7 @@ fn main() {
 
     let mut det = vad_path
         .as_deref()
-        .map(|p| SileroVad::load(Path::new(p)).expect("VAD"));
+        .map(|p| SileroVad::load(Path::new(p), 0.5).expect("VAD"));
     println!("Voix : {voice_path} (x3, au centre) · bruit de combat synthétique, crête {peak}");
     println!("| Scénario | RSB sans focus | RSB avec focus | Gain | VAD sans (segments sur voix / faux) | VAD avec |");
     println!("|---|---|---|---|---|---|");
@@ -203,7 +203,7 @@ fn main() {
         let cost = t0.elapsed().as_secs_f64() / (len as f64 / RATE as f64) * 100.0;
         costs.push(cost);
         let out: Vec<f32> = out[LATENCY_FRAMES..].to_vec();
-        // SNR on the voice parts only (what Whisper hears).
+        // SNR on the voice parts only (what the recogniser hears).
         let (mut c, mut p, mut o) = (Vec::new(), Vec::new(), Vec::new());
         for &(a, b) in &spans {
             let (a, b) = ((a as usize) * 48, (b as usize) * 48);

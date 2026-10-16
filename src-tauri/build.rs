@@ -19,5 +19,13 @@ fn main() {
     println!("cargo:rerun-if-env-changed=CROSSTALK_BUILD");
     println!("cargo:rerun-if-changed=../.git/HEAD");
     println!("cargo:rerun-if-changed=../.git/refs/heads");
+    // Linux (tests, tools): find the sherpa-onnx libraries where they were
+    // linked from, without LD_LIBRARY_PATH. Windows loads them next to the exe.
+    println!("cargo:rerun-if-env-changed=SHERPA_ONNX_LIB_DIR");
+    if std::env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok("linux") {
+        if let Ok(dir) = std::env::var("SHERPA_ONNX_LIB_DIR") {
+            println!("cargo:rustc-link-arg=-Wl,-rpath,{dir}");
+        }
+    }
     tauri_build::build()
 }

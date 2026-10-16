@@ -15,6 +15,7 @@ chat_start
 chat_status
 chat_stop
 cs2_status
+diag_pulse
 diag_report
 diag_report_issue
 dictation_state
@@ -29,8 +30,14 @@ history_export
 history_list
 llm_clear_key
 llm_configure
+llm_local_servers
+llm_models
+llm_ollama_local
+llm_open_key_page
 llm_set_key
 llm_status
+llm_test
+llm_translate_test
 logs_open_folder
 logs_recent
 logs_write
@@ -45,6 +52,7 @@ reply_models
 reply_open
 reply_phrase_text
 reply_phrases
+reply_say
 reply_translate
 settings_load
 settings_save
@@ -53,6 +61,8 @@ speaker_configure
 speaker_status
 speaker_test
 speech_configure
+speech_legacy_cleanup
+speech_legacy_whisper
 speech_models
 speech_rescan
 speech_stats
@@ -61,7 +71,8 @@ stream_configure
 stream_push
 stream_status
 translation_configure
-translation_models
+translation_legacy_cleanup
+translation_legacy_models
 translation_rescan
 translation_status
 translation_test
@@ -71,6 +82,15 @@ update_check
 update_download
 update_install
 update_status
+voice_cancel
+voice_configure
+voice_download
+voice_download_cancel
+voice_open_cable_page
+voice_preview
+voice_ptt_test
+voice_say
+voice_status
 
 [commandes installateur]
 setup_autostart
@@ -104,3 +124,6 @@ speech://transcript
 translation://result
 translation://status
 update://status
+voice://download
+voice://ptt
+voice://state

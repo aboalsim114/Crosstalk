@@ -1,18 +1,6 @@
-# whisper.cpp build flags, read by whisper-rs-sys (GGML_* variables are passed to
-# CMake). GGML_NATIVE would tune the binary for the build machine's CPU and crash
-# on older ones: target AVX2/FMA/F16C instead, available on every
-# CPU that runs Counter-Strike 2 comfortably (Intel Haswell / AMD Zen and later).
-[env]
-GGML_NATIVE = "OFF"
-GGML_AVX = "ON"
-GGML_AVX2 = "ON"
-GGML_FMA = "ON"
-GGML_F16C = "ON"
-GGML_BMI2 = "ON"
-
-# Static C/C++ runtime (/MT): whisper.cpp's C++ code otherwise imports
-# MSVCP140.dll, which Windows does not ship and the Tauri NSIS/MSI installers
-# do not install (Visual C++ redistributable). Without it the app does not
-# start on a clean PC. Checked with `dumpbin /dependents` (docs/quality, CT-007).
+# Static C runtime (/MT) for the Rust code of the MSVC build: nothing then
+# depends on the Visual C++ redistributable, which Windows does not ship. The
+# sherpa-onnx and ONNX Runtime DLLs shipped next to the exe are the "MT"
+# builds of their release (static runtime too).
 [target.x86_64-pc-windows-msvc]
 rustflags = ["-C", "target-feature=+crt-static"]

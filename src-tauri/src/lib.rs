@@ -4,9 +4,10 @@
 //! All native features live here, behind Tauri commands, events and plugins:
 //!
 //! - `audio`     WASAPI capture of cs2.exe (process loopback, device fallback), levels
-//! - `speech`    Silero VAD + whisper.cpp transcription of the captured voices
-//! - `translation` local Opus-MT translation into the user's language, with an
-//!   optional online LLM in front (user's own provider and key, off by default)
+//! - `speech`    Silero VAD + Parakeet (sherpa-onnx) transcription of the captured voices
+//! - `translation` translation into the user's language by the LLM the user
+//!   connects: a cloud provider with their own key, or Ollama / LM Studio on this PC
+//! - `pulse`     every 30 s of capture: sound, VAD segments, recognition and translation counters in the journal
 //! - `chat`      CS2 text chat read from console.log
 //! - `game`      CS2 process detection (names and PIDs only, the game is never opened)
 //! - `tray`      notification-area icon; the app keeps running when the window is closed
@@ -31,6 +32,7 @@ mod history;
 mod logs;
 mod overlay;
 pub mod paths;
+mod pulse;
 mod recap;
 mod reply;
 mod settings;
@@ -42,6 +44,7 @@ pub mod translation;
 mod tray;
 mod updater;
 mod version;
+mod voice;
 mod wiring;
 
 use std::sync::Arc;
@@ -53,14 +56,6 @@ use tauri_plugin_autostart::MacosLauncher;
 pub const MINIMIZED_FLAG: &str = "--minimized";
 
 pub fn run() {
-    // GPU test in a separate process (speech::gpu_guard): a driver crash
-    // there only ends this process, never the app.
-    let args: Vec<String> = std::env::args().collect();
-    if let Some(i) = args.iter().position(|a| a == "--gpu-probe") {
-        std::process::exit(speech::gpu_guard::probe_main(
-            args.get(i + 1).map(String::as_str),
-        ));
-    }
     tauri::Builder::default()
         // Must be first: a second launch just focuses the running instance.
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
@@ -87,15 +82,24 @@ pub fn run() {
             speech::speech_models,
             speech::speech_configure,
             speech::speech_rescan,
+            speech::speech_legacy_whisper,
+            speech::speech_legacy_cleanup,
             translation::translation_status,
             wiring::translation_configure,
             translation::translation_rescan,
-            translation::translation_models,
+            translation::translation_legacy_models,
+            translation::translation_legacy_cleanup,
             translation::translation_test,
             translation::llm_status,
             translation::llm_configure,
             translation::llm_set_key,
             translation::llm_clear_key,
+            translation::llm_test,
+            translation::llm_translate_test,
+            translation::llm_models,
+            translation::llm_local_servers,
+            translation::llm_ollama_local,
+            translation::llm_open_key_page,
             download_commands::models_download_status,
             download_commands::models_download_start,
             download_commands::models_download_cancel,
@@ -120,6 +124,7 @@ pub fn run() {
             logs::logs_write,
             logs::logs_open_folder,
             logs::diag_report,
+            pulse::diag_pulse,
             logs::diag_report_issue,
             gsi::gsi_status,
             gsi::gsi_install,
@@ -130,6 +135,7 @@ pub fn run() {
             reply::reply_models,
             reply::reply_open,
             reply::reply_hide,
+            reply::reply_say,
             dictation::dictation_toggle,
             dictation::dictation_state,
             stream::stream_status,
@@ -140,7 +146,16 @@ pub fn run() {
             speaker::speaker_test,
             recap::recap_save,
             recap::recap_reveal,
-            tray::ui_set_tray_labels
+            tray::ui_set_tray_labels,
+            voice::voice_status,
+            voice::voice_configure,
+            voice::voice_download,
+            voice::voice_download_cancel,
+            voice::voice_say,
+            voice::voice_preview,
+            voice::voice_cancel,
+            voice::voice_ptt_test,
+            voice::voice_open_cable_page
         ])
         .setup(|app| {
             let handle = app.handle();
@@ -158,19 +173,15 @@ pub fn run() {
                 ),
             );
             logs::watch(handle);
+            app.manage(pulse::watch(handle));
 
-            // Translation decodes one token at a time: one thread is nearly as
-            // fast as four and leaves the CPU to CS2 and Whisper (read by candle).
-            if std::env::var_os("RAYON_NUM_THREADS").is_none() {
-                std::env::set_var("RAYON_NUM_THREADS", "1");
-            }
             app.manage(downloads::Downloader::new(
                 Arc::new(downloads::HttpFetcher),
                 Arc::new(download_commands::TauriDownloadEvents(handle.clone())),
             ));
             let (translation, llm) = translation::start(handle);
             app.manage(translation.clone());
-            app.manage(llm);
+            app.manage(llm.clone());
             let speech = wiring::start_speech(handle);
             app.manage(speech.clone());
             let history = history::History::new(history::default_path());
@@ -187,16 +198,16 @@ pub fn run() {
                 chat::user_rules_file(),
             );
             app.manage(chat.clone());
-            let reply = reply::ReplyService::new(paths::models_dir());
+            let reply = reply::ReplyService::new(llm);
             app.manage(reply.clone());
             app.manage(Arc::new(dictation::Dictation::default()));
+            app.manage(voice::start(handle));
             app.manage(stream::StreamService::new());
             let speaker = speaker::SpeakerService::new();
             speaker::start(handle, speaker.clone());
             app.manage(speaker);
             let gsi = gsi::GsiService::new(Arc::new(gsi::TauriGsiEvents {
                 app: handle.clone(),
-                speech: speech.clone(),
                 translation: translation.clone(),
                 reply,
             }));
@@ -261,9 +272,12 @@ pub fn run() {
         })
         .build(tauri::generate_context!())
         .expect("error while running Crosstalk")
-        .run(|_, event| {
+        .run(|app, event| {
             if let tauri::RunEvent::Exit = event {
-                speech::gpu_guard::clean_exit();
+                // Never leave CS2's voice key held (automatic push-to-talk).
+                if let Some(v) = app.try_state::<Arc<voice::VoiceService>>() {
+                    v.shutdown();
+                }
             }
         });
 }

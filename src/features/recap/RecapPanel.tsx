@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react';
 import { isTauri, recapFiles } from '../../shared/ipc';
 import { Toggle, fnt } from '../../shared/ui/atoms';
 import { renderRecapPng } from './card';
-import { pickQuotes, recapFacts, useRecap, type MatchStats } from './recap';
+import { pickQuotes, recapFacts, topZones, useRecap, type MatchStats } from './recap';
+import { layoutOf } from '../radar/radar';
 import { useApp } from '../../app/state/store';
 
 /** Copies a PNG to the clipboard (paste into Discord with Ctrl+V). */
@@ -23,11 +24,16 @@ export function RecapPanel() {
   const flash = useApp.getState().flash;
   const [which, setWhich] = useState<'last' | 'current'>(last ? 'last' : 'current');
   const [quotes, setQuotes] = useState(false);
+  const [heatOn, setHeatOn] = useState(true);
   const [url, setUrl] = useState<string | null>(null);
   const [png, setPng] = useState<Blob | null>(null);
   const [saved, setSaved] = useState<string | null>(null);
   const match: MatchStats | null = which === 'last' ? (last ?? current) : (current ?? last);
   const live = match === current && !!current;
+  const layout = layoutOf(match?.map);
+  const top = match ? topZones(match) : [];
+  // The heat map needs a known map and at least one callout heard.
+  const heat = heatOn && match && layout && top.length ? { layout, zones: match.zones, top } : undefined;
 
   useEffect(() => {
     if (unseen) useRecap.setState({ unseen: false });
@@ -42,7 +48,7 @@ export function RecapPanel() {
     }
     let gone = false;
     let made: string | null = null;
-    renderRecapPng(recapFacts(match), { quotes: quotes ? pickQuotes(match, 2) : [], date: dateFr(match.endedAt ?? Date.now()) }).then(
+    renderRecapPng(recapFacts(match), { quotes: quotes ? pickQuotes(match, 2) : [], date: dateFr(match.endedAt ?? Date.now()), heat }).then(
       (b) => {
         if (gone) return;
         made = URL.createObjectURL(b);
@@ -56,7 +62,7 @@ export function RecapPanel() {
       gone = true;
       if (made) URL.revokeObjectURL(made);
     };
-  }, [match, quotes]);
+  }, [match, quotes, heatOn]);
 
   const copy = () => png && copyPng(png).then((ok) => flash(ok ? 'Image copiée : collez-la dans Discord avec Ctrl+V' : 'Copie impossible : enregistrez l’image'));
   const save = () =>
@@ -75,7 +81,7 @@ export function RecapPanel() {
         <div className="flex flex-col gap-1">
           <span style={{ font: fnt(400, 22, 'serif'), color: '#ece6dc' }}>Résumé de partie</span>
           <span style={{ font: fnt(400, 12, 'sans', 1.5), color: '#6e6961' }}>
-            À la fin de chaque partie, Crosstalk prépare une image à partager : carte, score, annonces traduites. Sans aucun pseudo. Rien n’est envoyé : c’est vous qui la partagez.
+            À la fin de chaque partie, Crosstalk prépare une image à partager : carte, score, annonces traduites, et les zones annoncées par votre équipe sur le plan de la carte. Sans aucun pseudo. Rien n’est envoyé : c’est vous qui la partagez.
           </span>
         </div>
         {current && last && (
@@ -111,6 +117,12 @@ export function RecapPanel() {
               </div>
             )}
             <div className="flex-1" />
+            {layout && top.length > 0 && (
+              <>
+                <span style={{ font: fnt(400, 12), color: '#8f8a83' }}>Carte des annonces</span>
+                <Toggle on={heatOn} onClick={() => setHeatOn(!heatOn)} label="Carte des annonces" />
+              </>
+            )}
             <span style={{ font: fnt(400, 12), color: '#8f8a83' }}>Ajouter 2 phrases traduites</span>
             <Toggle on={quotes} onClick={() => setQuotes(!quotes)} label="Ajouter 2 phrases traduites" />
           </div>

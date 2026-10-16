@@ -6,9 +6,9 @@
 #
 # Étapes : garde anti-triche, règles d'architecture, typecheck, tests UI,
 # build UI, rustfmt, clippy, tests Rust (application et installateur), installateurs NSIS + MSI (MSVC), crosstalk-audio-probe,
-# crosstalk-asr-bench et crosstalk-translate. Résultat : dist-local\<commit>\ avec les exécutables,
+# et crosstalk-asr-bench. Résultat : dist-local\<commit>\ avec les exécutables,
 # SHA256SUMS.txt et validation.md, le rapport à coller dans la Pull Request.
-# S'arrête à la première étape en échec. Ne mesure ni Whisper en partie, ni CS2,
+# S'arrête à la première étape en échec. Ne mesure ni la reconnaissance vocale en partie, ni CS2,
 # ni les FPS : ces tests restent manuels (docs/testing/).
 [CmdletBinding()]
 param(
@@ -26,17 +26,29 @@ function Fail([string]$msg) { Write-Host "ÉCHEC : $msg" -ForegroundColor Red; e
 
 # --- Préalables -------------------------------------------------------------
 if ($env:OS -ne 'Windows_NT') { Fail 'à lancer sous Windows (build MSVC).' }
-if (-not $env:LIBCLANG_PATH -and (Test-Path 'C:\Program Files\LLVM\bin\libclang.dll')) {
-    $env:LIBCLANG_PATH = 'C:\Program Files\LLVM\bin'
-}
-if (-not $env:LIBCLANG_PATH) { Fail 'LLVM introuvable : installez-le ou définissez LIBCLANG_PATH (bindgen de whisper-rs).' }
 $link = Get-Command link.exe -ErrorAction SilentlyContinue
 if ($link -and $link.Source -match '\\Git\\') {
     Fail "link.exe de Git ($($link.Source)) masque celui de MSVC : retirez Git\usr\bin du PATH ou utilisez un Developer PowerShell."
 }
-foreach ($tool in 'git', 'node', 'npm', 'cargo', 'rustc', 'cmake') {
+foreach ($tool in 'git', 'node', 'npm', 'cargo', 'rustc', 'tar') {
     if (-not (Get-Command $tool -ErrorAction SilentlyContinue)) { Fail "$tool introuvable dans le PATH." }
 }
+
+# Prebuilt sherpa-onnx (C API + ONNX Runtime, "MT" build): linked by the Rust
+# code, its DLLs shipped next to crosstalk.exe (src-tauri/tauri.windows.conf.json).
+# Same folder as scripts/fetch-sherpa-onnx.sh windows.
+$sherpaVersion = '1.13.8'
+$sherpaName = "sherpa-onnx-v$sherpaVersion-win-x64-shared-MT-Release-lib"
+$sherpaRoot = Join-Path $root 'src-tauri\target\sherpa-onnx\windows'
+if (-not (Test-Path (Join-Path $sherpaRoot "$sherpaName\lib\sherpa-onnx-c-api.dll"))) {
+    New-Item -ItemType Directory -Force -Path $sherpaRoot | Out-Null
+    $archive = Join-Path $sherpaRoot "$sherpaName.tar.bz2"
+    Invoke-WebRequest -Uri "https://github.com/k2-fsa/sherpa-onnx/releases/download/v$sherpaVersion/$sherpaName.tar.bz2" -OutFile $archive
+    tar -xjf $archive -C $sherpaRoot
+    if ($LASTEXITCODE -ne 0) { Fail "extraction de $sherpaName impossible." }
+    Remove-Item $archive
+}
+$env:SHERPA_ONNX_LIB_DIR = Join-Path $sherpaRoot "$sherpaName\lib"
 
 $commit = (git rev-parse HEAD).Trim()
 $short = $commit.Substring(0, 7)
@@ -51,13 +63,7 @@ $machine = [ordered]@{
     'RAM'         = '{0:N1} Go' -f ($os.TotalVisibleMemorySize / 1MB)
     'Node / npm'  = "$(node --version) / $(npm --version)"
     'Rust'        = (rustc --version)
-    'CMake'       = ((cmake --version) | Select-Object -First 1)
-    'LIBCLANG'    = $env:LIBCLANG_PATH
-    # The MSVC build does not enable the `gpu` feature: Whisper on the graphics
-    # card (Vulkan) exists only in the MinGW test build, which delay-loads
-    # vulkan-1.dll (scripts/cross/vulkan_shim.c). Said here so that nobody
-    # takes this package for one with GPU support (docs/quality/bugs.md, CT-002).
-    'Whisper GPU' = 'absent de ce build MSVC (processeur uniquement)'
+    'Reconnaissance vocale' = "sherpa-onnx $sherpaVersion (ONNX Runtime, processeur) · Parakeet TDT 0.6B v3"
 }
 
 $results = New-Object System.Collections.Generic.List[object]
@@ -86,7 +92,7 @@ function Write-Report {
     foreach ($k in $machine.Keys) { $lines += "- $k : $($machine[$k])" }
     $lines += '', '| Étape | Résultat | Durée |', '| --- | --- | --- |'
     foreach ($r in $results) { $lines += "| $($r.Step) | $(if ($r.Ok) { 'OK' } else { 'ÉCHEC' }) | $($r.Secs) s |" }
-    $lines += '', '**Non vérifié par ce script** : transcription Whisper en partie, capture CS2, latence réelle, FPS, installation des installateurs. Voir docs/testing/.'
+    $lines += '', '**Non vérifié par ce script** : reconnaissance vocale en partie, capture CS2, latence réelle, FPS, installation des installateurs. Voir docs/testing/.'
     if ($SkipBundle) { $lines += '', 'Installateurs non générés (-SkipBundle).' }
     $lines | Set-Content -Encoding UTF8 (Join-Path $dest 'validation.md')
 }
@@ -112,6 +118,7 @@ if ($Release) {
 Step 'Dépendances JS (npm ci)' $root { npm ci }
 Step 'Garde anti-triche' $root { npm run check:anticheat }
 Step 'Règles d''architecture' $root { npm run check:architecture }
+Step 'Notes de version' $root { npm run check:release-notes }
 Step 'Typecheck UI' $root { npm run typecheck }
 Step 'Tests UI (Vitest)' $root { npm test }
 Step 'Build UI' $root { npm run build }
@@ -128,8 +135,8 @@ Step 'Installateur : rustfmt, clippy, tests' "$root\src-installer" {
 if (-not $SkipBundle) {
     Step 'Installateurs NSIS + MSI (MSVC)' $root { npx tauri build --target $target }
 }
-Step 'audio_probe + asr_bench + translate (release, MSVC)' "$root\src-tauri" {
-    cargo build --release --locked --example audio_probe --example asr_bench --example translate --target $target
+Step 'audio_probe + asr_bench (release, MSVC)' "$root\src-tauri" {
+    cargo build --release --locked --example audio_probe --example asr_bench --target $target
 }
 
 # --- Paquet de test ---------------------------------------------------------
@@ -137,7 +144,7 @@ $rel = "src-tauri\target\$target\release"
 New-Item -ItemType Directory -Force -Path $dest | Out-Null
 Copy-Item "$rel\examples\audio_probe.exe" "$dest\crosstalk-audio-probe.exe"
 Copy-Item "$rel\examples\asr_bench.exe" "$dest\crosstalk-asr-bench.exe"
-Copy-Item "$rel\examples\translate.exe" "$dest\crosstalk-translate.exe"
+Copy-Item "$env:SHERPA_ONNX_LIB_DIR\sherpa-onnx-c-api.dll", "$env:SHERPA_ONNX_LIB_DIR\onnxruntime.dll", "$env:SHERPA_ONNX_LIB_DIR\onnxruntime_providers_shared.dll" $dest
 Copy-Item scripts\download-models.ps1, scripts\fetch-asr-corpus.py $dest
 if (-not $SkipBundle) {
     Copy-Item "$rel\crosstalk.exe" $dest

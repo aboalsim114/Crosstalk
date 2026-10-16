@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { dictation, isTauri, reply, type ReplyPhrase, type ReplyTarget } from '../../shared/ipc';
+import { dictation, isTauri, reply, voice, type ReplyPhrase, type ReplyTarget } from '../../shared/ipc';
 import { fnt } from '../../shared/ui/atoms';
 import { NATIVE_NAME, isPlayerLang } from '../languages/langs';
 
@@ -51,10 +51,12 @@ interface Props {
   /** Called once the text is in the clipboard. */
   onCopied?: () => void;
   autoFocusKey?: number;
+  /** In the pop-up: with "Dire mes réponses écrites", each reply is also said in the game. */
+  speakOnSend?: boolean;
 }
 
 /** The user's language in, the teammates' language out, copied to the clipboard. */
-export function ReplyBox({ target, onTarget, onCopied, autoFocusKey }: Props) {
+export function ReplyBox({ target, onTarget, onCopied, autoFocusKey, speakOnSend }: Props) {
   const { me, targets } = useReplyLanguages(autoFocusKey);
   const myName = targetName(me);
   const [text, setText] = useState('');
@@ -62,9 +64,17 @@ export function ReplyBox({ target, onTarget, onCopied, autoFocusKey }: Props) {
   const [busy, setBusy] = useState(false);
   const [out, setOut] = useState<{ text: string; note: string; error?: boolean } | null>(null);
   const input = useRef<HTMLInputElement>(null);
+  // AI voice ready (on, cable fed): the translation can be said in the game.
+  const [voiceReady, setVoiceReady] = useState(false);
+  // "Dire mes réponses écrites": read at each opening of the pop-up.
+  const [speakTyped, setSpeakTyped] = useState(false);
 
   useEffect(() => {
     reply.phrases().then(setPhrases);
+    voice.status().then((st) => {
+      setVoiceReady(!!st?.options.enabled && st.routing);
+      setSpeakTyped(!!st?.options.speakTyped);
+    });
   }, []);
   useEffect(() => {
     input.current?.focus();
@@ -73,6 +83,15 @@ export function ReplyBox({ target, onTarget, onCopied, autoFocusKey }: Props) {
   const done = async (translated: string, note: string) => {
     const ok = await copyText(translated);
     setOut({ text: translated, note: ok ? `${note} · ${PASTE_HINT}` : 'Copie impossible : sélectionnez le texte ci-dessus.' });
+    if (speakOnSend && speakTyped && voiceReady) {
+      // The pop-up closes (CS2 back in front for the voice key), then the voice speaks.
+      try {
+        await reply.say(translated, target);
+      } catch (e) {
+        setOut({ text: translated, note: String(e), error: true });
+        return;
+      }
+    }
     if (ok) onCopied?.();
   };
   const send = async () => {
@@ -82,12 +101,20 @@ export function ReplyBox({ target, onTarget, onCopied, autoFocusKey }: Props) {
     setOut({ text: '…', note: 'Traduction locale en cours (le premier message charge le modèle, quelques secondes)' });
     try {
       const r = await reply.translate(t, target);
-      await done(r.text, r.via === 'phrasebook' ? 'Phrase CS vérifiée' : `Traduit sur ce PC en ${(r.ms / 1000).toFixed(1).replace('.', ',')} s`);
+      await done(r.text, r.via === 'phrasebook' ? 'Phrase CS vérifiée' : `Traduit par le LLM en ${(r.ms / 1000).toFixed(1).replace('.', ',')} s`);
       setText('');
     } catch (e) {
       setOut({ text: '', note: String(e), error: true });
     } finally {
       setBusy(false);
+    }
+  };
+  const say = async (t: string) => {
+    try {
+      const ms = await voice.say(t, target);
+      setOut((o) => o && { ...o, note: `Dit en jeu par la voix IA (${(ms / 1000).toFixed(1).replace('.', ',')} s)` });
+    } catch (e) {
+      setOut((o) => o && { ...o, note: String(e), error: true });
     }
   };
   const quick = async (p: ReplyPhrase) => {
@@ -149,6 +176,11 @@ export function ReplyBox({ target, onTarget, onCopied, autoFocusKey }: Props) {
             </span>
           )}
           <span style={{ font: fnt(400, 11, 'sans', 1.45), color: out.error ? '#ff8a7a' : '#7fe0a8' }}>{out.note}</span>
+          {voiceReady && out.text && out.text !== '…' && (
+            <div className="pill self-start px-3 py-1" role="button" onClick={() => say(out.text)} style={{ font: fnt(500, 11.5) }}>
+              🔊 Dire en jeu
+            </div>
+          )}
         </div>
       )}
     </div>

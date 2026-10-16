@@ -1,5 +1,5 @@
-// Translation into the user's language: local Opus-MT, with the optional online
-// LLM in front (./llm.ts).
+// Translation into the user's language by the LLM the user connected
+// (./llm.ts): voice lines, chat, replies. No local translation model.
 
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
@@ -18,23 +18,20 @@ export interface TranslationConfig {
   /** The players' languages. */
   sources?: string[];
 }
-export type PairState = 'missing' | 'loading' | 'ready' | 'error';
-export interface PairStatus {
-  source: string;
-  target?: string;
-  /** "A + B" when the route goes through English. */
-  repo: string;
-  state: PairState;
-  error: string | null;
-  loadMs: number | null;
-}
 export interface TranslationStatus {
   config: TranslationConfig;
-  pairs: PairStatus[];
-  modelsDir: string;
+  /** The LLM can be asked. */
+  ready: boolean;
+  /** Why translations are unavailable (shown as is). */
+  problem: string | null;
   queued: number;
 }
-/** French translation of a transcript (matched by `id`), or why it is missing. */
+/** Opus-MT folders left by earlier versions. */
+export interface LegacyModels {
+  folders: number;
+  bytes: number;
+}
+/** Translation of a line (matched by `id`), or why it is missing: the original then stays shown. */
 export interface Translation {
   id: number;
   lang: string;
@@ -49,8 +46,8 @@ export interface Translation {
   partial?: boolean;
   /** Language of `translated` (the user's language when it was sent). */
   target?: string;
-  /** What produced `translated`: the online LLM, Opus-MT, or the built-in callouts. */
-  engine?: 'llm' | 'opus-mt' | 'lexicon' | null;
+  /** What produced `translated`: the LLM, or the built-in callouts. */
+  engine?: 'llm' | 'lexicon' | null;
 }
 
 export const translation = {
@@ -60,6 +57,9 @@ export const translation = {
   rescan: (): Promise<TranslationStatus | null> => (isTauri ? invoke<TranslationStatus>('translation_rescan') : Promise.resolve(null)),
   test: (lang: string, text: string): Promise<Translation | null> =>
     isTauri ? invoke<Translation>('translation_test', { lang, text }) : Promise.resolve(null),
+  legacyModels: (): Promise<LegacyModels | null> => (isTauri ? invoke<LegacyModels>('translation_legacy_models') : Promise.resolve(null)),
+  /** Deletes the old Opus-MT folders (on the user's request only). */
+  legacyCleanup: (): Promise<LegacyModels | null> => (isTauri ? invoke<LegacyModels>('translation_legacy_cleanup') : Promise.resolve(null)),
   onStatus: (cb: (s: TranslationStatus) => void) =>
     isTauri ? listen<TranslationStatus>('translation://status', (e) => cb(e.payload)) : Promise.resolve(noop),
   onResult: (cb: (t: Translation) => void) => (isTauri ? listen<Translation>('translation://result', (e) => cb(e.payload)) : Promise.resolve(noop)),

@@ -15,7 +15,7 @@ Implémentation : `src-tauri/src/speech/focus.rs`. Le traitement se fait avant l
 ## Mesures (Linux, banc `focus_bench`)
 
 ```
-cargo run --release --example focus_bench -- --voice corpus/jfk.wav --vad corpus/ggml-silero-v5.1.2.bin [--peak 1.0]
+cargo run --release --example focus_bench -- --voice corpus/jfk.wav --vad corpus/silero_vad.onnx [--peak 1.0]
 ```
 
 Conditions de mesure :
@@ -40,7 +40,7 @@ Historique de la mise au point, mesuré avec le même banc :
 
 ## Ce qui n'est pas encore mesuré
 
-- **Le WER**, c'est-à-dire l'effet réel sur Whisper : aucun modèle Whisper n'est téléchargeable dans l'environnement de développement.
+- **Le WER**, c'est-à-dire l'effet réel sur la reconnaissance (Parakeet) : non mesuré avec le focus. Les mesures ci-dessus ont été faites avec l'ancien VAD (portage ggml de Silero) ; elles n'ont pas été refaites avec `silero_vad.onnx`.
 - **De vrais sons de CS2**, et l'hypothèse elle-même : que la voix soit bien au centre dans CS2. Si la voix était spatialisée, le focus l'atténuerait.
 
 ## Protocole sur Windows

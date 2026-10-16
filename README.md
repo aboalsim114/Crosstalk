@@ -41,7 +41,7 @@ Capture audio Windows ciblée sur le processus CS2, sans intégration intrusive 
 <td width="33%" valign="top">
 
 ### 02 / Comprendre
-Détection de parole, transcription puis traduction vers le français, directement sur votre PC.
+Détection de parole et transcription sur votre PC, puis traduction dans votre langue par le LLM de votre choix : en ligne avec votre clé, ou Ollama / LM Studio sur votre PC.
 
 </td>
 <td width="33%" valign="top">
@@ -59,18 +59,20 @@ Un overlay transparent conçu pour afficher les sous-titres sans prendre le cont
 
 | | Expérience |
 | --- | --- |
-| **Répondez dans leur langue** | En pleine partie, **Ctrl+Alt+F6** : **dites** votre phrase en français, ou **Ctrl+Alt+F7** : écrivez-la, Crosstalk traduit en anglais ou en russe (la langue entendue chez vos coéquipiers) et copie le message. Dans CS2 : Y ou U, Ctrl+V, Entrée. Les annonces courantes (« éco », « drop-moi », « deux en B »…) sont traduites à la main, instantanément ; rien n'est tapé dans le jeu à votre place. |
+| **Répondez dans leur langue** | En pleine partie, **Ctrl+Alt+F6** : **dites** votre phrase en français, ou **Ctrl+Alt+F7** : écrivez-la, le LLM connecté traduit en anglais ou en russe (la langue entendue chez vos coéquipiers) et Crosstalk copie le message. Dans CS2 : Y ou U, Ctrl+V, Entrée. Les annonces courantes (« éco », « drop-moi », « deux en B »…) sont traduites à la main, instantanément ; rien n'est tapé dans le jeu à votre place. |
+| **Radar des annonces** | « Двое на банане » : la zone **Banana** s'allume sur le plan d'Inferno dans l'overlay, avec **×2**. Les callouts dits ou écrits par vos coéquipiers (russe, anglais, raccourcis de chat comme « 2 B ») deviennent une carte que vous lisez d'un coup d'œil. 9 cartes, plans schématiques, rien n'est lu dans le jeu ([détails](docs/radar.md)). |
+| **Voix IA en jeu** | **Ctrl+Alt+F6**, dites « Deux en B » : vos coéquipiers russes entendent « Двое на B » dans le vocal de CS2, dit par une voix neuronale au choix (Piper, homme ou femme). Transcription et voix sur votre PC, traduction par le LLM connecté (local avec Ollama ou LM Studio : gratuit, sans compte ni clé). Passe par le câble audio virtuel gratuit VB-CABLE. En appui pour parler, Crosstalk peut maintenir votre touche vocale (K par défaut) le temps exact de la phrase, seulement quand CS2 est au premier plan (option désactivée par défaut). Désactivé par défaut ([détails](docs/voice-ai.md)). |
 | **Mode streamer** | Vos viewers lisent aussi les annonces en français : Crosstalk sert une page locale (`http://127.0.0.1:31983/`) à ajouter dans OBS comme **source navigateur**. Pseudos masqués par défaut, phrase originale en option, désactivé tant que vous ne l'activez pas. |
 | **Qui parle ? (expérimental)** | « Sasha — deux en B » : Crosstalk lit le pseudo affiché par l'indicateur de voix de CS2, uniquement sur une petite zone de **votre écran**, avec l'OCR intégré à Windows. Aucun accès au jeu, aucune image enregistrée. Pas de pseudo en cas de doute. Désactivé par défaut. |
-| **Résumé de partie à partager** | À la fin du match, une image soignée : carte, score, nombre d'annonces traduites par langue, latence. Bouton « Copier l'image » à coller dans Discord, ou enregistrement dans Documents. Aucun pseudo dessus, rien n'est envoyé. |
+| **Résumé de partie à partager** | À la fin du match, une image soignée : carte, score, nombre d'annonces traduites par langue, latence, et la **carte des annonces** : les zones citées par votre équipe pendant le match, en lueurs sur le plan ([exemple](docs/radar.md#carte-des-annonces-de-la-partie)). Bouton « Copier l'image » à coller dans Discord, ou enregistrement dans Documents. Aucun pseudo dessus, rien n'est envoyé. |
 | **Focus voix (expérimental)** | Les coéquipiers parlent au centre du son, les tirs et les pas viennent des côtés : Crosstalk garde le centre et baisse le reste avant la transcription. +4 à +8 dB de clarté au banc d'essai, pour moins de 1 % de processeur. Désactivé par défaut. |
-| **Traduction dans votre langue** | Au premier lancement, vous choisissez la langue dans laquelle vous lisez (français, anglais, russe, allemand, espagnol, ukrainien) et celles de vos coéquipiers (les mêmes, plus polonais et turc). Votre propre langue n'est jamais traduite ; sans modèle direct, la traduction passe par l'anglais ([détails](docs/languages.md)). |
+| **Traduction dans votre langue** | Au premier lancement, vous choisissez la langue dans laquelle vous lisez et celles de vos coéquipiers (français, anglais, russe, allemand, espagnol, ukrainien, polonais, turc). Votre propre langue n'est jamais traduite ; toutes les paires sont directes avec le LLM ([détails](docs/languages.md)). |
 | **Interface en plusieurs langues** | Français, English, Español, Deutsch, Português (Brasil), Русский, Polski, Türkçe, 简体中文, ou la langue de Windows (automatique). Traduction en cours, écran par écran ([détails](docs/i18n.md)). |
 | **Overlay en jeu** | Fenêtre transparente, repositionnable, avec clics traversants par défaut. Fonctionne avec CS2 en mode fenêtré sans bordures. |
 | **Contrôle immédiat** | Affichez ou masquez l'overlay, mettez en pause ou déclenchez l'arrêt d'urgence via des raccourcis globaux. |
 | **Discret par conception** | Crosstalk peut continuer à fonctionner dans la zone de notification lorsque sa fenêtre principale est masquée. |
-| **Reconnaissance et traduction locales** | Pipeline WASAPI → Silero VAD → whisper.cpp → Opus-MT. Whisper tourne sur la **carte graphique** (Vulkan : NVIDIA, AMD, Intel) quand elle est compatible, sinon sur le processeur. Aucun compte, aucune clé API ni abonnement requis pour ce traitement. |
-| **Traduction en ligne (facultative)** | Désactivée par défaut. Vous pouvez confier les phrases au LLM de votre choix, avec votre propre clé : API compatibles OpenAI (OpenAI, OpenRouter, Mistral, Groq, Ollama, LM Studio…) ou Anthropic. Seul le texte des phrases est envoyé, jamais l'audio ni les pseudos. La clé reste dans le Gestionnaire d'identifiants Windows. Opus-MT prend le relais à la moindre erreur ([détails](docs/translation-llm.md)). |
+| **Reconnaissance vocale locale** | Pipeline WASAPI → Silero VAD → Parakeet TDT 0.6B v3 (sherpa-onnx), sur le processeur de votre PC. 25 langues européennes, dont le russe, l'anglais, le français, l'allemand, l'espagnol, l'ukrainien et le polonais (pas le turc). Aucun compte ni clé pour la transcription. |
+| **Traduction IA : Cloud ou Local** | Un seul moteur pour la voix, le chat et vos réponses : un LLM. **Cloud** : OpenAI, Anthropic (Claude), Mistral, Groq, OpenRouter, Ollama Cloud ou tout service compatible OpenAI, avec **votre propre clé** (gardée par le Gestionnaire d'identifiants Windows). **Local** : **Ollama** ou **LM Studio** déjà installés sur votre PC, détectés automatiquement, sans clé et hors ligne. Crosstalk ne télécharge aucun LLM. Seul le texte des phrases est envoyé au moteur choisi, jamais l'audio ni les pseudos ; en mode Cloud, vous l'acceptez avant la connexion. Sans moteur connecté, les phrases restent dans leur langue d'origine ([détails](docs/translation-llm.md)). |
 | **Vraie application Windows** | Interface React + TypeScript intégrée dans Tauri v2, cœur natif Rust, rendu via WebView2. Ce n'est pas un site web. |
 
 ### Le respect du jeu fait partie du produit
@@ -86,8 +88,8 @@ Crosstalk est un outil **externe**. Il n'injecte pas de code dans `cs2.exe`, ne 
 **[↓ Télécharger l'installateur Crosstalk-setup.exe](https://github.com/aboalsim114/Crosstalk/raw/downloads/Crosstalk-setup.exe)**
 
 1. **Téléchargez** `Crosstalk-setup.exe` depuis la branche de distribution `downloads`.
-2. **Installez** Crosstalk dans le dossier proposé ou celui de votre choix. L'installateur met en place l'application, les raccourcis et **télécharge tous les modèles** pendant l'installation : détection de voix, Whisper base et small, traduction russe et anglais → français, et français → anglais et russe pour vos réponses (environ **1,9 Go**, une seule fois).
-3. **Lancez** Crosstalk puis ouvrez CS2 : tout fonctionne hors ligne, sans aucun téléchargement supplémentaire.
+2. **Installez** Crosstalk dans le dossier proposé ou celui de votre choix. L'installateur met en place l'application, les raccourcis et **télécharge les modèles vocaux** pendant l'installation : détection de voix et reconnaissance Parakeet (environ **670 Mo**, une seule fois). Aucun modèle de traduction n'est téléchargé.
+3. **Lancez** Crosstalk et choisissez le moteur de traduction : **API Cloud**, **Ollama local**, **LM Studio local**, ou **Configurer plus tard** (la transcription marche déjà ; la traduction reste indisponible jusqu'à la configuration). Puis ouvrez CS2.
 4. **Mises à jour : depuis l'application.** À partir du build 94, Crosstalk vérifie au lancement (puis toutes les 6 h) s'il existe une version plus récente et propose de l'installer : il télécharge l'installateur, vérifie sa taille et son empreinte SHA-256, puis se met à jour au même endroit et redémarre, modèles et réglages conservés. Plus besoin de revenir sur cette page.
 
 **Avant l'installation :** ce build de test n'est pas signé numériquement et peut déclencher un avertissement SmartScreen. Vérifiez la provenance et, si nécessaire, comparez son empreinte SHA-256 avec la [fiche de distribution](https://github.com/aboalsim114/Crosstalk/blob/downloads/VERSION.md) avant de décider de l'exécuter.
@@ -97,7 +99,7 @@ Crosstalk est un outil **externe**. Il n'injecte pas de code dans `cs2.exe`, ne 
 | [**Installateur de développement**](https://github.com/aboalsim114/Crosstalk/raw/downloads/Crosstalk-setup.exe) | Tester l'expérience Windows et la capture/traduction actuelle. |
 | [**Fiche du build et SHA-256**](https://github.com/aboalsim114/Crosstalk/blob/downloads/VERSION.md) | Identifier le commit, la date de compilation et contrôler les téléchargements. |
 | [**Flux de mise à jour**](https://github.com/aboalsim114/Crosstalk/blob/downloads/latest.json) | Lu par l'application : numéro de build, nouveautés, empreinte de l'installateur. |
-| [**Outils Windows portables**](https://github.com/aboalsim114/Crosstalk/raw/downloads/crosstalk-windows-x64-portable.zip) | Diagnostics audio, banc d'essai ASR et tests de traduction. |
+| [**Outils Windows portables**](https://github.com/aboalsim114/Crosstalk/raw/downloads/crosstalk-windows-x64-portable.zip) | Diagnostics audio et banc d'essai ASR. |
 | [**Releases GitHub**](https://github.com/aboalsim114/Crosstalk/releases) | Versions publiées depuis la branche de production, lorsqu'elles sont disponibles. |
 
 **À noter :** le dépôt est public, les liens fonctionnent sans compte GitHub. La branche `downloads` peut être en retard sur `develop` : consultez `VERSION.md` pour connaître le commit exact du build. Le runtime WebView2 est pris en charge par les installateurs Windows si nécessaire.
@@ -119,9 +121,8 @@ Ces raccourcis utilisent `RegisterHotKey`, sans hook clavier. Un éventuel confl
 | Capacité | Statut | Détail |
 | --- | --- | --- |
 | Détection de `cs2.exe` et capture audio de processus | **Implémenté · en test** | WASAPI process loopback, Windows compatibles. |
-| Détection de parole et transcription RU / EN | **Implémenté · en test** | Silero VAD et whisper.cpp ; séparation parole / sons du jeu encore imparfaite. |
-| Traduction vocale vers le français | **Implémenté · en test** | Opus-MT local ; qualité et délais à mesurer sur des matchs réels. |
-| Traduction en ligne par un LLM (votre clé) | **Implémenté · à valider** | Désactivée par défaut. Testée avec un fournisseur simulé uniquement ; à essayer avec une vraie clé sous Windows. |
+| Détection de parole et transcription RU / EN | **Implémenté · en test** | Silero VAD et Parakeet (sherpa-onnx) ; séparation parole / sons du jeu encore imparfaite ; pas encore essayé en partie avec le nouveau moteur. |
+| Traduction par LLM (Cloud avec votre clé, ou Ollama / LM Studio local) | **Implémenté · à valider** | Seul moteur de traduction. Testée avec des fournisseurs et serveurs locaux simulés ; à essayer avec une vraie clé et un vrai Ollama / LM Studio sous Windows ([rapport](docs/reports/llm-only-translation-migration.md)). |
 | Overlay Windows et commandes rapides | **Implémenté** | Fenêtre transparente et raccourcis globaux. |
 | Identification fiable du joueur qui parle | **Expérimental / à valider** | Approche HUD et OCR prévue ; ne pas présumer qu'un pseudo est correctement identifié. |
 | Chat écrit de CS2 et traduction | **Implémenté · en test** | Lecture de `console.log` (option de lancement `-condebug`, vérifiée dans Steam) ; format des lignes à confirmer en partie réelle, règles modifiables sans nouvelle version. |
@@ -133,7 +134,7 @@ Le cap produit est simple : **moins de bruit, des traductions utiles, et un mini
 
 <div align="center">
 
-`Counter-Strike 2` → `WASAPI` → `Silero VAD` → `whisper.cpp` → `Opus-MT` → `Overlay`
+`Counter-Strike 2` → `WASAPI` → `Silero VAD` → `Parakeet (sherpa-onnx)` → `LLM (Cloud ou Local)` → `Overlay`
 
 </div>
 
@@ -147,7 +148,8 @@ La capture ciblée récupère l'audio attribué au processus CS2 — **y compris
 | Interface | **React · TypeScript · Tailwind CSS** |
 | Direction artistique et animation | **Motion · Three.js** |
 | Capture / fonctionnalités Windows | **WASAPI process loopback · WebView2 · APIs Windows** |
-| Intelligence vocale locale | **Silero VAD · whisper.cpp · Opus-MT** |
+| Intelligence vocale locale | **Silero VAD · Parakeet TDT 0.6B v3 · sherpa-onnx (ONNX Runtime)** |
+| Traduction | **LLM : API compatibles OpenAI, Anthropic, Ollama, LM Studio** |
 | Tests | **Vitest · Cargo tests · scripts de validation Windows** |
 
 ### Structure du dépôt
@@ -172,7 +174,7 @@ Architecture du code : [docs/architecture/overview.md](docs/architecture/overvie
 
 ## Développer en local
 
-**Prérequis :** Windows 10/11 x64, Node.js 22, Rust stable avec toolchain **MSVC**, Visual Studio Build Tools (développement desktop C++), LLVM / `LIBCLANG_PATH` et CMake.
+**Prérequis :** Windows 10/11 x64, Node.js 22, Rust stable avec toolchain **MSVC**, Visual Studio Build Tools (développement desktop C++). Les bibliothèques précompilées de sherpa-onnx sont téléchargées pendant le build (ou par `scripts/fetch-sherpa-onnx.sh windows`).
 
 ```powershell
 npm install

@@ -60,7 +60,7 @@ Pour un correctif urgent en production : créer `hotfix/<sujet>` depuis `main`, 
 
 **Décision du mainteneur (12/10/2026), permanente jusqu'à nouvel ordre** : Crosstalk n'utilise pas GitHub Actions, ni aucun runner hébergé payant. GitHub sert au code, aux branches, aux issues et aux Pull Requests. Toute validation technique s'exécute sur un PC Windows 10/11 x64, par le mainteneur, Codex ou Claude Code. Ne réactivez pas de workflow sans l'accord explicite du mainteneur.
 
-Prérequis : Rust stable (MSVC), Node.js 22, Build Tools Visual Studio (C++), LLVM (`LIBCLANG_PATH`), CMake. Lancez les commandes dans PowerShell, pas dans Git Bash : son `link.exe` masque celui de MSVC.
+Prérequis : Rust stable (MSVC), Node.js 22, Build Tools Visual Studio (C++). Les bibliothèques précompilées de sherpa-onnx (reconnaissance vocale) sont téléchargées par `validate.ps1`. Lancez les commandes dans PowerShell, pas dans Git Bash : son `link.exe` masque celui de MSVC.
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts\validate.ps1              # complet
@@ -71,6 +71,7 @@ powershell -ExecutionPolicy Bypass -File scripts\validate.ps1 -SkipBundle  # san
 | --- | --- |
 | Garde anti-triche | `npm run check:anticheat` (aucune API d'accès à un autre processus) |
 | Règles d'architecture | `npm run check:architecture` (cycles, fichiers partagés avec l'installateur, couche IPC, contrat IPC) |
+| Notes de version | `npm run check:release-notes` (`release-notes.json` : rédigé pour les joueurs, sans vocabulaire de développeur) |
 | Interface | `npm run typecheck`, `npm test`, `npm run build` |
 | Rust | `cargo fmt --all -- --check`, `cargo clippy --all-targets --locked -- -D warnings`, `cargo test --all-targets --locked` (dans `src-tauri` puis `src-installer`) |
 | Windows | `npx tauri build --target x86_64-pc-windows-msvc` (NSIS + MSI) |
@@ -78,11 +79,11 @@ powershell -ExecutionPolicy Bypass -File scripts\validate.ps1 -SkipBundle  # san
 
 Le script s'arrête à la première erreur et écrit `dist-local\<commit>\` : exécutables, `SHA256SUMS.txt` et `validation.md`.
 
-Restent manuels, selon le sujet : capture et reconnaissance vocale avec CS2, mesures Whisper (latence, CPU), FPS ; protocoles dans `docs/testing/`.
+Restent manuels, selon le sujet : capture et reconnaissance vocale avec CS2, mesures de la reconnaissance (latence, CPU), FPS ; protocoles dans `docs/testing/`.
 
 ### Version de test téléchargeable
 
-Après **chaque fusion dans `develop`**, republier la version de test depuis un `develop` à jour et propre :
+Après **chaque fusion dans `develop`** (et après chaque release, une fois `main` refusionnée dans `develop`), republier la version de test depuis un `develop` à jour et propre. C'est ce qui rend la mise à jour disponible dans l'application (À propos, flux `latest.json`) :
 
 ```bash
 scripts/publish-dev-build.sh

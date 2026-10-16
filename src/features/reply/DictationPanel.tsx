@@ -12,7 +12,11 @@ export function dictationView(st: DictationState): { title: string; detail: stri
     case 'done':
       return {
         title: st.translated ?? '',
-        detail: st.copied ? `${st.via === 'phrasebook' ? 'Phrase CS vérifiée' : 'Traduit sur ce PC'} · ${PASTE_HINT}` : 'Copie impossible : sélectionnez le texte.',
+        detail: st.spoken
+          ? `🔊 Dit en jeu par la voix IA · aussi copié pour le chat`
+          : st.copied
+            ? `${st.via === 'phrasebook' ? 'Phrase CS vérifiée' : 'Traduit par le LLM'} · ${PASTE_HINT}`
+            : 'Copie impossible : sélectionnez le texte.',
         color: '#7fe0a8',
       };
     case 'error':

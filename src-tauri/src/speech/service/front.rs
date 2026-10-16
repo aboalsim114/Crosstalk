@@ -1,6 +1,6 @@
 //! The front of the pipeline: the capture thread hands the audio over
 //! (`SpeechSink`, downmix only), and the VAD thread conditions it, detects
-//! voices, segments them and queues them for Whisper.
+//! voices, segments them and queues them for the recogniser.
 
 use std::sync::atomic::Ordering;
 use std::sync::mpsc::{Receiver, RecvTimeoutError, SyncSender, TrySendError};
@@ -155,8 +155,11 @@ pub(super) fn front_loop(inner: &Inner, rx: Receiver<FrontMsg>) {
                 d.reset();
             }
         }
-        st.segmenter
-            .set_threshold(inner.config.lock().unwrap().vad_threshold);
+        let vad_threshold = inner.config.lock().unwrap().vad_threshold;
+        st.segmenter.set_threshold(vad_threshold);
+        if let Some(d) = detector.as_mut() {
+            d.set_threshold(vad_threshold);
+        }
         match msg {
             FrontMsg::Detector(d) => {
                 detector = Some(d);
@@ -265,13 +268,13 @@ fn run_vad(inner: &Inner, det: &mut dyn VoiceDetector, st: &mut Front) {
     }
 }
 
-/// Live words while someone speaks: the open segment goes to Whisper when it
+/// Live words while someone speaks: the open segment goes to the recogniser when it
 /// is idle, at most once per `PARTIAL_STEP_FRAMES` of new audio.
 fn request_partial(inner: &Inner, st: &mut Front) {
     let (Some(utterance), n) = (st.utterance, st.segmenter.open_frames()) else {
         return;
     };
-    // Paced by Whisper's speed: at least twice its last live time between two
+    // Paced by the recogniser's speed: at least twice its last live time between two
     // live lines, and none when it cannot keep up (CPU taken by the game).
     let partial_ms = inner.live.lock().unwrap().partial_ms as usize;
     let step = PARTIAL_STEP_FRAMES.max(2 * partial_ms / FRAME_MS as usize);

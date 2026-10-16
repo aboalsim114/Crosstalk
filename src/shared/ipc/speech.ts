@@ -4,7 +4,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import { isTauri, noop } from './core';
 
-/** Whisper languages: the players' and the user's own (src/features/languages/langs.ts). */
+/** Recognised languages: the players' and the user's own (src/features/languages/langs.ts). */
 export type SpeechLang = 'fr' | 'en' | 'ru' | 'de' | 'es' | 'uk' | 'pl' | 'tr';
 export type EngineState = 'missing' | 'loading' | 'ready' | 'error';
 export type RejectReason =
@@ -13,8 +13,6 @@ export type RejectReason =
   | 'stale'
   | 'overflow'
   | 'empty'
-  | 'noSpeech'
-  | 'lowConfidence'
   | 'hallucination'
   | 'repetition'
   | 'wrongScript';
@@ -24,9 +22,6 @@ export interface SpeechConfig {
   languages: SpeechLang[];
   /** 0.2–0.9. */
   vadThreshold: number;
-  glossary: string[];
-  /** Where Whisper runs; auto = GPU only if measured clearly faster than the CPU. */
-  accel: 'cpu' | 'gpu' | 'auto';
   /** "Focus voix": keep the centre of the stereo game audio (voice chat), turn down side sounds. */
   voiceFocus?: boolean;
 }
@@ -41,6 +36,8 @@ export interface SpeechStatus {
   loadMs: number | null;
   backend: string;
   threads: number;
+  /** Name of the recognition model, e.g. "Parakeet TDT 0.6B v3". */
+  modelLabel: string;
 }
 
 /** A transcription in the speaker's language (not a translation). */
@@ -55,8 +52,6 @@ export interface Transcript {
   audioMs: number;
   latencyMs: number;
   asrMs: number;
-  avgLogprob: number;
-  noSpeechProb: number;
   model: string;
   /** Name read on CS2's voice indicator while it was spoken ("Qui parle ?", opt-in). */
   speaker?: string;
@@ -70,6 +65,9 @@ export interface SpeechStats {
   latencyP50Ms: number | null;
   latencyP95Ms: number | null;
   lastRtf: number | null;
+  /** Recogniser time and audio duration of every final segment (cumulative, ms). */
+  asrMs?: number;
+  asrAudioMs?: number;
   cpuPercent: number | null;
   /** Game sound removed by "Focus voix" over the last second (dB); null when off or mono. */
   focusDb?: number | null;
@@ -82,11 +80,19 @@ export interface VoiceActivity {
 
 export interface ModelInfo {
   id: string;
-  file: string;
+  /** Display name, e.g. "Parakeet TDT 0.6B v3". */
+  label: string;
   sizeMb: number;
   note: string;
+  /** Licence of the model weights. */
+  license: string;
   installed: boolean;
-  url: string;
+}
+
+/** Whisper files left by earlier versions (deleted on request only). */
+export interface LegacyWhisper {
+  files: number;
+  bytes: number;
 }
 
 export const speech = {
@@ -96,6 +102,9 @@ export const speech = {
   configure: (config: SpeechConfig): Promise<SpeechStatus | null> =>
     isTauri ? invoke<SpeechStatus>('speech_configure', { config }) : Promise.resolve(null),
   rescan: (): Promise<SpeechStatus | null> => (isTauri ? invoke<SpeechStatus>('speech_rescan') : Promise.resolve(null)),
+  legacyWhisper: (): Promise<LegacyWhisper | null> => (isTauri ? invoke<LegacyWhisper>('speech_legacy_whisper') : Promise.resolve(null)),
+  /** Removes the old Whisper files: only on the user's request. */
+  legacyCleanup: (): Promise<LegacyWhisper | null> => (isTauri ? invoke<LegacyWhisper>('speech_legacy_cleanup') : Promise.resolve(null)),
   onStatus: (cb: (s: SpeechStatus) => void) => (isTauri ? listen<SpeechStatus>('speech://status', (e) => cb(e.payload)) : Promise.resolve(noop)),
   onTranscript: (cb: (t: Transcript) => void) => (isTauri ? listen<Transcript>('speech://transcript', (e) => cb(e.payload)) : Promise.resolve(noop)),
   /** The live line of this utterance must go (its segment was finally rejected). */

@@ -6,14 +6,14 @@ Sévérités : P0 inutilisable · P1 fonction principale défaillante · P2 pré
 
 | ID | Sév. | Résumé | Statut |
 |---|---|---|---|
-| CT-001 | P2 | Une boucle de Whisper sur un segment court fait rejeter toute l'annonce | Corrigé, vérifié au banc (f201140) |
-| CT-002 | P2 | La version officielle MSVC (`validate.ps1`) est compilée sans la fonctionnalité `gpu` : pas de Whisper sur carte graphique, contrairement au README | Ouvert, rendu visible dans le rapport |
+| CT-001 | P2 | Une boucle de Whisper sur un segment court fait rejeter toute l'annonce | Corrigé, vérifié au banc (f201140) · sans objet depuis D-14 (Whisper retiré) |
+| CT-002 | P2 | La version officielle MSVC (`validate.ps1`) est compilée sans la fonctionnalité `gpu` : pas de Whisper sur carte graphique, contrairement au README | Sans objet depuis D-14 (Whisper retiré, reconnaissance sur processeur seul) |
 | CT-003 | P3 | L'intro affiche « V0.2 » en dur dans la version 0.3.0 | Corrigé, vérifié par test |
 | CT-004 | P3 | Le coin d'overlay enregistré est ignoré au démarrage (« overlay window missing ») | Corrigé, vérifié dans l'application |
 | CT-005 | P3 | « modèles absents » et un WARN au journal à chaque démarrage, alors que les modèles sont installés | Corrigé, vérifié dans l'application |
 | CT-006 | P3 | Licences tierces inexactes dans À propos (rubato cité ; candle, modèles et CC-BY absents) | Corrigé, vérifié par test |
-| CT-007 | P1 | `crosstalk.exe` (MSVC) dépend de `MSVCP140.dll`, que ni Windows ni l'installateur ne fournissent | Corrigé (74ace45) ; dépendance supprimée et vérifiée, non essayé sur un PC vierge |
-| CT-008 | P2 | Dans l'application, Whisper répète une phrase entière (« Save your weapons this round. » ×4) : l'annonce est rejetée | Corrigé (7f1ddbb), vérifié dans l'application |
+| CT-007 | P1 | `crosstalk.exe` (MSVC) dépend de `MSVCP140.dll`, que ni Windows ni l'installateur ne fournissent | Corrigé (74ace45) ; dépendance supprimée et vérifiée, non essayé sur un PC vierge · cause (whisper.cpp) disparue depuis D-14 |
+| CT-008 | P2 | Dans l'application, Whisper répète une phrase entière (« Save your weapons this round. » ×4) : l'annonce est rejetée | Corrigé (7f1ddbb), vérifié dans l'application · Whisper retiré depuis D-14 ; `collapse_repeats` reste dans le filtre |
 | CT-009 | P3 | Mode streamer : désactivé, le serveur local reste à l'écoute sur 127.0.0.1:31983 | Ouvert |
 
 ## CT-001 — Une boucle de Whisper fait perdre l'annonce
@@ -36,6 +36,7 @@ Sévérités : P0 inutilisable · P1 fonction principale défaillante · P2 pré
 
   Pour `fr8` en combat, la seconde passe rend « je tu presque mort, je retire, je retire » : un texte dégradé, mais affiché, là où rien ne l'était.
 - **Statut** : corrigé, vérifié au banc. Non vérifié en partie réelle.
+- **Depuis [D-14](../architecture/decisions.md)** : sans objet (Whisper retiré). La seconde passe et le plafond de jetons n'existent plus avec Parakeet.
 
 ## CT-002 — Pas de Whisper sur carte graphique dans la version MSVC
 
@@ -43,6 +44,7 @@ Sévérités : P0 inutilisable · P1 fonction principale défaillante · P2 pré
 - **Cause** : la version MinGW charge `vulkan-1.dll` à la demande (`scripts/cross/vulkan_shim.c`), ce qui lui permet de démarrer sur un PC sans pilote Vulkan. Ce mécanisme n'existe pas en MSVC. Activer `gpu` tel quel lierait `vulkan-1.dll` statiquement : l'application ne démarrerait plus sur un PC sans Vulkan.
 - **Ce qui est fait** : le rapport `validation.md` indique désormais « Whisper GPU : absent de ce build MSVC », pour que personne ne prenne ce paquet pour une version avec GPU.
 - **Ce qui reste à faire** : un build MSVC avec `gpu` et `/DELAYLOAD:vulkan-1.dll` (plus `delayimp.lib`), puis un test sur un PC avec et sans pilote Vulkan. Impossible ici : le SDK Vulkan (`glslc`) n'est pas installé sur cette machine.
+- **Depuis [D-14](../architecture/decisions.md)** : sans objet. Whisper et la fonctionnalité `gpu` sont retirés ; la reconnaissance tourne sur le processeur seul, dans toutes les versions.
 - **Statut** : ouvert, documenté.
 
 ## CT-003 — Version « V0.2 » en dur sur l'intro
@@ -85,6 +87,7 @@ Sévérités : P0 inutilisable · P1 fonction principale défaillante · P2 pré
 - **Validation** : `dumpbin /dependents` sur le nouveau `crosstalk.exe` ne liste plus `MSVCP140.dll` ni `VCRUNTIME140.dll` (seulement l'UCRT `api-ms-win-crt-*`, fournie par Windows 10/11). Ce build a été lancé et a fait une session complète (capture, Whisper, traduction), et les 254 tests Rust passent.
 - **Non vérifié** : un démarrage sur un Windows vierge sans redistribuable.
 - **Statut** : corrigé (74ace45).
+- **Depuis [D-14](../architecture/decisions.md)** : whisper.cpp est retiré. Les DLL de sherpa-onnx et d'ONNX Runtime livrées à côté de `crosstalk.exe` sont les versions « MT », avec le runtime C inclus ; leur démarrage sur un PC vierge n'est pas encore vérifié.
 
 ## CT-008 — Whisper répète une phrase entière : l'annonce est rejetée
 
@@ -95,10 +98,11 @@ Sévérités : P0 inutilisable · P1 fonction principale défaillante · P2 pré
   1. `filter::collapse_repeats` : une phrase d'au moins 3 mots différents, répétée bout à bout (dernière copie éventuellement coupée), est ramenée à une seule occurrence avant les autres contrôles. Un « go go go go » reste une boucle rejetée, et une hallucination répétée (« Thanks for watching! » ×3) reste rejetée une fois ramenée à un exemplaire.
   2. La seconde passe (CT-001) n'a lieu que si cette réduction ne suffit pas.
 - **Essai écarté (mesuré)** : une seconde passe sur la fenêtre complète de 30 s récupérait « Je suis presque mort, je recule. », mais coûtait +4,3 s sur le processeur (full_ms 5 162). L'annonce suivante devenait alors périmée (Stale).
-- **Tests** : `keeps_a_sentence_whisper_repeated_after_hearing_it_once`, `rejects_loops`.
+- **Tests** : `keeps_a_sentence_whisper_repeated_after_hearing_it_once` (aujourd'hui `keeps_a_sentence_repeated_after_hearing_it_once`), `rejects_loops`.
 
 - **Validation dans l'application** (même scénario de 10 annonces, build 74ace45) : 12 transcrits, 0 rejeté ; latence p50 1,5 s, p95 2,3 s. Avant : 2 rejets « Repetition », p50 2,4 s, p95 4,0 s.
 - **Statut** : corrigé (7f1ddbb).
+- **Depuis [D-14](../architecture/decisions.md)** : Whisper retiré. `filter::collapse_repeats` reste appliqué aux transcriptions de Parakeet ; la seconde passe n'existe plus.
 
 ## CT-009 — Le serveur du mode streamer reste ouvert après désactivation
 

@@ -50,7 +50,7 @@ impl Line {
 }
 
 /// Disk writes go through the `journal` thread: the threads that log (VAD,
-/// Whisper, capture) never wait for the disk, nor hold a lock during it.
+/// recognition, capture) never wait for the disk, nor hold a lock during it.
 pub struct Logger {
     dir: Option<PathBuf>,
     inner: Mutex<Inner>,
@@ -382,9 +382,11 @@ pub fn summarize(event: &str, v: &Value) -> Vec<(String, &'static str, &'static 
         }
         "speech://status" => {
             let state = s(v, &["state"]).unwrap_or("?");
-            let model = s(v, &["config", "model"]).unwrap_or("?");
+            let model = s(v, &["modelLabel"])
+                .or_else(|| s(v, &["config", "model"]))
+                .unwrap_or("?");
             let mut msg = format!(
-                "whisper-{model} : {state} · {} · {} thread(s){}",
+                "reconnaissance {model} : {state} · {} · {} thread(s){}",
                 s(v, &["backend"]).unwrap_or("?"),
                 n(v, &["threads"]).unwrap_or(0),
                 if v.get("vadReady").and_then(Value::as_bool) == Some(false) {
@@ -406,36 +408,23 @@ pub fn summarize(event: &str, v: &Value) -> Vec<(String, &'static str, &'static 
             };
             one(level, "asr", msg)
         }
-        "translation://status" => v
-            .get("pairs")
-            .and_then(Value::as_array)
-            .map(|pairs| {
-                pairs
-                    .iter()
-                    .map(|p| {
-                        let src = s(p, &["source"]).unwrap_or("?");
-                        // The user's language (Langues), French by default.
-                        let target = s(p, &["target"])
-                            .or_else(|| s(v, &["config", "target"]))
-                            .unwrap_or("fr");
-                        let state = s(p, &["state"]).unwrap_or("?");
-                        let mut msg = format!("{src}→{target} : {state}");
-                        if let Some(ms) = n(p, &["loadMs"]) {
-                            msg.push_str(&format!(" · chargé en {ms} ms"));
-                        }
-                        if let Some(e) = s(p, &["error"]) {
-                            msg.push_str(&format!(" · {e}"));
-                        }
-                        let level = if matches!(state, "error" | "missing") {
-                            "WARN"
-                        } else {
-                            "INFO"
-                        };
-                        (format!("{event}/{src}"), level, "translation", msg)
-                    })
-                    .collect()
-            })
-            .unwrap_or_default(),
+        "translation://status" => {
+            // The user's language (Langues), French by default.
+            let target = s(v, &["config", "target"]).unwrap_or("fr");
+            let ready = v.get("ready").and_then(Value::as_bool).unwrap_or(false);
+            let (level, msg) = if ready {
+                ("INFO", format!("traduction : LLM prêt → {target}"))
+            } else {
+                (
+                    "WARN",
+                    format!(
+                        "traduction indisponible : {}",
+                        s(v, &["problem"]).unwrap_or("?")
+                    ),
+                )
+            };
+            vec![(event.to_string(), level, "translation", msg)]
+        }
         "chat://status" => {
             let state = s(v, &["state"]).unwrap_or("?");
             let condebug = s(v, &["setup", "condebug"]).unwrap_or("?");
@@ -840,43 +829,33 @@ mod tests {
     fn summarizes_the_real_status_types() {
         use crate::audio::CaptureStatus;
         use crate::speech::{EngineState, SpeechConfig, SpeechStatus};
-        use crate::translation::service::{PairState, PairStatus};
         use crate::translation::{TranslationConfig, TranslationStatus};
 
         let speech = SpeechStatus {
             state: EngineState::Ready,
-            config: SpeechConfig {
-                model: "small".into(),
-                ..SpeechConfig::default()
-            },
+            config: SpeechConfig::default(),
             model_path: None,
             vad_ready: false,
             models_dir: "models".into(),
             error: Some("lent".into()),
             load_ms: Some(900),
-            backend: "CPU · AVX2".into(),
+            backend: "CPU · ONNX Runtime".into(),
             threads: 4,
+            model_label: "Parakeet TDT 0.6B v3".into(),
         };
         let line = &summarize("speech://status", &serde_json::to_value(&speech).unwrap())[0];
         assert_eq!(
             (line.1, line.3.as_str()),
             (
                 "INFO",
-                "whisper-small : ready · CPU · AVX2 · 4 thread(s) · VAD absente · chargé en 900 ms · lent"
+                "reconnaissance Parakeet TDT 0.6B v3 : ready · CPU · ONNX Runtime · 4 thread(s) · VAD absente · chargé en 900 ms · lent"
             )
         );
 
         let translation = TranslationStatus {
             config: TranslationConfig::default(),
-            pairs: vec![PairStatus {
-                source: "ru".into(),
-                target: "fr".into(),
-                repo: "Helsinki-NLP/opus-mt-ru-fr".into(),
-                state: PairState::Error,
-                error: Some("illisible".into()),
-                load_ms: Some(300),
-            }],
-            models_dir: "models".into(),
+            ready: false,
+            problem: Some("aucun moteur de traduction connecté".into()),
             queued: 0,
         };
         let line = &summarize(
@@ -884,11 +863,10 @@ mod tests {
             &serde_json::to_value(&translation).unwrap(),
         )[0];
         assert_eq!(
-            (line.0.as_str(), line.1, line.3.as_str()),
+            (line.1, line.3.as_str()),
             (
-                "translation://status/ru",
                 "WARN",
-                "ru→fr : error · chargé en 300 ms · illisible"
+                "traduction indisponible : aucun moteur de traduction connecté"
             )
         );
 
@@ -898,22 +876,18 @@ mod tests {
                 target: "ru".into(),
                 ..TranslationConfig::default()
             },
-            pairs: vec![PairStatus {
-                source: "en".into(),
-                target: "ru".into(),
-                repo: "Helsinki-NLP/opus-mt-en-ru".into(),
-                state: PairState::Ready,
-                error: None,
-                load_ms: None,
-            }],
-            models_dir: "models".into(),
+            ready: true,
+            problem: None,
             queued: 0,
         };
         let line = &summarize(
             "translation://status",
             &serde_json::to_value(&into_russian).unwrap(),
         )[0];
-        assert_eq!(line.3, "en→ru : ready");
+        assert_eq!(
+            (line.1, line.3.as_str()),
+            ("INFO", "traduction : LLM prêt → ru")
+        );
 
         let idle = serde_json::to_value(CaptureStatus::idle()).unwrap();
         assert_eq!(summarize("audio://status", &idle)[0].3, "capture à l’arrêt");
@@ -932,18 +906,14 @@ mod tests {
             (e.1, e.3.as_str()),
             ("WARN", "capture impossible [processLoopback] : refusé")
         );
-        let sp = json!({"state":"ready","config":{"model":"small"},"backend":"CPU","threads":4,"vadReady":true,"loadMs":900,"error":null});
+        let sp = json!({"state":"ready","config":{"model":"parakeet-tdt-0.6b-v3"},"modelLabel":"Parakeet TDT 0.6B v3","backend":"CPU","threads":4,"vadReady":true,"loadMs":900,"error":null});
         assert_eq!(
             summarize("speech://status", &sp)[0].3,
-            "whisper-small : ready · CPU · 4 thread(s) · chargé en 900 ms"
+            "reconnaissance Parakeet TDT 0.6B v3 : ready · CPU · 4 thread(s) · chargé en 900 ms"
         );
-        let tr = json!({"pairs":[{"source":"ru","state":"ready","loadMs":300,"error":null},{"source":"en","state":"missing","error":null}],"queued":3});
+        let tr = json!({"ready":false,"problem":"clé refusée par le fournisseur","queued":3});
         let t = summarize("translation://status", &tr);
-        assert_eq!(t.len(), 2);
-        assert_eq!(
-            (t[1].0.as_str(), t[1].1),
-            ("translation://status/en", "WARN")
-        );
+        assert_eq!((t.len(), t[0].1), (1, "WARN"));
         let chat = json!({"state":"following","offset":123,"messages":9,"rulesVersion":"cs2-1","rulesWarning":null,
             "setup":{"condebug":"present","consoleLog":"D:\\cs2\\console.log","consoleLogExists":true}});
         let c = &summarize("chat://status", &chat)[0];
@@ -974,7 +944,12 @@ mod tests {
     fn report_holds_versions_tests_and_journal_without_the_user_name() {
         let dir = tempdir("report");
         std::fs::create_dir_all(dir.join("opus-mt-ru-fr")).unwrap();
-        std::fs::write(dir.join("ggml-small.bin"), vec![0u8; 2_000_000]).unwrap();
+        std::fs::create_dir_all(dir.join("parakeet-tdt-0.6b-v3-int8")).unwrap();
+        std::fs::write(
+            dir.join("parakeet-tdt-0.6b-v3-int8").join("tokens.txt"),
+            vec![0u8; 2_000_000],
+        )
+        .unwrap();
         std::fs::write(dir.join("opus-mt-ru-fr").join("config.json"), "{}").unwrap();
         let rows = vec![DiagRow {
             name: "Journal console.log".into(),
@@ -989,7 +964,7 @@ mod tests {
         }];
         let r = report_text(&rows, &lines, &dir, NOW);
         assert!(r.contains("build "));
-        assert!(r.contains("ggml-small.bin · 2.0 Mo"));
+        assert!(r.contains("tokens.txt · 2.0 Mo"));
         assert!(r.contains("config.json"));
         assert!(r.contains(r"[OK] Journal console.log — C:\Users\[utilisateur]\cs2\console.log"));
         assert!(r.contains("2026-10-13 12:00:00 UTC INFO  asr: prêt"));

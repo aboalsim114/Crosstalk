@@ -1,8 +1,8 @@
-//! First-run download of the models: the installer stays small and the app
-//! fetches what it needs (Silero VAD, the Whisper model, Opus-MT ru/en → fr)
-//! from Hugging Face, once, with progress shown in the UI. Every file is
-//! checked by its exact published size (and SHA-1 when published); an
-//! interrupted download resumes where it stopped.
+//! First-run download of the speech models: the installer stays small and the
+//! app fetches what it needs (Silero VAD, the recognition model), once, with
+//! progress shown in the UI. Translation needs no download: it is done by the
+//! LLM the user connects. Every file is checked by its exact published size
+//! and SHA-256; an interrupted download resumes where it stopped.
 
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
@@ -11,8 +11,7 @@ use std::sync::{Arc, Mutex};
 
 use serde::Serialize;
 
-use crate::speech::models as whisper;
-use crate::translation::models as opus;
+use crate::speech::models;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FileSpec {
@@ -20,84 +19,41 @@ pub struct FileSpec {
     pub url: String,
     pub path: PathBuf,
     pub bytes: u64,
-    pub sha1: Option<&'static str>,
+    pub sha256: Option<&'static str>,
 }
 
 fn complete(spec: &FileSpec) -> bool {
     std::fs::metadata(&spec.path).is_ok_and(|m| m.len() == spec.bytes)
 }
 
-/// The user's languages, for the translation models to fetch.
-#[derive(Debug, Clone, PartialEq, Eq, serde::Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct TranslationPlan {
-    /// The user's language.
-    pub target: String,
-    /// The players' languages.
-    pub sources: Vec<String>,
+/// Files the app needs and does not have yet: the VAD and the recognition model.
+pub fn missing(dir: &Path, model: &str) -> Vec<FileSpec> {
+    missing_all(dir, &[model])
 }
 
-impl Default for TranslationPlan {
-    fn default() -> Self {
-        Self {
-            target: opus::DEFAULT_TARGET.into(),
-            sources: opus::DEFAULT_SOURCES
-                .iter()
-                .map(|s| s.to_string())
-                .collect(),
-        }
-    }
-}
-
-/// Files the app needs and does not have yet: VAD, the chosen Whisper model
-/// and, when translation is on, the Opus-MT models of the chosen languages
-/// (into the user's language, and back for "Répondre").
-pub fn missing(
-    dir: &Path,
-    whisper_model: &str,
-    translation: Option<&TranslationPlan>,
-) -> Vec<FileSpec> {
-    missing_all(dir, &[whisper_model], translation)
-}
-
-/// Same, for several Whisper models (the installer fetches every model the
-/// app can run on the CPU, so that changing model never downloads anything).
-pub fn missing_all(
-    dir: &Path,
-    whisper_models: &[&str],
-    translation: Option<&TranslationPlan>,
-) -> Vec<FileSpec> {
+/// Same, for several models of the catalog.
+pub fn missing_all(dir: &Path, model_ids: &[&str]) -> Vec<FileSpec> {
     let mut all = vec![FileSpec {
         label: "Détection de parole (Silero)".into(),
-        url: whisper::VAD_URL.into(),
-        path: dir.join(whisper::VAD_FILE),
-        bytes: whisper::VAD_BYTES,
-        sha1: None,
+        url: models::VAD_URL.into(),
+        path: dir.join(models::VAD_FILE),
+        bytes: models::VAD_BYTES,
+        sha256: Some(models::VAD_SHA256),
     }];
-    for m in whisper_models.iter().filter_map(|id| whisper::spec(id)) {
-        all.push(FileSpec {
-            label: format!("Transcription (Whisper {})", m.id),
-            url: whisper::url(m),
-            path: dir.join(m.file),
-            bytes: m.bytes,
-            sha1: Some(m.sha1),
-        });
-    }
-    if let Some(plan) = translation {
-        for p in opus::needed_with_replies(&plan.target, &plan.sources) {
-            for &(file, bytes) in &p.files {
-                all.push(FileSpec {
-                    label: format!(
-                        "Traduction {} → {}",
-                        p.source.to_uppercase(),
-                        p.target.to_uppercase()
-                    ),
-                    url: format!("https://huggingface.co/{}/resolve/main/{file}", p.repo),
-                    path: opus::pair_dir(dir, p).join(file),
-                    bytes,
-                    sha1: None,
-                });
-            }
+    let mut seen = Vec::new();
+    for spec in model_ids.iter().map(|id| models::spec_or_default(id)) {
+        if seen.contains(&spec.id) {
+            continue;
+        }
+        seen.push(spec.id);
+        for f in spec.files {
+            all.push(FileSpec {
+                label: format!("Reconnaissance vocale ({}) · {}", spec.label, f.name),
+                url: spec.url(f),
+                path: dir.join(spec.dir).join(f.name),
+                bytes: f.bytes,
+                sha256: Some(f.sha256),
+            });
         }
     }
     all.retain(|f| !complete(f));
@@ -231,13 +187,8 @@ impl Downloader {
     }
 
     /// Current state, with what is still missing for this configuration.
-    pub fn status(
-        &self,
-        dir: &Path,
-        whisper_model: &str,
-        translation: Option<&TranslationPlan>,
-    ) -> DownloadStatus {
-        let todo = missing(dir, whisper_model, translation);
+    pub fn status(&self, dir: &Path, model: &str) -> DownloadStatus {
+        let todo = missing(dir, model);
         let mut st = self.status.lock().unwrap().clone();
         if !self.running.load(Ordering::SeqCst) {
             st.missing_files = todo.len();
@@ -248,23 +199,40 @@ impl Downloader {
 
     /// Starts downloading what is missing, on a background thread. Returns
     /// false when a download already runs or nothing is missing.
-    pub fn start(
-        self: &Arc<Self>,
-        dir: PathBuf,
-        whisper_model: &str,
-        translation: Option<&TranslationPlan>,
-    ) -> bool {
-        self.start_all(dir, &[whisper_model], translation)
+    pub fn start(self: &Arc<Self>, dir: PathBuf, model: &str) -> bool {
+        self.start_all(dir, &[model])
     }
 
-    /// [`Downloader::start`] for several Whisper models.
-    pub fn start_all(
-        self: &Arc<Self>,
-        dir: PathBuf,
-        whisper_models: &[&str],
-        translation: Option<&TranslationPlan>,
-    ) -> bool {
-        let files = missing_all(&dir, whisper_models, translation);
+    /// Downloads exactly these files (other catalogues: the AI voices).
+    pub fn start_files(self: &Arc<Self>, files: Vec<FileSpec>) -> bool {
+        if files.is_empty() || self.running.swap(true, Ordering::SeqCst) {
+            return false;
+        }
+        self.cancel.store(false, Ordering::SeqCst);
+        let me = self.clone();
+        let spawned = std::thread::Builder::new()
+            .name("files-download".into())
+            .spawn(move || me.run(files));
+        if spawned.is_err() {
+            self.running.store(false, Ordering::SeqCst);
+            return false;
+        }
+        true
+    }
+
+    /// The last published state, with `missing` as the files still to fetch.
+    pub fn snapshot(&self, missing: &[FileSpec]) -> DownloadStatus {
+        let mut st = self.status.lock().unwrap().clone();
+        if !self.running.load(Ordering::SeqCst) {
+            st.missing_files = missing.len();
+            st.missing_bytes = missing.iter().map(|f| f.bytes).sum();
+        }
+        st
+    }
+
+    /// [`Downloader::start`] for several models.
+    pub fn start_all(self: &Arc<Self>, dir: PathBuf, model_ids: &[&str]) -> bool {
+        let files = missing_all(&dir, model_ids);
         if files.is_empty() || self.running.swap(true, Ordering::SeqCst) {
             return false;
         }
@@ -392,11 +360,11 @@ impl Downloader {
                 f.label, f.bytes
             ));
         }
-        if let Some(expected) = f.sha1 {
-            if sha1_of(&part)? != expected {
+        if let Some(expected) = f.sha256 {
+            if sha256_of(&part)? != expected {
                 let _ = std::fs::remove_file(&part);
                 return Err(format!(
-                    "{} : empreinte SHA-1 invalide, fichier supprimé",
+                    "{} : empreinte SHA-256 invalide, fichier supprimé",
                     f.label
                 ));
             }
@@ -419,14 +387,15 @@ pub fn partial_len(f: &FileSpec) -> u64 {
         .unwrap_or(0)
 }
 
-fn sha1_of(path: &Path) -> Result<String, String> {
+fn sha256_of(path: &Path) -> Result<String, String> {
+    use sha2::{Digest, Sha256};
     let mut file = std::fs::File::open(path).map_err(|e| e.to_string())?;
-    let mut h = sha1_smol::Sha1::new();
+    let mut h = Sha256::new();
     let mut buf = vec![0u8; 1 << 20];
     loop {
         let n = file.read(&mut buf).map_err(|e| e.to_string())?;
         if n == 0 {
-            return Ok(h.digest().to_string());
+            return Ok(format!("{:x}", h.finalize()));
         }
         h.update(&buf[..n]);
     }
@@ -473,13 +442,13 @@ mod tests {
         fn finished(&self) {}
     }
 
-    fn spec(dir: &Path, name: &str, body: &[u8], sha1: Option<&'static str>) -> FileSpec {
+    fn spec(dir: &Path, name: &str, body: &[u8], sha256: Option<&'static str>) -> FileSpec {
         FileSpec {
             label: name.into(),
             url: format!("https://x/{name}"),
             path: dir.join(name),
             bytes: body.len() as u64,
-            sha1,
+            sha256,
         }
     }
 
@@ -505,12 +474,11 @@ mod tests {
     fn downloads_checks_and_installs_files() {
         let d = dir("ok");
         let body = b"hello world, this is a model".to_vec();
-        let sha1 = {
-            let mut h = sha1_smol::Sha1::new();
-            h.update(&body);
-            h.digest().to_string()
+        let sha = {
+            use sha2::{Digest, Sha256};
+            format!("{:x}", Sha256::digest(&body))
         };
-        let f = spec(&d, "a.bin", &body, Some(Box::leak(sha1.into_boxed_str())));
+        let f = spec(&d, "a.bin", &body, Some(Box::leak(sha.into_boxed_str())));
         let (tx, rx) = channel();
         let dl = Downloader::new(
             Arc::new(Fake {
@@ -558,7 +526,7 @@ mod tests {
     }
 
     #[test]
-    fn a_wrong_sha1_deletes_the_file() {
+    fn a_wrong_checksum_deletes_the_file() {
         let d = dir("sha");
         let body = b"tampered".to_vec();
         let f = spec(
@@ -578,7 +546,7 @@ mod tests {
         dl.run(vec![f.clone()]);
         let end = wait_end(&rx);
         assert_eq!(end.state, DownloadState::Error);
-        assert!(end.error.unwrap().contains("SHA-1"));
+        assert!(end.error.unwrap().contains("SHA-256"));
         assert!(!f.path.exists() && !part_path(&f.path).exists());
     }
 
@@ -672,62 +640,28 @@ mod tests {
     }
 
     #[test]
-    fn the_starter_pack_is_vad_whisper_and_the_translation_models() {
+    fn the_starter_pack_is_the_vad_and_the_recognition_model() {
         let d = dir("pack");
-        let all = missing(&d, "base", Some(&TranslationPlan::default()));
-        // VAD + Whisper, ru/en → fr, then fr → en/ru (replies).
-        assert_eq!(all.len(), 2 + 10 + 10);
-        assert_eq!(
-            all.iter()
-                .filter(|f| f.label.starts_with("Traduction FR"))
-                .count(),
-            10
-        );
-        let mb: u64 = all.iter().map(|f| f.bytes).sum::<u64>() / 1_000_000;
-        assert!((1370..1420).contains(&mb), "{mb} Mo");
-        assert!(all
+        let spec = models::spec(models::DEFAULT_MODEL).unwrap();
+        let all = missing(&d, models::DEFAULT_MODEL);
+        assert_eq!(all.len(), 1 + spec.files.len());
+        assert!(all.iter().all(|f| f.url.starts_with("https://")));
+        assert!(all.iter().all(|f| f.sha256.is_some_and(|s| s.len() == 64)));
+        assert!(all[1..]
             .iter()
-            .all(|f| f.url.starts_with("https://huggingface.co/")));
-        assert_eq!(missing(&d, "base", None).len(), 2);
+            .all(|f| f.path.starts_with(d.join(spec.dir))));
+        let mb: u64 = all.iter().map(|f| f.bytes).sum::<u64>() / 1_000_000;
+        assert!((600..750).contains(&mb), "{mb} Mo");
         std::fs::write(
-            d.join(whisper::VAD_FILE),
-            vec![0u8; whisper::VAD_BYTES as usize],
+            d.join(models::VAD_FILE),
+            vec![0u8; models::VAD_BYTES as usize],
         )
         .unwrap();
-        assert_eq!(missing(&d, "base", None).len(), 1);
-    }
-
-    #[test]
-    fn the_installer_pack_holds_every_cpu_model() {
-        let d = dir("all");
-        let all = missing_all(&d, &["base", "small"], Some(&TranslationPlan::default()));
-        assert_eq!(all.len(), 3 + 20);
-        let mb: u64 = all.iter().map(|f| f.bytes).sum::<u64>() / 1_000_000;
-        assert!((1800..1950).contains(&mb), "{mb} Mo");
-        assert_eq!(all.iter().filter(|f| f.sha1.is_some()).count(), 2);
-    }
-    #[test]
-    fn the_translation_pack_follows_the_chosen_languages() {
-        let d = dir("plan-ru");
-        let plan = TranslationPlan {
-            target: "ru".into(),
-            sources: vec!["en".into(), "de".into()],
-        };
-        let mut dirs: Vec<String> = missing(&d, "base", Some(&plan))
-            .iter()
-            .filter(|f| f.label.starts_with("Traduction"))
-            .filter_map(|f| f.path.parent()?.file_name()?.to_str().map(String::from))
-            .collect();
-        dirs.dedup();
-        // en → ru, de → en (→ ru), and back for "Répondre": ru → en (→ de) and en → de.
+        assert_eq!(missing(&d, models::DEFAULT_MODEL).len(), spec.files.len());
+        // A Whisper id saved by an older version: the current model, once.
         assert_eq!(
-            dirs,
-            [
-                "opus-mt-en-ru",
-                "opus-mt-de-en",
-                "opus-mt-ru-en",
-                "opus-mt-en-de"
-            ]
+            missing_all(&d, &["small", "base", models::DEFAULT_MODEL]).len(),
+            spec.files.len()
         );
     }
 }

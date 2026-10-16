@@ -11,7 +11,7 @@ rust-version = "1.80"
 # The `_lib` suffix avoids a name clash with the binary on Windows (cargo#8519).
 name = "crosstalk_lib"
 # Desktop only: the binary links the rlib. The template's staticlib/cdylib are
-# for Tauri mobile, and a cdylib exceeds the 65,535 DLL exports limit with candle.
+# for Tauri mobile.
 crate-type = ["rlib"]
 
 [build-dependencies]
@@ -25,31 +25,25 @@ tauri-plugin-global-shortcut = "2"
 tauri-plugin-autostart = "2"
 tauri-plugin-single-instance = "2"
 thiserror = "2"
-# whisper.cpp bindings: speech recognition and the Silero VAD (ggml port), both
-# run locally on the CPU. Optional so the Windows target can be type-checked
-# from Linux (`--no-default-features`), where whisper.cpp cannot be cross-built.
-whisper-rs = { version = "0.16.0", optional = true }
-# Local translation (Opus-MT / Marian, Apache-2.0) with candle, pure Rust on the
-# CPU: no API key, no network, nothing to pay for the user.
-candle-core = "0.11"
-candle-nn = "0.11"
-candle-transformers = "0.11"
-# First-run download of the models (Hugging Face, HTTPS with rustls, no
-# OpenSSL), checked by exact size and published SHA-1.
+# Speech recognition and the Silero VAD: sherpa-onnx (Apache-2.0) on ONNX
+# Runtime (MIT), CPU, through its C API in two DLLs shipped next to the exe.
+# Optional so the Windows target can be type-checked from Linux without the
+# native libraries (`--no-default-features`). The prebuilt libraries come from
+# the sherpa-onnx release, or from SHERPA_ONNX_LIB_DIR (scripts/fetch-sherpa-onnx.sh).
+sherpa-onnx = { version = "=1.13.8", default-features = false, features = ["shared"], optional = true }
+# First-run download of the speech models (HTTPS with rustls, no OpenSSL),
+# checked by exact size and SHA-256; also the LLM requests.
 ureq = "2.12"
-sha1_smol = "1"
-# Fingerprint of the update installer (in-app update).
+# SHA-256 of the downloaded models and of the update installer.
 sha2 = "0.10"
+# The Piper voice engine is downloaded as a zip (src/voice/catalog.rs).
+zip = { version = "8", default-features = false, features = ["deflate-flate2-zlib-rs"] }
 # Chat lines of console.log, matched by the rules file (src/chat/rules.json).
 regex = "1"
 
 [features]
-default = ["whisper"]
-whisper = ["dep:whisper-rs"]
-# Whisper on the graphics card (Vulkan, any recent NVIDIA / AMD / Intel GPU).
-# Enabled by the Windows build (scripts/cross-build-windows-gnu.sh); without a
-# Vulkan driver, ggml falls back to the CPU (scripts/cross/vulkan_shim.c).
-gpu = ["whisper", "whisper-rs/vulkan"]
+default = ["asr"]
+asr = ["dep:sherpa-onnx"]
 
 # Native Windows APIs used by the audio capture (WASAPI) and the CS2 process
 # watcher (Toolhelp snapshots: enumerates names and PIDs, never opens cs2.exe).
@@ -73,6 +67,8 @@ windows = { version = "0.62", features = [
   "Win32_System_DataExchange",
   "Win32_System_Memory",
   "Win32_UI_WindowsAndMessaging",
+  # SendInput / GetAsyncKeyState: CS2 voice key held during the AI voice (voice/ptt.rs).
+  "Win32_UI_Input_KeyboardAndMouse",
   # "Qui parle ?": Windows' built-in OCR (src/speaker).
   "Foundation",
   "Foundation_Collections",
@@ -84,17 +80,16 @@ windows = { version = "0.62", features = [
 ] }
 windows-core = "0.62"
 
-# whisper.cpp is built by CMake with the profile's opt-level: "s" would map to
-# MinSizeRel (MSVC /O1, less vectorised). Inference code gets full optimisation.
-[profile.release.package.whisper-rs-sys]
-opt-level = 3
-
-[profile.release.package.whisper-rs]
-opt-level = 3
-
+# Inference runs in the prebuilt sherpa-onnx / ONNX Runtime libraries: the
+# Rust code itself is optimised for size.
 [profile.release]
 codegen-units = 1
 lto = true
 opt-level = "s"
 panic = "abort"
 strip = true
+
+# sherpa-onnx-sys 1.13.8 asks for zip 2, whose releases are all yanked: same
+# crate (Apache-2.0), build dependency moved to zip 9 (vendor/sherpa-onnx-sys).
+[patch.crates-io]
+sherpa-onnx-sys = { path = "vendor/sherpa-onnx-sys" }

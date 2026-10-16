@@ -1,10 +1,11 @@
 import { create } from 'zustand';
-import { LLM_DEFAULT_URL, type LlmConfig, type StreamOpts, type Translation } from '../../shared/ipc';
+import { LLM_DEFAULT_URL, type LlmConfig, type LlmService, type StreamOpts, type Translation, type VoiceOptions } from '../../shared/ipc';
 import { config } from '../config';
 import { isCapturing, useAudio } from '../../features/audio/audio';
 import type { UiLang } from '../../shared/i18n';
-import { EVENTS, GLOSSARY, type GlossEntry, type ModelId, type PageId, type SimEvent } from './data';
+import { DEFAULT_MODEL, EVENTS, GLOSSARY, type GlossEntry, type ModelId, type PageId, type SimEvent } from './data';
 import type { PlayerLang, TargetLang } from '../../features/languages/langs';
+import { RADAR_DEFAULTS, type RadarOpts } from '../../features/radar/radar';
 import { useTargetLang } from '../../shared/i18n';
 
 export type Session = 'IDLE' | 'INITIALIZING' | 'LISTENING' | 'DEGRADED' | 'PAUSED' | 'STOPPING' | 'STOPPED';
@@ -14,8 +15,6 @@ export type FeedMode = 'text' | 'voice' | 'mixed';
 export type OverlayFormat = 'minimal' | 'bilingue' | 'accessible';
 export type Corner = 'tl' | 'tr' | 'bl' | 'br';
 export type CaptureSource = 'process' | 'device' | 'wav';
-/** Whisper on the processor, the graphics card (Vulkan), or the faster one measured (auto). */
-export type Accel = 'cpu' | 'gpu' | 'auto';
 export type ToggleKey = 'click' | 'noise' | 'translate' | 'hist' | 'skipFr' | 'ignoreOwn';
 /** Mode streamer: subtitles for OBS (src-tauri/src/stream). */
 export type { StreamOpts } from '../../shared/ipc';
@@ -26,9 +25,15 @@ export interface SpeakerOpts {
   region: { x: number; y: number; w: number; h: number };
 }
 export const SPEAKER_DEFAULTS: SpeakerOpts = { enabled: false, region: { x: 0, y: 0.5, w: 0.25, h: 0.3 } };
-/** Online translation by an LLM (Audio & IA): the user's provider, off by default. The key is not here. */
-export type LlmOpts = LlmConfig;
-export const LLM_DEFAULTS: LlmOpts = { enabled: false, provider: 'openai', baseUrl: LLM_DEFAULT_URL.openai, model: '' };
+export const VOICE_DEFAULTS: VoiceOptions = { enabled: false, mic: null, voices: {}, monitor: true, volume: 100, micVolume: 100, autoPtt: false, pttKey: 'K', pttLeadMs: 250, pttTailMs: 350, speakTyped: false };
+
+/**
+ * Translation engine (Audio & IA › Traduction IA): a cloud provider or a server on this PC,
+ * not connected until the user chooses. `cloudConsent`: the user accepted that texts are
+ * sent to the cloud provider. The key is not here.
+ */
+export type LlmOpts = LlmConfig & { service: LlmService; cloudConsent: boolean };
+export const LLM_DEFAULTS: LlmOpts = { enabled: false, service: 'openai', provider: 'openai', baseUrl: LLM_DEFAULT_URL.openai, model: 'gpt-4o-mini', cloudConsent: false };
 export const STREAM_DEFAULTS: StreamOpts = { enabled: false, names: false, original: false, watermark: true, size: 34, max: 3, duration: 8 };
 
 export type SourceLang = PlayerLang;
@@ -85,15 +90,22 @@ export interface AppState {
   capture: CaptureSource;
   vad: number;
   model: ModelId;
-  accel: Accel;
   /** "Focus voix": keep the centred voice chat, turn down game sounds from the sides. */
   voiceFocus: boolean;
+  /** Callout radar in the overlay. */
+  radar: RadarOpts;
+  /** AI voice in the game (Langues › Voix IA). */
+  voice: VoiceOptions;
+  /** "Essayer": time the sample radar was asked for (not saved). */
+  radarDemo: number | null;
   /** The players' languages (Langues › Mes langues). */
   src: Record<SourceLang, boolean>;
   /** The user's language: everything is translated into it. */
   target: TargetLang;
   /** Languages chosen once (first launch asks before anything else). */
   langSetupDone: boolean;
+  /** Translation engine chosen, or "Configurer plus tard" (first launch asks once). */
+  engineSetupDone: boolean;
   gloss: GlossEntry[];
   newTerm: string;
   test: number;
@@ -102,7 +114,6 @@ export interface AppState {
   seg: number;
   drop: number;
   toast: string | null;
-  dl: Partial<Record<ModelId, number>>;
   entered: boolean;
   showIntro: boolean;
   startedAt: number;
@@ -125,7 +136,6 @@ export interface AppActions {
   toggleSource: (k: SourceLang) => void;
   runTest: () => void;
   runDiag: () => void;
-  pickModel: (id: ModelId, installed: boolean) => void;
   addTerm: () => void;
   removeTerm: (i: number) => void;
   clearFeed: () => void;
@@ -172,12 +182,15 @@ const initial: AppState = {
   llm: LLM_DEFAULTS,
   capture: 'process',
   vad: 55,
-  model: 'base',
-  accel: 'auto',
+  model: DEFAULT_MODEL,
   voiceFocus: false,
+  radar: RADAR_DEFAULTS,
+  voice: VOICE_DEFAULTS,
+  radarDemo: null,
   src: { fr: false, en: true, ru: true, de: false, es: false, uk: false, pl: false, tr: false },
   target: 'fr',
   langSetupDone: false,
+  engineSetupDone: false,
   gloss: GLOSSARY,
   newTerm: '',
   test: 0,
@@ -186,7 +199,6 @@ const initial: AppState = {
   seg: 0,
   drop: 0,
   toast: null,
-  dl: {},
   entered: config.skipIntro,
   showIntro: !config.skipIntro,
   startedAt: 0,
@@ -354,20 +366,6 @@ export const useApp = create<AppState & AppActions>()((set, get) => {
       setTimeout(() => set({ diag: 'done' }), 1600);
     },
 
-    pickModel: (id, installed) => {
-      const d = get().dl[id];
-      if (installed || d === 100) {
-        set({ model: id });
-        return;
-      }
-      if (d) return;
-      const iv = setInterval(() => {
-        const n = Math.min(100, (get().dl[id] ?? 0) + 7);
-        if (n >= 100) clearInterval(iv);
-        set((st) => ({ dl: { ...st.dl, [id]: n } }));
-      }, 180);
-    },
-
     addTerm: () => {
       const v = get().newTerm.trim();
       if (v) set((st) => ({ gloss: [...st.gloss, [v, 'Conserver', v]], newTerm: '' }));
@@ -425,8 +423,8 @@ export function startMeter(): () => void {
   return () => clearInterval(iv);
 }
 
-/** Untranslated on purpose: the original stays, with the reason, not as an error. */
-const QUIET_FAILURES = ['traduction désactivée', 'modèle de traduction absent', 'langue non gérée'];
+/** Untranslated on purpose (off, no engine connected yet…): the original stays, with the reason, not as an error. */
+const QUIET_FAILURES = ['traduction désactivée', 'aucun moteur de traduction connecté', 'langue non gérée'];
 
 /** A transcript line once its translation arrived: French text, or the original with why. */
 /** A translation identical to the original: only Counter-Strike terms. */
@@ -442,7 +440,7 @@ export function withTranslation(f: FeedEntry, t: Translation): FeedEntry {
     return { ...f, status: 'final', tr: t.translated, shown: t.translated, lat: total, err: false, note };
   }
   const why = t.error ?? 'moteur indisponible';
-  if (QUIET_FAILURES.includes(why)) return { ...f, note: why, shown: null };
+  if (QUIET_FAILURES.some((q) => why.startsWith(q))) return { ...f, note: why, shown: null };
   return { ...f, status: 'erreur', shown: null, err: true, lat: total, note: why };
 }
 

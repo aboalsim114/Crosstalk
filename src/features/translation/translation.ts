@@ -1,9 +1,9 @@
-// Local French translation (Opus-MT on the CPU, no API key), mirrored from the
-// Rust core (`translation://*` events).
+// Translation into the user's language by the connected LLM, mirrored from
+// the Rust core (`translation://*` events).
 
-import { langName, t } from '../../shared/i18n';
+import { t } from '../../shared/i18n';
 import { create } from 'zustand';
-import { isTauri, translation, type PairStatus, type Translation, type TranslationConfig, type TranslationStatus } from '../../shared/ipc';
+import { isTauri, translation, type Translation, type TranslationConfig, type TranslationStatus } from '../../shared/ipc';
 import { GLOSSARY, type GlossEntry } from '../../app/state/data';
 import type { AppState } from '../../app/state/store';
 import { chosenSources } from '../languages/langs';
@@ -30,57 +30,33 @@ export function translationConfigFrom(s: Pick<AppState, 'tg' | 'gloss'> & Partia
   };
 }
 
-const cap = (s: string) => s.charAt(0) + s.slice(1).toLowerCase();
-
-/** "Russe → français" in the interface's language. */
-export function pairName(source: string, target: string): string {
-  return `${cap(langName(source))} → ${langName(target).toLowerCase()}`;
-}
-
-export interface PairSummary {
+export interface TranslationSummary {
   label: string;
   value: string;
   color: string;
 }
 
-export function pairSummary(p: PairStatus): PairSummary {
-  const label = pairName(p.source, p.target ?? 'fr');
-  switch (p.state) {
-    case 'ready':
-      return { label, value: p.loadMs != null ? `prêt · chargé en ${p.loadMs} ms` : 'prêt', color: '#7fe0a8' };
-    case 'loading':
-      return { label, value: 'chargement…', color: '#ffa24a' };
-    case 'error':
-      return { label, value: p.error ?? 'erreur', color: '#ff8a7a' };
-    case 'missing':
-      return { label, value: 'modèle absent', color: '#ffa24a' };
-  }
-}
-
-/** State of the local translation as a whole: what the colours and the diagnostics derive from. */
-export type TranslationHealth = 'off' | 'loading' | 'error' | 'missing' | 'ready';
+/** State of the translation as a whole: what the colours and the diagnostics derive from. */
+export type TranslationHealth = 'off' | 'missing' | 'ready';
 
 export function translationHealth(st: TranslationStatus | null): TranslationHealth {
   if (!st || !st.config.enabled) return 'off';
-  if (st.pairs.some((p) => p.state === 'loading')) return 'loading';
-  if (st.pairs.some((p) => p.state === 'error')) return 'error';
-  return st.pairs.some((p) => p.state === 'ready') ? 'ready' : 'missing';
+  return st.ready ? 'ready' : 'missing';
 }
 
-const HEALTH_COLOR: Record<TranslationHealth, string> = { off: '#8f8a83', loading: '#ffa24a', error: '#ff8a7a', missing: '#ffa24a', ready: '#7fe0a8' };
+const HEALTH_COLOR: Record<TranslationHealth, string> = { off: '#8f8a83', missing: '#ffa24a', ready: '#7fe0a8' };
 
 /** One line for the pipeline, the status cards and the diagnostics. */
-export function translationSummary(st: TranslationStatus | null): PairSummary {
+export function translationSummary(st: TranslationStatus | null): TranslationSummary {
   const label = t('tr.label');
   const health = translationHealth(st);
   const color = HEALTH_COLOR[health];
   if (!st) return { label, value: '…', color };
   if (health === 'off') return { label, value: t('tr.disabled'), color };
-  if (health === 'loading') return { label, value: t('tr.loading'), color };
-  if (health === 'error') return { label, value: t('tr.error'), color };
   if (health === 'missing') return { label, value: t('tr.missing'), color };
-  const ready = st.pairs.filter((p) => p.state === 'ready').map((p) => p.source.toUpperCase());
-  return { label, value: t('tr.ready', { langs: ready.join(', '), target: (st.config.target ?? 'fr').toUpperCase() }), color };
+  const target = st.config.target ?? 'fr';
+  const langs = (st.config.sources ?? []).filter((l) => l !== target).map((l) => l.toUpperCase());
+  return { label, value: t('tr.ready', { langs: langs.join(', ') || '—', target: target.toUpperCase() }), color };
 }
 
 export function percentile(times: number[], q: number): number | null {
@@ -95,7 +71,7 @@ export function recordTime(t: Translation): void {
   useTranslation.setState((s) => ({ times: [...s.times, t.ms].slice(-50) }));
 }
 
-export async function rescanTranslation(): Promise<void> {
+export async function refreshTranslation(): Promise<void> {
   const status = await translation.rescan();
   if (status) useTranslation.setState({ status });
 }

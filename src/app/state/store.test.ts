@@ -116,17 +116,6 @@ describe('settings', () => {
     expect(s().gloss[0][0]).toBe('mid');
   });
 
-  it('selects installed models and downloads missing ones', () => {
-    s().pickModel('base', true);
-    expect(s().model).toBe('base');
-    s().pickModel('medium', false);
-    expect(s().model).toBe('base');
-    vi.advanceTimersByTime(180 * 15);
-    expect(s().dl.medium).toBe(100);
-    s().pickModel('medium', false);
-    expect(s().model).toBe('medium');
-  });
-
   it('runs the 10 s audio test to completion', () => {
     s().runTest();
     expect(s().test).toBe(1);

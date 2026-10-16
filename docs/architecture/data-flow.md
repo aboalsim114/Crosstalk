@@ -14,7 +14,7 @@ cs2.exe ──WASAPI (par processus)──► audio-capture
                                        │ JobQueue : 3 segments finaux (plein → le plus ancien est retiré : Overflow)
                                        │            + 1 emplacement de ligne provisoire (remplacé par la plus récente)
                                        ▼
-                         speech-asr (priorité basse)   Whisper, filtre anti-hallucinations
+                         speech-asr (priorité normale) Parakeet (sherpa-onnx), langue lue dans le texte, filtre anti-hallucinations
                                        │ SpeechEvents::transcript
                                        ▼
                          wiring                        1. nom du locuteur (speaker, si activé)
@@ -65,8 +65,7 @@ Aucune n'est modifiée par la refactorisation.
 | Règles du chat | `%APPDATA%\Crosstalk\chat-rules.json` | JSON |
 | Historique | `%LOCALAPPDATA%\Crosstalk\history.jsonl` (`CROSSTALK_HISTORY_DIR`) | texte seulement, désactivé par défaut |
 | Journal | `%LOCALAPPDATA%\Crosstalk\logs\` (`CROSSTALK_LOG_DIR`) | texte, 7 jours |
-| Modèles | `%LOCALAPPDATA%\Crosstalk\models\` (`CROSSTALK_MODELS_DIR`) | fichiers Hugging Face d'origine |
-| État du test GPU | `%LOCALAPPDATA%\Crosstalk` (`CROSSTALK_GPU_STATE_DIR`) | JSON |
+| Modèles | `%LOCALAPPDATA%\Crosstalk\models\` (`CROSSTALK_MODELS_DIR`) | fichiers d'origine (Hugging Face, GitHub pour `silero_vad.onnx`) ; les anciens `ggml-*.bin` de Whisper restent jusqu'à « Libérer l'espace » |
 | Installation | `HKCU\Software\Crosstalk` (`InstallDir`, `Version`) | registre |
 
 Aucun audio n'est écrit sur disque.

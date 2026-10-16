@@ -12,7 +12,7 @@ describe('installer phases', () => {
   });
 
   it('show what the installer reports, else the phase text', () => {
-    expect(phaseSub(1, 'Traduction RU → français · 120 / 776 Mo', true)).toBe('Traduction RU → français · 120 / 776 Mo');
+    expect(phaseSub(1, 'Reconnaissance vocale (Parakeet TDT 0.6B v3) · 120 / 671 Mo', true)).toBe('Reconnaissance vocale (Parakeet TDT 0.6B v3) · 120 / 671 Mo');
     expect(phaseSub(1, '', true)).toBe(PHASES[1][2]);
     expect(phaseSub(3, '', false)).toBe('Création des raccourcis (menu Démarrer uniquement)');
     expect(phaseSub(3, '', true)).toBe('Création des raccourcis');

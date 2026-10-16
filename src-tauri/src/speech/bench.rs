@@ -9,8 +9,8 @@
 use std::time::Instant;
 
 use super::dsp::Conditioner;
-use super::engine::{InferenceTiming, RecognizeOptions, Recognizer};
-use super::filter::{judge, prompt_from, Recognition};
+use super::engine::{RecognizeOptions, Recognizer};
+use super::filter::{judge, Recognition};
 use super::segmenter::{Outcome, Segmenter, SegmenterConfig};
 use super::service::VAD_HOP_FRAMES;
 use super::types::{Lang, RejectReason, SpeechConfig};
@@ -26,10 +26,9 @@ pub struct SegmentResult {
     /// Accepted text, or why the segment was dropped.
     pub outcome: Result<String, RejectReason>,
     pub recognition: Option<Recognition>,
-    pub timing: Option<InferenceTiming>,
 }
 
-/// Runs `mono` (any rate) through conditioning, VAD, segmentation, Whisper
+/// Runs `mono` (any rate) through conditioning, VAD, segmentation, the recogniser
 /// (when given) and the filter, exactly as the app does.
 pub fn run_pipeline(
     mono: &[f32],
@@ -37,7 +36,6 @@ pub fn run_pipeline(
     detector: &mut dyn VoiceDetector,
     mut recognizer: Option<&mut dyn Recognizer>,
     config: &SpeechConfig,
-    threads: usize,
 ) -> Result<Vec<SegmentResult>, SpeechError> {
     let mut audio = Vec::with_capacity(mono.len() / 2);
     let mut cond = Conditioner::new(rate);
@@ -47,14 +45,13 @@ pub fn run_pipeline(
     audio.extend(std::iter::repeat(0.0).take(tail * FRAME));
     audio.truncate(audio.len() / FRAME * FRAME);
 
-    // Same hop as the app's VAD thread (Silero state is rebuilt from context).
+    // Same hop as the app's VAD thread.
     detector.reset();
     let mut probs = Vec::with_capacity(audio.len() / FRAME);
     for chunk in audio.chunks(VAD_HOP_FRAMES * FRAME) {
         probs.extend(detector.probabilities(chunk)?);
     }
     let mut seg = Segmenter::new(SegmenterConfig::new(config.vad_threshold));
-    let prompt = prompt_from(&config.glossary);
     let mut out = Vec::new();
     for (frame, prob) in audio.chunks_exact(FRAME).zip(probs) {
         let Some(outcome) = seg.push(frame, prob) else {
@@ -68,7 +65,6 @@ pub fn run_pipeline(
                 asr_ms: 0,
                 outcome: Err(r),
                 recognition: None,
-                timing: None,
             }),
             Outcome::Segment(s) => {
                 let audio_ms = s.duration_ms();
@@ -80,7 +76,6 @@ pub fn run_pipeline(
                         asr_ms: 0,
                         outcome: Ok(String::new()),
                         recognition: None,
-                        timing: None,
                     });
                     continue;
                 };
@@ -89,9 +84,6 @@ pub fn run_pipeline(
                     &s.samples,
                     &RecognizeOptions {
                         languages: &config.languages,
-                        prompt: &prompt,
-                        threads,
-                        fast_encoder: config.fast_encoder,
                     },
                 )?;
                 out.push(SegmentResult {
@@ -100,7 +92,6 @@ pub fn run_pipeline(
                     asr_ms: t0.elapsed().as_millis() as u32,
                     outcome: judge(&r, audio_ms),
                     recognition: Some(r),
-                    timing: rec.timing(),
                 });
             }
         }
@@ -396,11 +387,11 @@ mod tests {
             track.extend(render_event(kind, rate, &mut rng).iter().map(|s| s * 0.9));
             track.extend(vec![0.0f32; rate as usize]);
         }
-        let res = run_pipeline(&track, rate, &mut det, None, &SpeechConfig::default(), 1).unwrap();
+        let res = run_pipeline(&track, rate, &mut det, None, &SpeechConfig::default()).unwrap();
         assert!(!res.is_empty());
         assert!(
             res.iter().all(|r| r.outcome.is_err()),
-            "every noise segment is rejected before Whisper: {res:?}"
+            "every noise segment is rejected before recognition: {res:?}"
         );
     }
 
@@ -416,7 +407,7 @@ mod tests {
                 .map(|i| 0.3 * (i as f32 * 0.05).sin() * (1.0 + 0.2 * (i as f32 * 0.0005).sin())),
         );
         x.extend(vec![0.0f32; rate as usize / 2]);
-        let res = run_pipeline(&x, rate, &mut det, None, &SpeechConfig::default(), 1).unwrap();
+        let res = run_pipeline(&x, rate, &mut det, None, &SpeechConfig::default()).unwrap();
         assert_eq!(res.len(), 1, "{res:?}");
         assert!(res[0].outcome.is_ok());
         assert!(

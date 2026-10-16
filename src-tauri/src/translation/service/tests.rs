@@ -1,28 +1,36 @@
-use super::worker::{run, Engines};
+//! The service with a simulated LLM: no network, no key.
+
+use super::worker::run;
 use super::*;
-use std::path::Path;
 use std::sync::mpsc::{channel, Receiver, Sender};
 
-struct Upper(Arc<AtomicU64>, Duration);
-impl Engine for Upper {
-    fn translate(&mut self, text: &str) -> Result<String, String> {
-        self.0.fetch_add(1, Ordering::SeqCst);
-        std::thread::sleep(self.1);
-        Ok(format!("FR:{text}"))
-    }
-}
-
-struct Loader {
-    installed: Vec<&'static str>,
+/// "FR:<text>" (or "RU:<text>"…) after `delay`; can be made unavailable.
+struct FakeLlm {
     calls: Arc<AtomicU64>,
     delay: Duration,
+    problem: Mutex<Option<String>>,
+    /// Live lines refused (as towards a cloud provider).
+    no_partial: bool,
+    answer: Option<String>,
 }
-impl EngineLoader for Loader {
-    fn installed(&self, _: &Path, source: &str, _: &str) -> bool {
-        self.installed.contains(&source)
+
+impl Translator for FakeLlm {
+    fn problem(&self) -> Option<String> {
+        self.problem.lock().unwrap().clone()
     }
-    fn load(&self, _: &Path, _: &str, _: &str) -> Result<Box<dyn Engine>, String> {
-        Ok(Box::new(Upper(self.calls.clone(), self.delay)))
+    fn translate(&self, text: &str, _source: &str, target: &str) -> Result<String, String> {
+        self.calls.fetch_add(1, Ordering::SeqCst);
+        std::thread::sleep(self.delay);
+        Ok(self
+            .answer
+            .clone()
+            .unwrap_or_else(|| format!("{}:{text}", target.to_uppercase())))
+    }
+    fn translate_partial(&self, text: &str, source: &str, target: &str) -> Result<String, String> {
+        if self.no_partial {
+            return Err("provisoire non envoyé (fournisseur cloud)".into());
+        }
+        self.translate(text, source, target)
     }
 }
 
@@ -34,38 +42,33 @@ impl TranslationEvents for Events {
     }
 }
 
-fn service(
-    installed: Vec<&'static str>,
-    delay_ms: u64,
-) -> (
-    Arc<TranslationService>,
-    Receiver<Translation>,
-    Arc<AtomicU64>,
-) {
+fn with(llm: FakeLlm) -> (Arc<TranslationService>, Receiver<Translation>, Arc<FakeLlm>) {
     let (tx, rx) = channel();
-    let calls = Arc::new(AtomicU64::new(0));
+    let llm = Arc::new(llm);
     let svc = TranslationService::start(
         Arc::new(Events(Mutex::new(tx))),
-        Arc::new(Loader {
-            installed,
-            calls: calls.clone(),
-            delay: Duration::from_millis(delay_ms),
-        }),
-        PathBuf::from("models"),
+        llm.clone(),
         TranslationConfig::default(),
     );
-    let end = Instant::now() + Duration::from_secs(5);
-    while svc
-        .status()
-        .pairs
-        .iter()
-        .any(|p| p.state == PairState::Loading)
-        || svc.inner.reload.load(Ordering::SeqCst)
-    {
-        assert!(Instant::now() < end);
-        std::thread::sleep(Duration::from_millis(5));
+    (svc, rx, llm)
+}
+
+fn fake(delay_ms: u64) -> FakeLlm {
+    FakeLlm {
+        calls: Arc::new(AtomicU64::new(0)),
+        delay: Duration::from_millis(delay_ms),
+        problem: Mutex::new(None),
+        no_partial: false,
+        answer: None,
     }
-    (svc, rx, calls)
+}
+
+fn service(delay_ms: u64) -> (Arc<TranslationService>, Receiver<Translation>, Arc<FakeLlm>) {
+    with(fake(delay_ms))
+}
+
+fn calls(llm: &FakeLlm) -> u64 {
+    llm.calls.load(Ordering::SeqCst)
 }
 
 fn next(rx: &Receiver<Translation>) -> Translation {
@@ -74,25 +77,21 @@ fn next(rx: &Receiver<Translation>) -> Translation {
 }
 
 #[test]
-fn known_callouts_need_no_model() {
-    let (svc, rx, calls) = service(vec![], 0);
+fn known_callouts_are_exact_without_calling_the_llm() {
+    let (svc, rx, llm) = service(0);
     svc.submit(1, "en", "CT, go, go.");
     let t = next(&rx);
     assert_eq!(t.translated.as_deref(), Some("CT, on y va"));
-    assert_eq!(calls.load(Ordering::SeqCst), 0);
+    assert_eq!(t.engine.as_deref(), Some("lexicon"));
+    assert_eq!(calls(&llm), 0);
 }
 
 #[test]
-fn subtitle_dashes_are_removed_from_the_model_output() {
-    struct Dash;
-    impl Engine for Dash {
-        fn translate(&mut self, _: &str) -> Result<String, String> {
-            Ok("- Deux vont sur B.".into())
-        }
-    }
-    let mut engines: Engines = HashMap::new();
-    engines.insert(("en".into(), "fr".into()), Box::new(Dash));
-    let (svc, _rx, _) = service(vec![], 0);
+fn subtitle_dashes_are_removed_from_the_answer() {
+    let (svc, _rx, _) = with(FakeLlm {
+        answer: Some("- Deux vont sur B.".into()),
+        ..fake(0)
+    });
     let job = Job {
         id: 1,
         lang: "en".into(),
@@ -102,13 +101,99 @@ fn subtitle_dashes_are_removed_from_the_model_output() {
         reply: None,
         partial: false,
     };
-    let t = run(&svc.inner, &mut engines, &job).unwrap();
-    assert_eq!(t.translated.as_deref(), Some("Deux vont sur B."));
+    assert_eq!(
+        run(&svc.inner, &job).unwrap().translated.as_deref(),
+        Some("Deux vont sur B.")
+    );
+}
+
+#[test]
+fn a_line_comes_back_from_the_llm_then_from_the_cache() {
+    let (svc, rx, llm) = service(0);
+    assert!(svc.status().ready);
+    svc.submit(7, "ru", "Двое идут на B");
+    let t = next(&rx);
+    assert_eq!(
+        (t.id, t.translated.as_deref(), t.cached, t.engine.as_deref()),
+        (7, Some("FR:Двое идут на B"), false, Some("llm"))
+    );
+    svc.submit(8, "ru", "  двое   ИДУТ на b ");
+    let t = next(&rx);
+    assert_eq!(
+        (t.id, t.translated.as_deref(), t.cached),
+        (8, Some("FR:Двое идут на B"), true)
+    );
+    assert_eq!(calls(&llm), 1);
+}
+
+#[test]
+fn without_an_engine_the_line_stays_in_its_language_with_the_reason() {
+    let (svc, rx, llm) = service(0);
+    *llm.problem.lock().unwrap() =
+        Some("aucun moteur de traduction connecté (Audio & IA › Traduction IA)".into());
+    let st = svc.status();
+    assert!(!st.ready);
+    assert!(st.problem.unwrap().contains("aucun moteur"));
+    svc.submit(1, "en", "Two of them are going B");
+    let t = next(&rx);
+    assert_eq!(t.translated, None);
+    assert!(t.error.unwrap().contains("aucun moteur"));
+    assert_eq!(calls(&llm), 0, "nothing sent, nothing invented");
+    // Exact callouts still work.
+    svc.submit(2, "en", "rush");
+    assert_eq!(next(&rx).translated.as_deref(), Some("rush"));
+    svc.configure(TranslationConfig {
+        enabled: false,
+        ..TranslationConfig::default()
+    });
+    svc.submit(3, "ru", "Двое");
+    assert_eq!(next(&rx).error.as_deref(), Some("traduction désactivée"));
+}
+
+#[test]
+fn llm_errors_are_shown_and_never_replaced_by_another_engine() {
+    struct Failing;
+    impl Translator for Failing {
+        fn problem(&self) -> Option<String> {
+            None
+        }
+        fn translate(&self, _: &str, _: &str, _: &str) -> Result<String, String> {
+            Err("quota ou limite de débit atteint (429)".into())
+        }
+        fn translate_partial(&self, _: &str, _: &str, _: &str) -> Result<String, String> {
+            Err("provisoire non envoyé (fournisseur cloud)".into())
+        }
+    }
+    let (tx, rx) = channel();
+    let svc = TranslationService::start(
+        Arc::new(Events(Mutex::new(tx))),
+        Arc::new(Failing),
+        TranslationConfig::default(),
+    );
+    svc.submit(1, "ru", "они сегодня медленные");
+    let t = next(&rx);
+    assert_eq!(t.translated, None);
+    assert_eq!(
+        t.error.as_deref(),
+        Some("LLM : quota ou limite de débit atteint (429)")
+    );
+    assert_eq!(t.engine, None);
+    // A refused live line publishes nothing: the final line will say why.
+    svc.submit_partial(2, "ru", "живая");
+    assert!(rx.recv_timeout(Duration::from_millis(300)).is_err());
+}
+
+#[test]
+fn the_users_own_language_is_never_sent() {
+    let (svc, rx, llm) = service(0);
+    svc.submit(3, "fr", "on push B");
+    assert_eq!(next(&rx).translated.as_deref(), Some("on push B"));
+    assert_eq!(calls(&llm), 0);
 }
 
 #[test]
 fn live_lines_wait_for_final_ones_and_only_the_latest_is_kept() {
-    let (svc, rx, _) = service(vec!["ru"], 150);
+    let (svc, rx, _) = service(150);
     svc.submit(1, "ru", "первая фраза");
     svc.submit_partial(2, "ru", "живая");
     svc.submit_partial(2, "ru", "живая строка");
@@ -132,61 +217,25 @@ fn live_lines_wait_for_final_ones_and_only_the_latest_is_kept() {
 }
 
 #[test]
-fn a_transcript_comes_back_in_french_then_from_the_cache() {
-    let (svc, rx, calls) = service(vec!["ru", "en"], 0);
-    assert!(svc
-        .status()
-        .pairs
-        .iter()
-        .all(|p| p.state == PairState::Ready));
-    svc.submit(7, "ru", "Двое идут на B");
-    let t = next(&rx);
-    assert_eq!(
-        (t.id, t.translated.as_deref(), t.cached),
-        (7, Some("FR:Двое идут на B"), false)
-    );
-    svc.submit(8, "ru", "  двое   ИДУТ на b ");
-    let t = next(&rx);
-    assert_eq!(
-        (t.id, t.translated.as_deref(), t.cached),
-        (8, Some("FR:Двое идут на B"), true)
-    );
-    assert_eq!(calls.load(Ordering::SeqCst), 1);
-}
-
-#[test]
-fn missing_model_or_disabled_translation_keeps_the_original() {
-    let (svc, rx, _) = service(vec!["ru"], 0);
-    let st = svc.status();
-    assert_eq!(
-        st.pairs.iter().find(|p| p.source == "en").unwrap().state,
-        PairState::Missing
-    );
-    svc.submit(1, "en", "Two of them are going B");
-    let t = next(&rx);
-    assert_eq!(t.translated, None);
-    assert_eq!(t.error.as_deref(), Some("modèle de traduction absent"));
-    svc.configure(TranslationConfig {
-        enabled: false,
-        glossary: vec![],
-        ..TranslationConfig::default()
+fn live_lines_cost_nothing_when_the_engine_refuses_them() {
+    let (svc, rx, llm) = with(FakeLlm {
+        no_partial: true,
+        ..fake(0)
     });
-    svc.submit(2, "ru", "Двое");
-    assert_eq!(next(&rx).error.as_deref(), Some("traduction désactivée"));
-}
-
-#[test]
-fn french_is_never_sent_to_a_model() {
-    let (svc, rx, calls) = service(vec!["ru", "en"], 0);
-    svc.submit(3, "fr", "on push B");
-    let t = next(&rx);
-    assert_eq!(t.translated.as_deref(), Some("on push B"));
-    assert_eq!(calls.load(Ordering::SeqCst), 0);
+    for i in 0..5 {
+        svc.submit_partial(1, "ru", &format!("живая строка {i}"));
+        std::thread::sleep(Duration::from_millis(20));
+    }
+    assert!(rx.recv_timeout(Duration::from_millis(300)).is_err());
+    assert_eq!(calls(&llm), 0);
+    svc.submit(1, "ru", "живая строка");
+    assert_eq!(next(&rx).translated.as_deref(), Some("FR:живая строка"));
+    assert_eq!(calls(&llm), 1);
 }
 
 #[test]
 fn purge_drops_queued_and_running_lines() {
-    let (svc, rx, _) = service(vec!["ru"], 300);
+    let (svc, rx, _) = service(300);
     svc.submit(1, "ru", "раз");
     svc.submit(2, "ru", "два");
     std::thread::sleep(Duration::from_millis(50));
@@ -198,7 +247,7 @@ fn purge_drops_queued_and_running_lines() {
 
 #[test]
 fn a_full_queue_reports_the_oldest_line_untranslated() {
-    let (svc, rx, _) = service(vec!["ru"], 200);
+    let (svc, rx, _) = service(200);
     for id in 0..=QUEUE_CAPACITY as u64 + 1 {
         svc.submit(id, "ru", &format!("фраза {id}"));
     }
@@ -212,9 +261,8 @@ fn a_full_queue_reports_the_oldest_line_untranslated() {
 
 #[test]
 fn manual_test_waits_for_the_result_and_glossary_is_applied() {
-    let (svc, _rx, _) = service(vec!["en"], 0);
+    let (svc, _rx, _) = service(0);
     svc.configure(TranslationConfig {
-        enabled: true,
         glossary: vec![Term {
             source: "smoke".into(),
             target: None,
@@ -228,9 +276,8 @@ fn manual_test_waits_for_the_result_and_glossary_is_applied() {
 
 #[test]
 fn map_callouts_are_kept_and_the_user_glossary_wins() {
-    let (svc, _rx, calls) = service(vec!["en"], 0);
+    let (svc, _rx, llm) = service(0);
     svc.configure(TranslationConfig {
-        enabled: true,
         glossary: vec![Term {
             source: "palace".into(),
             target: Some("palais".into()),
@@ -239,174 +286,105 @@ fn map_callouts_are_kept_and_the_user_glossary_wins() {
     });
     svc.translate_blocking("en", "go jungle");
     svc.translate_blocking("en", "go jungle");
-    let before = calls.load(Ordering::SeqCst);
+    let before = calls(&llm);
     // A new map clears the cache: the line is translated again.
     svc.set_map_terms(vec!["Jungle".into(), "Palace".into()]);
     let t = svc.translate_blocking("en", "go jungle");
-    assert_eq!(calls.load(Ordering::SeqCst), before + 1);
+    assert_eq!(calls(&llm), before + 1);
     assert_eq!(t.translated.as_deref(), Some("FR:go jungle"));
     let t = svc.translate_blocking("en", "push palace");
     assert_eq!(t.translated.as_deref(), Some("FR:push palais"));
-    // Same map again: the cache is kept.
     svc.set_map_terms(vec!["Jungle".into(), "Palace".into()]);
     svc.translate_blocking("en", "go jungle");
-    assert_eq!(calls.load(Ordering::SeqCst), before + 2);
-}
-fn settle(svc: &TranslationService) {
-    let end = Instant::now() + Duration::from_secs(5);
-    while svc
-        .status()
-        .pairs
-        .iter()
-        .any(|p| p.state == PairState::Loading)
-        || svc.inner.reload.load(Ordering::SeqCst)
-    {
-        assert!(Instant::now() < end);
-        std::thread::sleep(Duration::from_millis(5));
-    }
+    assert_eq!(calls(&llm), before + 2);
 }
 
 #[test]
-fn a_russian_user_gets_the_other_languages_in_russian() {
-    let (svc, rx, calls) = service(vec!["en", "fr"], 0);
-    let st = svc.configure(TranslationConfig {
+fn a_russian_user_gets_every_other_language_in_russian_directly() {
+    let (svc, rx, _) = service(0);
+    svc.configure(TranslationConfig {
         target: "ru".into(),
-        sources: vec!["en".into(), "fr".into(), "ru".into(), "xx".into()],
+        sources: vec!["en".into(), "fr".into(), "pl".into(), "ru".into()],
         ..TranslationConfig::default()
     });
-    assert_eq!(
-        st.config.sources,
-        ["en", "fr", "ru"],
-        "unknown language dropped"
-    );
-    // Both models are installed: a pair still Missing has not been
-    // looked at yet by the worker (it clears `reload` before the first
-    // pair is marked Loading), so wait for it too.
-    let end = Instant::now() + Duration::from_secs(5);
-    let st = loop {
-        settle(&svc);
-        let st = svc.status();
-        if st.pairs.iter().all(|p| p.state != PairState::Missing) || Instant::now() > end {
-            break st;
-        }
-        std::thread::sleep(Duration::from_millis(5));
-    };
-    let pairs: Vec<_> = st
-        .pairs
-        .iter()
-        .map(|p| (p.source.as_str(), p.target.as_str(), p.state))
-        .collect();
-    assert_eq!(
-        pairs,
-        [
-            ("en", "ru", PairState::Ready),
-            ("fr", "ru", PairState::Ready)
-        ]
-    );
-    // Their own language: shown as is.
-    svc.submit(1, "ru", "Двое на B");
-    let t = next(&rx);
-    assert_eq!(
-        (t.translated.as_deref(), t.target.as_str()),
-        (Some("Двое на B"), "ru")
-    );
-    // The French callout lexicon does not answer into Russian: the model does.
-    svc.submit(2, "en", "rush B");
-    let t = next(&rx);
-    assert_eq!(
-        (t.translated.as_deref(), t.target.as_str()),
-        (Some("FR:rush B"), "ru")
-    );
-    assert_eq!(calls.load(Ordering::SeqCst), 1);
-    // A language not chosen stays as is.
-    svc.submit(3, "de", "zwei auf B");
+    for (id, lang, text) in [
+        (1, "en", "two on B"),
+        (2, "fr", "deux en B"),
+        (3, "pl", "dwóch na B"),
+    ] {
+        svc.submit(id, lang, text);
+        let t = next(&rx);
+        assert_eq!(
+            (t.translated.as_deref(), t.target.as_str()),
+            (Some(format!("RU:{text}").as_str()), "ru"),
+            "{lang}"
+        );
+    }
+    // French callouts of the lexicon are not used towards Russian.
+    svc.submit(4, "en", "rush");
+    assert_eq!(next(&rx).translated.as_deref(), Some("RU:rush"));
+    // A language the user did not choose is shown as is.
+    svc.submit(5, "de", "zwei auf B");
     assert_eq!(
         next(&rx).error.as_deref(),
         Some("langue non choisie (Langues)")
     );
-}
-
-#[test]
-fn changing_the_target_reloads_and_never_mixes_cached_lines() {
-    let (svc, rx, calls) = service(vec!["en", "ru", "fr"], 0);
-    svc.submit(1, "en", "they rotate to B with the AWP");
-    assert!(next(&rx).translated.is_some());
-    svc.configure(TranslationConfig {
-        target: "de".into(),
+    // Polish and Turkish can now be the user's language too.
+    let st = svc.configure(TranslationConfig {
+        target: "tr".into(),
         sources: vec!["en".into()],
         ..TranslationConfig::default()
     });
-    settle(&svc);
-    svc.submit(2, "en", "they rotate to B with the AWP");
-    let t = next(&rx);
-    assert!(
-        !t.cached,
-        "a cached French line must not come back in German"
-    );
-    assert_eq!(t.target, "de");
-    assert_eq!(calls.load(Ordering::SeqCst), 2);
-    // An unsupported target falls back to French.
-    let st = svc.configure(TranslationConfig {
-        target: "pl".into(),
-        ..TranslationConfig::default()
-    });
-    assert_eq!(st.config.target, "fr");
+    assert_eq!(st.config.target, "tr");
 }
 
 #[test]
-fn each_line_reports_its_engine_and_a_new_llm_setup_clears_the_cache() {
-    struct Online(Arc<AtomicU64>);
-    impl Engine for Online {
-        fn translate(&mut self, text: &str) -> Result<String, String> {
-            self.0.fetch_add(1, Ordering::SeqCst);
-            Ok(format!("FR:{text}"))
-        }
-        fn last_engine(&self) -> Option<&'static str> {
-            Some("llm")
-        }
-    }
-    let calls = Arc::new(AtomicU64::new(0));
-    let mut engines: Engines = HashMap::new();
-    engines.insert(("en".into(), "fr".into()), Box::new(Online(calls.clone())));
-    let (svc, _rx, _) = service(vec![], 0);
-    let job = |id| Job {
-        id,
-        lang: "en".into(),
-        text: "they are stacking long".into(),
-        queued: Instant::now(),
-        generation: svc.inner.generation.load(Ordering::SeqCst),
+fn changing_the_target_never_mixes_cached_lines() {
+    let (svc, _rx, llm) = service(0);
+    assert_eq!(
+        svc.translate_blocking("en", "they are slow today")
+            .translated
+            .as_deref(),
+        Some("FR:they are slow today")
+    );
+    svc.configure(TranslationConfig {
+        target: "de".into(),
+        ..TranslationConfig::default()
+    });
+    assert_eq!(
+        svc.translate_blocking("en", "they are slow today")
+            .translated
+            .as_deref(),
+        Some("DE:they are slow today")
+    );
+    assert_eq!(calls(&llm), 2);
+}
+
+#[test]
+fn a_new_llm_setup_clears_the_cache() {
+    let (svc, _rx, llm) = service(0);
+    svc.translate_blocking("ru", "они сегодня медленные");
+    svc.translate_blocking("ru", "они сегодня медленные");
+    assert_eq!(calls(&llm), 1);
+    svc.engines_changed();
+    svc.translate_blocking("ru", "они сегодня медленные");
+    assert_eq!(calls(&llm), 2);
+}
+
+#[test]
+fn a_line_waiting_too_long_keeps_its_language() {
+    let (svc, _rx, llm) = service(0);
+    let job = Job {
+        id: 1,
+        lang: "ru".into(),
+        text: "Двое".into(),
+        queued: Instant::now() - MAX_WAIT - Duration::from_millis(1),
+        generation: 0,
         reply: None,
         partial: false,
     };
-    let t = run(&svc.inner, &mut engines, &job(1)).unwrap();
-    assert_eq!(t.engine.as_deref(), Some("llm"));
-    assert!(!t.cached);
-    let hit = run(&svc.inner, &mut engines, &job(2)).unwrap();
-    assert!(hit.cached);
-    assert_eq!(
-        hit.engine.as_deref(),
-        Some("llm"),
-        "the cache keeps the engine"
-    );
-    assert_eq!(calls.load(Ordering::SeqCst), 1);
-    svc.engines_changed();
-    let again = run(&svc.inner, &mut engines, &job(3)).unwrap();
-    assert!(
-        !again.cached,
-        "translations of the previous setup are dropped"
-    );
-    assert_eq!(calls.load(Ordering::SeqCst), 2);
-    // Built-in callouts say so.
-    svc.submit(4, "en", "CT, go, go.");
-    let lex = next(&_rx);
-    assert_eq!(lex.engine.as_deref(), Some("lexicon"));
-}
-
-#[test]
-fn models_not_yet_examined_are_loading_not_missing() {
-    // Shown at every start before the worker looked: "modèles absents" and a
-    // journal warning although the models were installed.
-    let pairs = super::pairs_for(&TranslationConfig::default());
-    assert!(!pairs.is_empty());
-    assert!(pairs.values().all(|p| p.state == PairState::Loading));
+    let t = run(&svc.inner, &job).unwrap();
+    assert_eq!(t.translated, None);
+    assert!(t.error.unwrap().contains("délai dépassé"));
+    assert_eq!(calls(&llm), 0);
 }

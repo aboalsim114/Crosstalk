@@ -1,8 +1,8 @@
-// First-run setup: the app downloads its models itself (installer stays small).
+// First-run setup: the app downloads its speech models itself (installer
+// stays small). Translation needs no download: it is done by the LLM.
 
 import { create } from 'zustand';
 import { modelDownload, type DownloadStatus } from '../../shared/ipc';
-import { chosenSources } from '../languages/langs';
 import type { AppState } from '../../app/state/store';
 
 export const useSetup = create<{ status: DownloadStatus | null }>()(() => ({ status: null }));
@@ -46,15 +46,10 @@ export function setupView(s: DownloadStatus | null): SetupView {
   }
 }
 
-/** The models the current settings need: Whisper model, translation on or off, languages. */
-export const setupNeeds = (s: Pick<AppState, 'model' | 'tg'> & Partial<Pick<AppState, 'target' | 'src'>>) => ({
-  model: s.model,
-  translation: s.tg.translate,
-  plan: { target: s.target ?? 'fr', sources: s.src ? chosenSources(s.src) : ['ru', 'en'] },
-});
+/** The models the current settings need: the recognition model (and the VAD). */
+export const setupNeeds = (s: Pick<AppState, 'model'>) => ({ model: s.model });
 
-export async function startSetup(s: Pick<AppState, 'model' | 'tg'> & Partial<Pick<AppState, 'target' | 'src'>>): Promise<void> {
-  const n = setupNeeds(s);
-  const status = await modelDownload.start(n.model, n.translation, n.plan);
+export async function startSetup(s: Pick<AppState, 'model'>): Promise<void> {
+  const status = await modelDownload.start(setupNeeds(s).model);
   if (status) useSetup.setState({ status });
 }

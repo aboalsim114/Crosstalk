@@ -17,10 +17,10 @@ use windows::Win32::Foundation::{
 use windows::Win32::Media::Audio::{
     eCapture, eCommunications, eConsole, eRender, ActivateAudioInterfaceAsync,
     IActivateAudioInterfaceAsyncOperation, IActivateAudioInterfaceCompletionHandler,
-    IActivateAudioInterfaceCompletionHandler_Impl, IAudioCaptureClient, IAudioClient, IMMDevice,
-    IMMDeviceEnumerator, MMDeviceEnumerator, AUDCLNT_BUFFERFLAGS_SILENT,
-    AUDCLNT_E_DEVICE_INVALIDATED, AUDCLNT_E_SERVICE_NOT_RUNNING, AUDCLNT_E_UNSUPPORTED_FORMAT,
-    AUDCLNT_SHAREMODE_SHARED, AUDCLNT_STREAMFLAGS_AUTOCONVERTPCM,
+    IActivateAudioInterfaceCompletionHandler_Impl, IAudioCaptureClient, IAudioClient,
+    IAudioRenderClient, IMMDevice, IMMDeviceEnumerator, MMDeviceEnumerator,
+    AUDCLNT_BUFFERFLAGS_SILENT, AUDCLNT_E_DEVICE_INVALIDATED, AUDCLNT_E_SERVICE_NOT_RUNNING,
+    AUDCLNT_E_UNSUPPORTED_FORMAT, AUDCLNT_SHAREMODE_SHARED, AUDCLNT_STREAMFLAGS_AUTOCONVERTPCM,
     AUDCLNT_STREAMFLAGS_EVENTCALLBACK, AUDCLNT_STREAMFLAGS_LOOPBACK,
     AUDCLNT_STREAMFLAGS_SRC_DEFAULT_QUALITY, AUDIOCLIENT_ACTIVATION_PARAMS,
     AUDIOCLIENT_ACTIVATION_PARAMS_0, AUDIOCLIENT_ACTIVATION_TYPE_PROCESS_LOOPBACK,
@@ -155,17 +155,27 @@ fn describe(device: &IMMDevice) -> Result<(String, String), AudioError> {
 }
 
 fn list_devices_mta() -> Result<Vec<AudioDevice>, AudioError> {
+    list_endpoints_mta(false)
+}
+
+/// Active endpoints: outputs, or microphones when `capture`.
+fn list_endpoints_mta(capture: bool) -> Result<Vec<AudioDevice>, AudioError> {
     let _com = Com::init()?;
     let en = enumerator()?;
+    let (flow, role) = if capture {
+        (eCapture, eCommunications)
+    } else {
+        (eRender, eConsole)
+    };
     // SAFETY: COM calls on live interfaces.
     unsafe {
         let default_id = en
-            .GetDefaultAudioEndpoint(eRender, eConsole)
+            .GetDefaultAudioEndpoint(flow, role)
             .ok()
             .and_then(|d| describe(&d).ok())
             .map(|(id, _)| id);
         let collection = en
-            .EnumAudioEndpoints(eRender, DEVICE_STATE_ACTIVE)
+            .EnumAudioEndpoints(flow, DEVICE_STATE_ACTIVE)
             .map_err(os)?;
         let count = collection.GetCount().map_err(os)?;
         let mut out = Vec::with_capacity(count as usize);
@@ -278,22 +288,35 @@ fn open_device(id: Option<&str>) -> Result<WasapiStream, AudioError> {
     }
 }
 
-/// The default communications microphone, in shared event-driven mode (no
-/// loopback). Only opened while the user dictates a reply.
-pub fn open_microphone() -> Result<Box<dyn CaptureStream>, AudioError> {
+/// Outputs (`capture` false) or microphones, on their own MTA thread.
+pub fn list_endpoints(capture: bool) -> Result<Vec<AudioDevice>, AudioError> {
+    std::thread::spawn(move || list_endpoints_mta(capture))
+        .join()
+        .unwrap_or_else(|_| Err(AudioError::Os("énumération interrompue".into())))
+}
+
+/// A microphone (the default communications one when `id` is None), in
+/// shared event-driven mode (no loopback). Only opened while the user
+/// dictates a reply, or while the AI voice routes it to the virtual cable.
+pub fn open_microphone(id: Option<&str>) -> Result<Box<dyn CaptureStream>, AudioError> {
     let com = Com::init()?;
     let en = enumerator()?;
     // SAFETY: COM calls on live interfaces; the mix format is freed after use.
     unsafe {
-        let device = en
-            .GetDefaultAudioEndpoint(eCapture, eCommunications)
-            .map_err(|e| {
-                if e.code() == E_NOTFOUND {
-                    AudioError::NoMicrophone
-                } else {
-                    os(e)
-                }
-            })?;
+        let device = match id {
+            Some(id) => en
+                .GetDevice(&HSTRING::from(id))
+                .map_err(|_| AudioError::DeviceNotFound(id.to_owned()))?,
+            None => en
+                .GetDefaultAudioEndpoint(eCapture, eCommunications)
+                .map_err(|e| {
+                    if e.code() == E_NOTFOUND {
+                        AudioError::NoMicrophone
+                    } else {
+                        os(e)
+                    }
+                })?,
+        };
         let (dev_id, name) = describe(&device)?;
         let client: IAudioClient = device.Activate(CLSCTX_ALL, None).map_err(os)?;
         let mix = client.GetMixFormat().map_err(os)?;
@@ -569,6 +592,163 @@ impl Drop for WasapiStream {
             if let Some(h) = self.mmcss.take() {
                 let _ = AvRevertMmThreadCharacteristics(h);
             }
+        }
+    }
+}
+
+// ---------- output (AI voice) ----------
+
+/// Output buffer of 40 ms: the microphone passed to the virtual cable stays
+/// close to real time.
+const RENDER_BUFFER_100NS: i64 = 400_000;
+
+/// An output device in shared event-driven mode, fed with mono samples.
+pub struct RenderStream {
+    client: IAudioClient,
+    render: IAudioRenderClient,
+    event: HANDLE,
+    format: StreamFormat,
+    frames: u32,
+    name: String,
+    /// Frames still waiting in the device buffer after the last write.
+    queued: u32,
+    /// Declared last: COM is uninitialised after the interfaces are released.
+    _com: Com,
+}
+
+/// Opens an output (the default one when `id` is None).
+pub fn open_render(id: Option<&str>) -> Result<RenderStream, AudioError> {
+    let com = Com::init()?;
+    let en = enumerator()?;
+    // SAFETY: COM calls on live interfaces; the mix format is freed after use.
+    unsafe {
+        let device = match id {
+            Some(id) => en
+                .GetDevice(&HSTRING::from(id))
+                .map_err(|_| AudioError::DeviceNotFound(id.to_owned()))?,
+            None => en.GetDefaultAudioEndpoint(eRender, eConsole).map_err(|e| {
+                if e.code() == E_NOTFOUND {
+                    AudioError::NoDevice
+                } else {
+                    os(e)
+                }
+            })?,
+        };
+        let (_, name) = describe(&device)?;
+        let client: IAudioClient = device.Activate(CLSCTX_ALL, None).map_err(os)?;
+        let mix = client.GetMixFormat().map_err(os)?;
+        let parsed = parse_format(mix);
+        let init = parsed.as_ref().ok().map(|_| {
+            client.Initialize(
+                AUDCLNT_SHAREMODE_SHARED,
+                AUDCLNT_STREAMFLAGS_EVENTCALLBACK,
+                RENDER_BUFFER_100NS,
+                0,
+                mix,
+                None,
+            )
+        });
+        CoTaskMemFree(Some(mix as *const _));
+        let format = parsed?;
+        if !matches!(format.sample_format, SampleFormat::F32 | SampleFormat::I16) {
+            return Err(AudioError::FormatUnsupported(format!(
+                "{:?}",
+                format.sample_format
+            )));
+        }
+        if let Some(r) = init {
+            r.map_err(os)?;
+        }
+        let event = CreateEventW(None, false, false, None).map_err(os)?;
+        let setup = (|| {
+            client.SetEventHandle(event)?;
+            let frames = client.GetBufferSize()?;
+            let render: IAudioRenderClient = client.GetService()?;
+            client.Start()?;
+            Ok::<_, windows::core::Error>((frames, render))
+        })();
+        let (frames, render) = match setup {
+            Ok(v) => v,
+            Err(e) => {
+                let _ = CloseHandle(event);
+                return Err(os(e));
+            }
+        };
+        Ok(RenderStream {
+            client,
+            render,
+            event,
+            format,
+            frames,
+            name,
+            queued: 0,
+            _com: com,
+        })
+    }
+}
+
+impl RenderStream {
+    pub fn format(&self) -> StreamFormat {
+        self.format
+    }
+
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
+    /// Frames waiting in the device buffer just after the last write (not yet heard).
+    pub fn queued(&self) -> u32 {
+        self.queued
+    }
+
+    /// Waits up to `timeout_ms` for room, then asks `fill` for that many mono
+    /// samples (it must return exactly `n`) and writes them on every channel.
+    pub fn write(
+        &mut self,
+        timeout_ms: u32,
+        fill: &mut dyn FnMut(usize) -> Vec<f32>,
+    ) -> Result<(), AudioError> {
+        // SAFETY: COM calls on live interfaces; the buffer is written within
+        // the `n` frames WASAPI gave us, then released.
+        unsafe {
+            WaitForSingleObject(self.event, timeout_ms);
+            let padding = self.client.GetCurrentPadding().map_err(os)?;
+            let n = self.frames.saturating_sub(padding) as usize;
+            self.queued = padding;
+            if n == 0 {
+                return Ok(());
+            }
+            let mut mono = fill(n);
+            mono.resize(n, 0.0);
+            let ch = self.format.channels as usize;
+            let data = self.render.GetBuffer(n as u32).map_err(os)?;
+            match self.format.sample_format {
+                SampleFormat::F32 => {
+                    let out = std::slice::from_raw_parts_mut(data as *mut f32, n * ch);
+                    for (frame, s) in out.chunks_exact_mut(ch).zip(&mono) {
+                        frame.fill(*s);
+                    }
+                }
+                _ => {
+                    let out = std::slice::from_raw_parts_mut(data as *mut i16, n * ch);
+                    for (frame, s) in out.chunks_exact_mut(ch).zip(&mono) {
+                        frame.fill((s.clamp(-1.0, 1.0) * 32767.0) as i16);
+                    }
+                }
+            }
+            self.render.ReleaseBuffer(n as u32, 0).map_err(os)?;
+            self.queued = padding + n as u32;
+            Ok(())
+        }
+    }
+}
+
+impl Drop for RenderStream {
+    fn drop(&mut self) {
+        // SAFETY: releasing resources this stream owns.
+        unsafe {
+            let _ = self.client.Stop();
+            let _ = CloseHandle(self.event);
         }
     }
 }

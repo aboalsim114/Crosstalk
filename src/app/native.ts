@@ -2,7 +2,7 @@
 // in-game overlay window out. Only active inside the Tauri app.
 
 import { resolveLocale, type Locale } from '../shared/i18n';
-import { audioCapture, chat, cs2, dictation, isTauri, llm, modelDownload, onNativeAction, overlayWindow, reply, speech, translation, type CaptureStatus, type NativeAction, type OverlayWindowConfig } from '../shared/ipc';
+import { audioCapture, chat, cs2, dictation, isTauri, llm, voice, modelDownload, onNativeAction, overlayWindow, reply, speech, translation, type CaptureStatus, type NativeAction, type OverlayWindowConfig } from '../shared/ipc';
 import { refreshModels, speechConfigFrom, transcriptEntry, useSpeech } from '../features/speech/speech';
 import { recordTime, translationConfigFrom, useTranslation } from '../features/translation/translation';
 import { llmConfigFrom, refreshLlm, useLlm } from '../features/translation/llm';
@@ -10,6 +10,9 @@ import { setupNeeds, startSetup, useSetup } from '../features/setup/setup';
 import { chatConfigFrom, chatEntry, useChat } from '../features/chat/chat';
 import { captureModeFor, levelToUnit, recordTestLevel, refreshDevices, useAudio } from '../features/audio/audio';
 import { recentLangs } from '../features/languages/langs';
+import { radarPayload, type RadarPayload } from '../features/radar/radar';
+import { useGsi } from '../features/recap/gsi';
+import { refreshVoice, useVoice } from '../features/voice/voice';
 import { isRunning, useApp, type AppState, type FeedEntry, type Session } from './state/store';
 
 export interface OverlayPayload {
@@ -27,6 +30,8 @@ export interface OverlayPayload {
   locale: Locale;
   /** Language of the translations ("RUSSE → FRANÇAIS"). */
   target: string;
+  /** Callout radar: map and lit zones, null when off or on an unknown map. */
+  radar: RadarPayload | null;
 }
 
 export function overlayPayload(s: AppState): OverlayPayload {
@@ -41,6 +46,7 @@ export function overlayPayload(s: AppState): OverlayPayload {
     repos: s.repos,
     locale: resolveLocale(s.uiLang),
     target: s.target,
+    radar: radarPayload(s.radar, useGsi.getState().status?.map, s.feed, s.radarDemo, Date.now()),
   };
 }
 
@@ -171,7 +177,7 @@ export const speechConfigKey = (s: AppState) => JSON.stringify(speechConfigFrom(
 
 /**
  * First run: the installer is small, the app downloads its models by itself
- * (and again when the user picks another Whisper model or turns translation on).
+ * (and again when the recognition model changes or translation is turned on).
  */
 function startSetupBridge(): Promise<() => void>[] {
   const unlisten: Promise<() => void>[] = [];
@@ -257,6 +263,33 @@ function startLlmBridge(): Promise<() => void>[] {
   return unlisten;
 }
 
+/** AI voice: settings follow the UI; download progress and spoken sentences mirrored. */
+function startVoiceBridge(): Promise<() => void>[] {
+  const unlisten: Promise<() => void>[] = [];
+  const sync = debouncedSync(
+    (s) => JSON.stringify(s.voice),
+    (s) => voice.configure(s.voice).then((status) => status && useVoice.setState({ status, download: status.download })),
+    300,
+  );
+  sync.push(useApp.getState());
+  unlisten.push(Promise.resolve(useApp.subscribe((s) => sync.push(s))));
+  unlisten.push(Promise.resolve(sync.stop));
+  unlisten.push(
+    voice.onDownload((download) => {
+      useVoice.setState({ download });
+      if (download.state === 'done') refreshVoice();
+    }),
+  );
+  unlisten.push(voice.onSpeak((spoken) => useVoice.setState({ spoken })));
+  unlisten.push(voice.onPtt((ptt) => useVoice.setState({ ptt })));
+  // "La voix parle…" and the cable state.
+  const timer = setInterval(() => {
+    if (useApp.getState().voice.enabled) refreshVoice();
+  }, 2000);
+  unlisten.push(Promise.resolve(() => clearInterval(timer)));
+  return unlisten;
+}
+
 /** Mirrors the Rust speech recognition: status, real transcripts, voice activity. */
 function startSpeechBridge(): Promise<() => void>[] {
   const unlisten: Promise<() => void>[] = [];
@@ -299,6 +332,7 @@ export function startNativeBridge(): () => void {
   unlisten.push(...startSpeechBridge());
   unlisten.push(...startTranslationBridge());
   unlisten.push(...startLlmBridge());
+  unlisten.push(...startVoiceBridge());
   unlisten.push(...startChatBridge());
   unlisten.push(...startSetupBridge());
 
@@ -313,13 +347,16 @@ export function startNativeBridge(): () => void {
 
   const sync = (s: AppState, prev?: AppState) => {
     windowFlags.sync(s, prev);
-    if (!prev || prev.feed !== s.feed || prev.fmt !== s.fmt || prev.opacity !== s.opacity || prev.textSize !== s.textSize || prev.maxBlocks !== s.maxBlocks || prev.duration !== s.duration || prev.corner !== s.corner || prev.repos !== s.repos || prev.uiLang !== s.uiLang || prev.target !== s.target) push();
+    if (!prev || prev.feed !== s.feed || prev.fmt !== s.fmt || prev.opacity !== s.opacity || prev.textSize !== s.textSize || prev.maxBlocks !== s.maxBlocks || prev.duration !== s.duration || prev.corner !== s.corner || prev.repos !== s.repos || prev.uiLang !== s.uiLang || prev.target !== s.target || prev.radar !== s.radar || prev.radarDemo !== s.radarDemo) push();
   };
   sync(useApp.getState());
   const unsub = useApp.subscribe(sync);
+  // The radar follows the map being played.
+  const unsubMap = useGsi.subscribe((g, prev) => g.status?.map !== prev.status?.map && push());
 
   return () => {
     unsub();
+    unsubMap();
     unlisten.forEach((p) => p.then((f) => f()));
   };
 }

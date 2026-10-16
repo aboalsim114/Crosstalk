@@ -3,19 +3,20 @@
 // in the browser preview. Versioned: older files are migrated, unknown or
 // invalid values are ignored (the default stays).
 
-import { isTauri, settingsStore } from '../../shared/ipc';
+import { isTauri, llmService, serviceOf, settingsStore, type LlmService } from '../../shared/ipc';
 import { isUiLang } from '../../shared/i18n';
 import { isTargetLang } from '../../features/languages/langs';
 import { useAudio } from '../../features/audio/audio';
 import type { GlossEntry, ModelId } from './data';
 import { useApp, type AppState } from './store';
+import { HOLD_RANGE } from '../../features/radar/radar';
 
 export const SETTINGS_VERSION = 1;
 const LOCAL_KEY = 'crosstalk.settings';
 
 type Persisted = Pick<
   AppState,
-  'mode' | 'fmt' | 'corner' | 'opacity' | 'textSize' | 'duration' | 'maxBlocks' | 'overlayOn' | 'tg' | 'chatPath' | 'ownName' | 'capture' | 'vad' | 'model' | 'accel' | 'src' | 'stream' | 'speaker' | 'llm' | 'voiceFocus' | 'uiLang' | 'target' | 'langSetupDone'
+  'mode' | 'fmt' | 'corner' | 'opacity' | 'textSize' | 'duration' | 'maxBlocks' | 'overlayOn' | 'tg' | 'chatPath' | 'ownName' | 'capture' | 'vad' | 'model' | 'src' | 'stream' | 'speaker' | 'llm' | 'voiceFocus' | 'radar' | 'voice' | 'uiLang' | 'target' | 'langSetupDone' | 'engineSetupDone'
 >;
 
 const oneOf =
@@ -40,16 +41,19 @@ const CHECKS: { [K in keyof Persisted]: (v: unknown) => boolean } = {
   ownName: isString,
   capture: oneOf('process', 'device', 'wav'),
   vad: inRange(0, 100),
-  model: oneOf<ModelId>('tiny', 'base', 'small', 'medium', 'large-v3-turbo'),
-  accel: (v) => v === 'cpu' || v === 'gpu' || v === 'auto' || v === 'cuda',
+  // An old Whisper id ("base", "small"…) is not valid: the default model applies.
+  model: oneOf<ModelId>('parakeet-tdt-0.6b-v3'),
   src: (v) => typeof v === 'object' && v !== null,
   stream: (v) => typeof v === 'object' && v !== null,
   speaker: (v) => typeof v === 'object' && v !== null,
   llm: (v) => typeof v === 'object' && v !== null,
   voiceFocus: isBool,
+  radar: (v) => typeof v === 'object' && v !== null,
+  voice: (v) => typeof v === 'object' && v !== null,
   uiLang: isUiLang,
   target: isTargetLang,
   langSetupDone: isBool,
+  engineSetupDone: isBool,
 };
 
 export function snapshot(s: AppState, deviceId: string | null) {
@@ -86,10 +90,13 @@ export function restore(raw: unknown, defaults: AppState): { app: Partial<AppSta
       app.stream = merged as unknown as AppState['stream'];
     } else if (k === 'speaker') {
       app.speaker = restoreSpeaker(v as Record<string, unknown>, defaults.speaker);
+    } else if (k === 'voice') {
+      app.voice = restoreVoice(v as Record<string, unknown>, defaults.voice);
+    } else if (k === 'radar') {
+      const r = v as Record<string, unknown>;
+      app.radar = { on: isBool(r.on) ? r.on : defaults.radar.on, hold: inRange(...HOLD_RANGE)(r.hold) ? r.hold : defaults.radar.hold };
     } else if (k === 'llm') {
       app.llm = restoreLlm(v as Record<string, unknown>, defaults.llm);
-    } else if (k === 'accel') {
-      app.accel = v === 'cuda' ? 'auto' : (v as AppState['accel']); // "cuda" was simulated before the Vulkan build
     } else if (k === 'tg' || k === 'src') {
       const base = defaults[k] as Record<string, boolean>;
       const merged = { ...base };
@@ -101,14 +108,39 @@ export function restore(raw: unknown, defaults: AppState): { app: Partial<AppSta
   return { app, deviceId };
 }
 
-/** Online LLM settings (provider, address, model). The API key is never in this file. */
-function restoreLlm(v: Record<string, unknown>, base: AppState['llm']): AppState['llm'] {
+/** AI voice settings: each field checked, voice ids kept as short strings. */
+function restoreVoice(v: Record<string, unknown>, base: AppState['voice']): AppState['voice'] {
+  const voices: Record<string, string> = {};
+  if (typeof v.voices === 'object' && v.voices !== null)
+    for (const [lang, id] of Object.entries(v.voices as Record<string, unknown>)) if (/^[a-z]{2}$/.test(lang) && typeof id === 'string' && id.length <= 80) voices[lang] = id;
   return {
+    enabled: isBool(v.enabled) ? v.enabled : base.enabled,
+    mic: v.mic === null || isString(v.mic) ? (v.mic as string | null) : base.mic,
+    voices,
+    monitor: isBool(v.monitor) ? v.monitor : base.monitor,
+    volume: inRange(0, 150)(v.volume) ? v.volume : base.volume,
+    micVolume: inRange(0, 150)(v.micVolume) ? v.micVolume : base.micVolume,
+    autoPtt: isBool(v.autoPtt) ? v.autoPtt : base.autoPtt,
+    pttKey: typeof v.pttKey === 'string' && /^[A-Za-z0-9]{1,8}$/.test(v.pttKey) ? v.pttKey : base.pttKey,
+    pttLeadMs: inRange(50, 1000)(v.pttLeadMs) ? v.pttLeadMs : base.pttLeadMs,
+    pttTailMs: inRange(100, 1500)(v.pttTailMs) ? v.pttTailMs : base.pttTailMs,
+    speakTyped: isBool(v.speakTyped) ? v.speakTyped : (base.speakTyped ?? false),
+  };
+}
+
+/** Translation engine settings (provider, address, model). The API key is never in this file. */
+function restoreLlm(v: Record<string, unknown>, base: AppState['llm']): AppState['llm'] {
+  const c = {
     enabled: isBool(v.enabled) ? v.enabled : base.enabled,
     provider: v.provider === 'openai' || v.provider === 'anthropic' ? v.provider : base.provider,
     baseUrl: isString(v.baseUrl) ? v.baseUrl : base.baseUrl,
     model: isString(v.model) ? v.model : base.model,
   };
+  // Settings saved before the service list: the service is found from the address.
+  const service = typeof v.service === 'string' && (v.service === 'custom' || llmService(v.service as LlmService)) ? (v.service as LlmService) : serviceOf(c);
+  // Saved before the consent: a cloud provider already switched on was accepted with the privacy notice of the time.
+  const cloudConsent = isBool(v.cloudConsent) ? v.cloudConsent : c.enabled && !llmService(service)?.local;
+  return { ...c, service, cloudConsent };
 }
 
 /** "Qui parle ?" options: a boolean and an area inside CS2's window. */
