@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { IDLE_CAPTURE } from '../../shared/ipc';
 import { useAudio } from './audio';
 import { useSpeech } from '../speech/speech';
@@ -51,38 +51,62 @@ describe('speech recognition cards in the desktop app', () => {
   const speech0 = useSpeech.getState();
   beforeEach(() => useSpeech.setState(speech0, true));
 
-  it('lists the real model files and the engine state', () => {
+  it('shows the recognition model, its state, languages and licence', () => {
     useSpeech.setState({
       native: true,
       status: {
         state: 'missing',
-        config: { model: 'base', languages: ['ru', 'en'], vadThreshold: 0.55, glossary: [], accel: 'auto' },
+        config: { model: 'parakeet-tdt-0.6b-v3', languages: ['ru', 'en', 'fr'], vadThreshold: 0.55 },
         modelPath: null,
         vadReady: true,
         modelsDir: 'C:\\Users\\x\\AppData\\Local\\Crosstalk\\models',
         error: null,
         loadMs: null,
-        backend: 'CPU · AVX2',
+        backend: 'CPU · ONNX Runtime',
         threads: 4,
+        modelLabel: 'Parakeet TDT 0.6B v3',
       },
-      models: [
-        { id: 'tiny', file: 'ggml-tiny.bin', sizeMb: 75, note: 'Très rapide', installed: true, url: '' },
-        { id: 'base', file: 'ggml-base.bin', sizeMb: 142, note: 'Défaut', installed: false, url: '' },
-      ],
+      models: [{ id: 'parakeet-tdt-0.6b-v3', label: 'Parakeet TDT 0.6B v3', sizeMb: 670, note: 'Russe, anglais, français', license: 'CC-BY-4.0 (NVIDIA)', installed: false }],
     });
-    useApp.setState({ model: 'base' });
     render(<AudioPage />);
     expect(screen.getByTestId('engine-state')).toHaveTextContent('Modèle absent');
+    expect(screen.getByTestId('engine-state')).toHaveTextContent('Parakeet TDT 0.6B v3 non installé');
+    expect(screen.getByTestId('engine-langs')).toHaveTextContent('Langues écoutées : russe, anglais, français');
+    expect(screen.queryByTestId('unsupported-langs')).toBeNull();
     expect(screen.getByText('Sélectionné · téléchargement')).toBeInTheDocument();
-    expect(screen.getByText('Installé')).toBeInTheDocument();
+    expect(screen.getByText(/CC-BY-4.0/)).toBeInTheDocument();
     expect(screen.getByText('Rechercher les modèles')).toBeInTheDocument();
-    // Auto asked, CPU in use (backend from the engine): said plainly.
-    expect(screen.getByTestId('accel-note')).toHaveTextContent(/processeur/i);
-    // Picking a model selects it; a missing one is then downloaded by the app.
-    fireEvent.click(screen.getByText('whisper-tiny'));
-    expect(useApp.getState().model).toBe('tiny');
-    fireEvent.click(screen.getByText('whisper-base'));
-    expect(useApp.getState().model).toBe('base');
+    // Nothing about Whisper or a CPU / GPU choice any more.
+    expect(screen.queryByText(/whisper/i)).toBeNull();
+    expect(screen.queryByText('GPU')).toBeNull();
+  });
+
+  it('says when the model is loaded, with its backend and load time', () => {
+    useSpeech.setState({
+      native: true,
+      status: {
+        state: 'ready',
+        config: { model: 'parakeet-tdt-0.6b-v3', languages: ['ru', 'en'], vadThreshold: 0.55 },
+        modelPath: 'C:\\models\\parakeet-tdt-0.6b-v3-int8',
+        vadReady: true,
+        modelsDir: 'C:\\models',
+        error: null,
+        loadMs: 6100,
+        backend: 'CPU · ONNX Runtime',
+        threads: 4,
+        modelLabel: 'Parakeet TDT 0.6B v3',
+      },
+      models: [{ id: 'parakeet-tdt-0.6b-v3', label: 'Parakeet TDT 0.6B v3', sizeMb: 670, note: '', license: 'CC-BY-4.0 (NVIDIA)', installed: true }],
+    });
+    render(<AudioPage />);
+    expect(screen.getByTestId('engine-state')).toHaveTextContent('Parakeet TDT 0.6B v3');
+    expect(screen.getByTestId('engine-state')).toHaveTextContent('chargé en 6,1 s');
+    // Turkish is not among the model's languages: said plainly.
+    cleanup();
+    useSpeech.setState({ status: { ...useSpeech.getState().status!, config: { model: 'parakeet-tdt-0.6b-v3', languages: ['tr', 'en'], vadThreshold: 0.55 } } });
+    render(<AudioPage />);
+    expect(screen.getByTestId('unsupported-langs')).toHaveTextContent('Le turc n’est pas reconnu');
+    expect(screen.getByText('Actif')).toBeInTheDocument();
   });
 
   it('shows the real VAD activity and rejection counters', () => {
@@ -149,21 +173,6 @@ describe('translation test', () => {
     await waitFor(() => expect(screen.getByTestId('translation-result')).toHaveTextContent('lexique Counter-Strike'));
     expect(spy).toHaveBeenCalledTimes(2);
     spy.mockRestore();
-  });
-});
-
-describe('where Whisper runs', () => {
-  it('explains the CPU / GPU choice from the real backend', async () => {
-    const { accelNote } = await import('./AudioPage');
-    expect(accelNote('gpu', 'GPU · NVIDIA GeForce RTX 3060 (Vulkan)')).toMatch(/^Carte graphique/);
-    expect(accelNote('gpu', 'CPU · AVX2')).toMatch(/Aucune carte graphique/);
-    expect(accelNote('cpu', 'CPU · AVX2')).toMatch(/Processeur choisi/);
-    expect(accelNote('auto', 'GPU · NVIDIA GeForce RTX 3060 (Vulkan) · auto : 4,2× plus rapide que le processeur')).toBe('Auto : carte graphique NVIDIA GeForce RTX 3060, 4,2× plus rapide que le processeur.');
-    expect(accelNote('auto', 'CPU · AVX2 · auto : carte graphique pas assez rapide (1,1×)')).toBe('Auto : processeur (carte graphique pas assez rapide, 1,1×).');
-    expect(accelNote('auto', 'CPU · AVX2 · auto (aucune carte graphique Vulkan)')).toBe('Auto : processeur (aucune carte graphique Vulkan).');
-    // The driver crashed in the separate test process: said plainly.
-    expect(accelNote('auto', 'CPU · AVX2 · auto (le pilote graphique a planté pendant le test)')).toBe('Auto : processeur (le pilote graphique a planté pendant le test).');
-    expect(accelNote('gpu', 'CPU · AVX2 · GPU (Crosstalk s\'est fermé brutalement en utilisant la carte graphique)')).toMatch(/^Carte graphique non utilisée : Crosstalk s'est fermé brutalement/);
   });
 });
 

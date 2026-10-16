@@ -16,7 +16,7 @@ const LOCAL_KEY = 'crosstalk.settings';
 
 type Persisted = Pick<
   AppState,
-  'mode' | 'fmt' | 'corner' | 'opacity' | 'textSize' | 'duration' | 'maxBlocks' | 'overlayOn' | 'tg' | 'chatPath' | 'ownName' | 'capture' | 'vad' | 'model' | 'accel' | 'src' | 'stream' | 'speaker' | 'llm' | 'voiceFocus' | 'radar' | 'voice' | 'uiLang' | 'target' | 'langSetupDone' | 'engineSetupDone'
+  'mode' | 'fmt' | 'corner' | 'opacity' | 'textSize' | 'duration' | 'maxBlocks' | 'overlayOn' | 'tg' | 'chatPath' | 'ownName' | 'capture' | 'vad' | 'model' | 'src' | 'stream' | 'speaker' | 'llm' | 'voiceFocus' | 'radar' | 'voice' | 'uiLang' | 'target' | 'langSetupDone' | 'engineSetupDone'
 >;
 
 const oneOf =
@@ -41,8 +41,8 @@ const CHECKS: { [K in keyof Persisted]: (v: unknown) => boolean } = {
   ownName: isString,
   capture: oneOf('process', 'device', 'wav'),
   vad: inRange(0, 100),
-  model: oneOf<ModelId>('tiny', 'base', 'small', 'medium', 'large-v3-turbo'),
-  accel: (v) => v === 'cpu' || v === 'gpu' || v === 'auto' || v === 'cuda',
+  // An old Whisper id ("base", "small"…) is not valid: the default model applies.
+  model: oneOf<ModelId>('parakeet-tdt-0.6b-v3'),
   src: (v) => typeof v === 'object' && v !== null,
   stream: (v) => typeof v === 'object' && v !== null,
   speaker: (v) => typeof v === 'object' && v !== null,
@@ -97,8 +97,6 @@ export function restore(raw: unknown, defaults: AppState): { app: Partial<AppSta
       app.radar = { on: isBool(r.on) ? r.on : defaults.radar.on, hold: inRange(...HOLD_RANGE)(r.hold) ? r.hold : defaults.radar.hold };
     } else if (k === 'llm') {
       app.llm = restoreLlm(v as Record<string, unknown>, defaults.llm);
-    } else if (k === 'accel') {
-      app.accel = v === 'cuda' ? 'auto' : (v as AppState['accel']); // "cuda" was simulated before the Vulkan build
     } else if (k === 'tg' || k === 'src') {
       const base = defaults[k] as Record<string, boolean>;
       const merged = { ...base };

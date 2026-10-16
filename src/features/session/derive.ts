@@ -23,10 +23,8 @@ export function isDemoLine(native: boolean, f: FeedEntry | undefined): boolean {
 
 /** Under a transcript that stays untranslated, with the reason. */
 /** Advice when the measured voice delay is too long for live subtitles. */
-export function latencyAdvice(p50Ms: number, model: string): string | null {
-  if (p50Ms <= 3000) return null;
-  if (model !== 'tiny' && model !== 'base') return t('advice.slowModel', { model });
-  return t('advice.cpu');
+export function latencyAdvice(p50Ms: number): string | null {
+  return p50Ms <= 3000 ? null : t('advice.cpu');
 }
 
 export function transcriptNote(f: FeedEntry): string {

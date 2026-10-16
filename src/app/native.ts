@@ -177,7 +177,7 @@ export const speechConfigKey = (s: AppState) => JSON.stringify(speechConfigFrom(
 
 /**
  * First run: the installer is small, the app downloads its models by itself
- * (and again when the user picks another Whisper model or turns translation on).
+ * (and again when the recognition model changes or translation is turned on).
  */
 function startSetupBridge(): Promise<() => void>[] {
   const unlisten: Promise<() => void>[] = [];

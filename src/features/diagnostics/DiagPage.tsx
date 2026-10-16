@@ -66,7 +66,7 @@ export function nativeLog(chat: ChatStatus | null, lines: [string, string][]): [
 
 /** "Voix → texte" row: the stage that stops during this capture, else the last 30 s summary. */
 export function pulseDiag(p: PulseView | null): [string, DiagState] {
-  if (!p || (!p.capturing && !p.summary)) return ['Démarrez une session : bilan toutes les 30 s (son, VAD, Whisper, traduction)', 'AVERT.'];
+  if (!p || (!p.capturing && !p.summary)) return ['Démarrez une session : bilan toutes les 30 s (son, VAD, reconnaissance, traduction)', 'AVERT.'];
   const last = p.alerts[p.alerts.length - 1];
   if (last) return [last, 'ÉCHEC'];
   return [p.summary ?? 'Capture en cours : premier bilan dans 30 s', 'OK'];
@@ -98,8 +98,8 @@ export function DiagPage() {
   const sp = useSpeech();
   const engine = engineSummary(sp.status);
   const asrRow: [string, string, DiagState] = sp.native
-    ? ['Modèle whisper-' + s.model, `${engine.value} · ${engine.detail}`, sp.status?.state === 'ready' ? 'OK' : sp.status?.state === 'error' ? 'ÉCHEC' : 'AVERT.']
-    : ['Modèle whisper-' + s.model, 'Chargé en 1,8 s · ' + s.accel.toUpperCase(), 'OK'];
+    ? ['Reconnaissance vocale', `${engine.value} · ${engine.detail}`, sp.status?.state === 'ready' ? 'OK' : sp.status?.state === 'error' ? 'ÉCHEC' : 'AVERT.']
+    : ['Reconnaissance vocale', 'Parakeet TDT 0.6B v3 · chargé en 6,1 s · CPU', 'OK'];
   const trStatus = useTranslation((x) => x.status);
   const trTimes = useTranslation((x) => x.times);
   const trSum = translationSummary(trStatus);
@@ -130,7 +130,7 @@ export function DiagPage() {
     ['14:02:11', 'INFO', 'cs2-detect: 2 bibliothèques Steam'],
     ['14:02:12', 'INFO', 'chat-ingest: suivi depuis offset 1 284 330'],
     ['14:02:12', fb ? 'WARN' : 'INFO', fb ? 'audio-win: repli endpoint loopback' : 'audio-win: process loopback pid=18244'],
-    ['14:02:13', 'INFO', 'asr: whisper-small chargé (GPU)'],
+    ['14:02:13', 'INFO', 'asr: Parakeet TDT 0.6B v3 chargé (CPU)'],
     ['14:02:13', 'INFO', 'traduction : LLM prêt → fr'],
     ['14:03:40', 'DEBUG', 'audio-pipeline: segment 3,1 s → asr'],
     ['14:03:41', 'WARN', 'audio-pipeline: segment périmé abandonné'],

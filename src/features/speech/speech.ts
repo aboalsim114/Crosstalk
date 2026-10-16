@@ -5,7 +5,6 @@
 import { t } from '../../shared/i18n';
 import { create } from 'zustand';
 import { isTauri, speech, type ModelInfo, type RejectReason, type SpeechConfig, type SpeechStats, type SpeechStatus, type Transcript, type VoiceActivity } from '../../shared/ipc';
-import type { GlossEntry } from '../../app/state/data';
 import type { AppState, FeedEntry } from '../../app/state/store';
 import { chosenSources } from '../languages/langs';
 
@@ -27,17 +26,15 @@ export const useSpeech = create<SpeechState>()(() => ({
 
 // ---------- pure helpers (unit-tested) ----------
 
-/** Rust speech settings from the UI settings (threshold %, languages, glossary, model). */
-export function speechConfigFrom(s: Pick<AppState, 'model' | 'vad' | 'src' | 'gloss'> & Partial<Pick<AppState, 'accel' | 'voiceFocus' | 'target'>>): SpeechConfig {
-  // Whisper may hear the players' languages and the user's own (shown as is).
+/** Rust speech settings from the UI settings (threshold %, languages, model). */
+export function speechConfigFrom(s: Pick<AppState, 'model' | 'vad' | 'src'> & Partial<Pick<AppState, 'voiceFocus' | 'target'>>): SpeechConfig {
+  // The recogniser may hear the players' languages and the user's own (shown as is).
   const languages = chosenSources(s.src);
   if (languages.length && s.target && !languages.includes(s.target)) languages.push(s.target);
   return {
     model: s.model,
     languages: languages.length ? languages : ['ru', 'en'],
     vadThreshold: Math.min(0.9, Math.max(0.2, s.vad / 100)),
-    glossary: s.gloss.map((g: GlossEntry) => g[0]),
-    accel: s.accel ?? 'auto',
     voiceFocus: s.voiceFocus ?? false,
   };
 }
@@ -69,16 +66,12 @@ export interface EngineSummary {
 
 export function engineSummary(st: SpeechStatus | null): EngineSummary {
   if (!st) return { value: '…', detail: t('eng.starting'), color: '#8f8a83' };
-  // Automatic fallback: whisper-base runs in place of a model too slow during the match.
-  const running = st.fallbackFrom ? 'base' : st.config.model;
-  const model = `whisper ${running}`;
+  const model = st.modelLabel || st.config.model;
   switch (st.state) {
     case 'ready':
       return {
-        value: `Whisper ${running}`,
-        detail: st.fallbackFrom
-          ? t('eng.fallback', { from: st.fallbackFrom })
-          : st.loadMs != null ? t('eng.loaded', { backend: st.backend, threads: st.threads, ms: formatMs(st.loadMs) }) : t('eng.threads', { backend: st.backend, threads: st.threads }),
+        value: model,
+        detail: st.loadMs != null ? t('eng.loaded', { backend: st.backend, threads: st.threads, ms: formatMs(st.loadMs) }) : t('eng.threads', { backend: st.backend, threads: st.threads }),
         color: '#7fe0a8',
       };
     case 'loading':
@@ -104,8 +97,6 @@ export const REJECT_LABEL: Record<RejectReason, string> = {
   stale: 'périmé',
   overflow: 'file pleine',
   empty: 'vide',
-  noSpeech: 'pas de parole',
-  lowConfidence: 'confiance faible',
   hallucination: 'hallucination',
   repetition: 'répétition',
   wrongScript: 'alphabet incohérent',

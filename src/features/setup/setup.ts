@@ -46,7 +46,7 @@ export function setupView(s: DownloadStatus | null): SetupView {
   }
 }
 
-/** The models the current settings need: the Whisper model (and the VAD). */
+/** The models the current settings need: the recognition model (and the VAD). */
 export const setupNeeds = (s: Pick<AppState, 'model'>) => ({ model: s.model });
 
 export async function startSetup(s: Pick<AppState, 'model'>): Promise<void> {

@@ -3,7 +3,6 @@ import type { SpeechStatus, Transcript } from '../../shared/ipc';
 import { feedRow, subtitle } from '../session/derive';
 import { overlayBlocks } from '../overlay/OverlayPage';
 import { useAudio } from '../audio/audio';
-import { GLOSSARY } from '../../app/state/data';
 import { engineSummary, formatMs, speechConfigFrom, statsLine, transcriptEntry } from './speech';
 import { sceneFx, useApp } from '../../app/state/store';
 
@@ -16,29 +15,27 @@ const t: Transcript = {
   audioMs: 1800,
   latencyMs: 1240,
   asrMs: 610,
-  avgLogprob: -0.31,
-  noSpeechProb: 0.02,
-  model: 'base',
+  model: 'parakeet-tdt-0.6b-v3',
 };
 
 const status = (over: Partial<SpeechStatus> = {}): SpeechStatus => ({
   state: 'ready',
-  config: { model: 'base', languages: ['ru', 'en'], vadThreshold: 0.55, glossary: [], accel: 'auto' },
-  modelPath: 'C:\\m\\ggml-base.bin',
+  config: { model: 'parakeet-tdt-0.6b-v3', languages: ['ru', 'en'], vadThreshold: 0.55 },
+  modelPath: 'C:\\m\\parakeet-tdt-0.6b-v3-int8',
   vadReady: true,
   modelsDir: 'C:\\m',
   error: null,
   loadMs: 420,
-  backend: 'CPU · AVX2',
+  backend: 'CPU · ONNX Runtime',
   threads: 4,
+  modelLabel: 'Parakeet TDT 0.6B v3',
   ...over,
 });
 
 describe('speech settings', () => {
   it('maps the UI settings to the Rust config', () => {
-    const c = speechConfigFrom({ model: 'small', vad: 55, src: { ru: true, en: false, de: true, es: false, fr: false, uk: false, pl: false, tr: false }, gloss: GLOSSARY.slice(0, 2) });
-    expect(c).toEqual({ model: 'small', languages: ['ru', 'de'], vadThreshold: 0.55, glossary: ['rush B', 'mid'], accel: 'auto', voiceFocus: false });
-    expect(speechConfigFrom({ model: 'small', vad: 55, src: { ru: true, en: false, de: false, es: false, fr: false, uk: false, pl: false, tr: false }, gloss: [], accel: 'cpu' }).accel).toBe('cpu');
+    const c = speechConfigFrom({ model: 'parakeet-tdt-0.6b-v3', vad: 55, src: { ru: true, en: false, de: true, es: false, fr: false, uk: false, pl: false, tr: false } });
+    expect(c).toEqual({ model: 'parakeet-tdt-0.6b-v3', languages: ['ru', 'de'], vadThreshold: 0.55, voiceFocus: false });
   });
 
   it("listens to the players' languages and to the user's own", () => {
@@ -51,13 +48,13 @@ describe('speech settings', () => {
     expect(speechConfigFrom({ ...useApp.getState(), voiceFocus: true }).voiceFocus).toBe(true);
   });
 
-  it('starts on the same model as the Rust engine (base), so a fresh install works', () => {
-    expect(speechConfigFrom(useApp.getState()).model).toBe('base');
+  it('starts on the same model as the Rust engine, so a fresh install works', () => {
+    expect(speechConfigFrom(useApp.getState()).model).toBe('parakeet-tdt-0.6b-v3');
   });
 
   it('never sends an empty language list or an out-of-range threshold', () => {
     const none = { ru: false, en: false, de: false, es: false, fr: false, uk: false, pl: false, tr: false };
-    const c = speechConfigFrom({ model: 'base', vad: 5, src: none, gloss: [] });
+    const c = speechConfigFrom({ model: 'parakeet-tdt-0.6b-v3', vad: 5, src: none });
     expect(c.languages).toEqual(['ru', 'en']);
     expect(c.vadThreshold).toBe(0.2);
   });
@@ -106,13 +103,9 @@ describe('real transcripts are never presented as French before a real translati
 describe('engine and stats summaries', () => {
   it('describes each engine state', () => {
     expect(engineSummary(null).value).toBe('…');
-    expect(engineSummary(status())).toMatchObject({ value: 'Whisper base', color: '#7fe0a8' });
-    expect(engineSummary(status()).detail).toBe('CPU · AVX2 · 4 threads · chargé en 420 ms');
-    // Automatic fallback: the model that really runs, and why.
-    expect(engineSummary(status({ config: { ...status().config, model: 'small' }, fallbackFrom: 'small' }))).toMatchObject({
-      value: 'Whisper base',
-      detail: 'whisper small trop lent pendant la partie : base utilisé jusqu’à l’arrêt de la capture',
-    });
+    expect(engineSummary(status())).toMatchObject({ value: 'Parakeet TDT 0.6B v3', color: '#7fe0a8' });
+    expect(engineSummary(status()).detail).toBe('CPU · ONNX Runtime · 4 threads · chargé en 420 ms');
+    expect(engineSummary(status({ state: 'missing' })).detail).toBe('Parakeet TDT 0.6B v3 non installé');
     expect(engineSummary(status({ state: 'loading' })).value).toBe('Chargement…');
     expect(engineSummary(status({ state: 'missing' })).value).toBe('Modèle absent');
     expect(engineSummary(status({ state: 'missing', vadReady: false })).detail).toMatch(/silero/);
