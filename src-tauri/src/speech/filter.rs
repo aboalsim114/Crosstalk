@@ -1,54 +1,22 @@
-//! Post-recognition checks: Whisper "hears" words in noise (shots, explosions,
-//! music) and has well-known hallucinations learnt from subtitled videos. A
-//! transcript is shown only if it passes every check here.
+//! Post-recognition checks: a recogniser can still "hear" words in noise
+//! (shots, explosions, music), loop, or write in a script no allowed language
+//! uses. A transcript is shown only if it passes every check here.
 
 use super::types::{Lang, RejectReason};
 
-/// CS2 vocabulary given to Whisper as initial prompt: it biases spelling
-/// ("AWP", "плент") without forcing words that were not said.
-pub const DEFAULT_GLOSSARY: &[&str] = &[
-    "rush B",
-    "mid",
-    "smoke",
-    "flash",
-    "molly",
-    "AWP",
-    "eco",
-    "force buy",
-    "plant",
-    "defuse",
-    "rotate",
-    "плент",
-    "раш",
-    "смок",
-    "флешка",
-    "мид",
-    "эко",
-    "ротейт",
-    "дефьюз",
-    "авп",
-];
-
-/// What Whisper returned for a segment.
+/// What the recogniser returned for a segment.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Recognition {
     pub text: String,
     pub lang: Lang,
+    /// Confidence in `lang` (read from the text, see `engine::identify`).
     pub lang_prob: f32,
-    /// Mean log-probability of the text tokens.
-    pub avg_logprob: f32,
-    /// Probability of the "no speech" token, from the first decoder step.
-    pub no_speech_prob: f32,
 }
 
-/// Rejection thresholds, aligned with OpenAI's reference decoder where it has one.
-pub const NO_SPEECH_MAX: f32 = 0.6;
-pub const NO_SPEECH_LOGPROB: f32 = -0.7;
-pub const LOGPROB_MIN: f32 = -1.0;
 /// Fast speech is ~15 characters per second; more means invented text.
 pub const MAX_CHARS_PER_S: f32 = 28.0;
 
-/// Phrases Whisper produces on silence or noise (normalised: lower case,
+/// Phrases speech recognisers produce on silence or noise (normalised: lower case,
 /// letters and spaces only). Matched as the whole text.
 const HALLUCINATIONS: &[&str] = &[
     "продолжение следует",
@@ -77,7 +45,7 @@ const HALLUCINATIONS: &[&str] = &[
     "смех",
 ];
 
-/// Fragments of subtitle credits that Whisper inserts anywhere.
+/// Fragments of subtitle credits (seen in transcripts of noise).
 const CREDIT_FRAGMENTS: &[&str] = &[
     "субтитры",
     "редактор субтитров",
@@ -168,12 +136,6 @@ pub fn judge(r: &Recognition, audio_ms: u32) -> Result<String, RejectReason> {
     if letters.is_empty() {
         return Err(RejectReason::Empty);
     }
-    if r.no_speech_prob > NO_SPEECH_MAX && r.avg_logprob < NO_SPEECH_LOGPROB {
-        return Err(RejectReason::NoSpeech);
-    }
-    if r.avg_logprob < LOGPROB_MIN {
-        return Err(RejectReason::LowConfidence);
-    }
 
     let norm = normalise(&text);
     if HALLUCINATIONS.contains(&norm.as_str()) || CREDIT_FRAGMENTS.iter().any(|f| norm.contains(f))
@@ -199,11 +161,6 @@ pub fn judge(r: &Recognition, audio_ms: u32) -> Result<String, RejectReason> {
         return Err(RejectReason::WrongScript);
     }
     Ok(text)
-}
-
-/// The raw Whisper text loops (what `judge` rejects as `Repetition`).
-pub fn is_looping(text: &str) -> bool {
-    is_repetitive(&normalise(&clean(text)))
 }
 
 /// Looping output: a word or short phrase repeated over and over.
@@ -245,41 +202,6 @@ fn is_repetitive(norm: &str) -> bool {
     })
 }
 
-/// Initial prompt from the glossary, kept short (Whisper uses at most 224 tokens).
-pub fn prompt_from(glossary: &[String]) -> String {
-    prompt_with(glossary, &[])
-}
-
-/// Glossary, then the callouts of the map being played: the map's callouts
-/// always fit (at the end, nearest to the speech), the glossary fills the rest.
-pub fn prompt_with(glossary: &[String], map: &[String]) -> String {
-    const BUDGET: usize = 400;
-    let map_len: usize = map.iter().map(|t| t.len() + 2).sum();
-    let mut out = String::new();
-    for term in glossary {
-        if out.len() + term.len() + 2 + map_len > BUDGET {
-            break;
-        }
-        if !out.is_empty() {
-            out.push_str(", ");
-        }
-        out.push_str(term);
-    }
-    for term in map {
-        if out.len() + term.len() + 2 > BUDGET {
-            break;
-        }
-        if !out.is_empty() {
-            out.push_str(", ");
-        }
-        out.push_str(term);
-    }
-    if !out.is_empty() {
-        out.push('.');
-    }
-    out
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -289,8 +211,6 @@ mod tests {
             text: text.into(),
             lang,
             lang_prob: 0.9,
-            avg_logprob: -0.3,
-            no_speech_prob: 0.05,
         }
     }
 
@@ -316,25 +236,12 @@ mod tests {
     }
 
     #[test]
-    fn rejects_noise_only_and_low_confidence() {
+    fn rejects_noise_only() {
         assert_eq!(
             judge(&rec("[Музыка]", Lang::Ru), 1000),
             Err(RejectReason::Empty)
         );
         assert_eq!(judge(&rec("...", Lang::En), 1000), Err(RejectReason::Empty));
-        let mut r = rec("Бомба", Lang::Ru);
-        r.no_speech_prob = 0.8;
-        r.avg_logprob = -0.9;
-        assert_eq!(judge(&r, 1000), Err(RejectReason::NoSpeech));
-        r.no_speech_prob = 0.8;
-        r.avg_logprob = -0.2;
-        assert!(
-            judge(&r, 1000).is_ok(),
-            "confident text survives a high no-speech prob"
-        );
-        r.no_speech_prob = 0.1;
-        r.avg_logprob = -1.4;
-        assert_eq!(judge(&r, 1000), Err(RejectReason::LowConfidence));
     }
 
     #[test]
@@ -381,16 +288,11 @@ mod tests {
             Err(RejectReason::Repetition)
         );
         assert!(judge(&rec("go go go, push B", Lang::En), 2000).is_ok());
-        // What triggers a second decoding pass: the same test on the raw text.
-        assert!(is_looping(
-            "they are rotating mid, they are rotating mid, they are rotating mid, they are rotating mid"
-        ));
-        assert!(!is_looping("They are rotating mid, three of them."));
     }
 
     #[test]
-    fn keeps_a_sentence_whisper_repeated_after_hearing_it_once() {
-        // Seen in the app (speaker loopback, whisper base, reduced encoder).
+    fn keeps_a_sentence_repeated_after_hearing_it_once() {
+        // Seen with the former recogniser (speaker loopback).
         assert_eq!(
             judge(
                 &rec(
@@ -449,31 +351,5 @@ mod tests {
             judge(&rec("push B now", Lang::Uk), 1500),
             Err(RejectReason::WrongScript)
         );
-    }
-
-    #[test]
-    fn builds_a_bounded_prompt() {
-        let g: Vec<String> = DEFAULT_GLOSSARY.iter().map(|s| s.to_string()).collect();
-        let p = prompt_from(&g);
-        assert!(p.starts_with("rush B, mid"));
-        assert!(p.ends_with('.'));
-        assert!(p.len() <= 402);
-        assert_eq!(prompt_from(&[]), "");
-        let many: Vec<String> = (0..200).map(|i| format!("term{i}")).collect();
-        assert!(prompt_from(&many).len() <= 402);
-    }
-
-    #[test]
-    fn map_callouts_always_fit_at_the_end() {
-        let many: Vec<String> = (0..200).map(|i| format!("term{i}")).collect();
-        let map: Vec<String> = ["Palace", "Jungle", "Connector"]
-            .iter()
-            .map(|s| s.to_string())
-            .collect();
-        let p = prompt_with(&many, &map);
-        assert!(p.starts_with("term0, "));
-        assert!(p.ends_with("Palace, Jungle, Connector."), "{p}");
-        assert!(p.len() <= 402);
-        assert_eq!(prompt_with(&[], &map), "Palace, Jungle, Connector.");
     }
 }

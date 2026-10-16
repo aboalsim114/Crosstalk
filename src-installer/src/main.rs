@@ -24,9 +24,9 @@ mod downloads;
 mod paths;
 #[allow(dead_code)]
 #[path = "../../src-tauri/src/speech/models.rs"]
-mod whisper_models;
+mod speech_models;
 mod speech {
-    pub(crate) use crate::whisper_models as models;
+    pub(crate) use crate::speech_models as models;
 }
 
 mod install;

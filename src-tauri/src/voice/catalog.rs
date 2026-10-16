@@ -1,6 +1,6 @@
 //! What "Voix IA" downloads: the Piper engine (Windows build, MIT) and the
 //! neural voices (rhasspy/piper-voices on Hugging Face). Sizes are the
-//! published ones; the engine is also checked by SHA-1.
+//! published ones; the engine is also checked by SHA-256.
 
 use std::path::{Path, PathBuf};
 
@@ -12,7 +12,7 @@ use crate::downloads::FileSpec;
 pub const ENGINE_URL: &str =
     "https://github.com/rhasspy/piper/releases/download/2023.11.14-2/piper_windows_amd64.zip";
 pub const ENGINE_BYTES: u64 = 22_477_236;
-pub const ENGINE_SHA1: &str = "48b7ae8a46c07124aacbd112a1ba0ed4a913e3f0";
+pub const ENGINE_SHA256: &str = "f3c58906402b24f3a96d92145f58acba6d86c9b5db896d207f78dc80811efcea";
 const ENGINE_ZIP: &str = "piper_windows_amd64.zip";
 const VOICES_BASE: &str = "https://huggingface.co/rhasspy/piper-voices/resolve/v1.0.0";
 
@@ -221,7 +221,7 @@ pub fn missing(models: &Path, voice_ids: &[String]) -> Vec<FileSpec> {
             url: ENGINE_URL.into(),
             path: engine_zip(models),
             bytes: ENGINE_BYTES,
-            sha1: Some(ENGINE_SHA1),
+            sha256: Some(ENGINE_SHA256),
         });
     }
     for v in voice_ids.iter().filter_map(|id| voice(id)) {
@@ -236,7 +236,7 @@ pub fn missing(models: &Path, voice_ids: &[String]) -> Vec<FileSpec> {
                     url: format!("{VOICES_BASE}/{base}.{ext}"),
                     path,
                     bytes,
-                    sha1: None,
+                    sha256: None,
                 });
             }
         }
@@ -312,7 +312,7 @@ mod tests {
         let _ = std::fs::remove_dir_all(&d);
         let todo = missing(&d, &["ru_RU-irina-medium".into(), "nope".into()]);
         assert_eq!(todo.len(), 3);
-        assert_eq!(todo[0].sha1, Some(ENGINE_SHA1));
+        assert_eq!(todo[0].sha256, Some(ENGINE_SHA256));
         assert!(todo[1]
             .url
             .ends_with("/ru/ru_RU/irina/medium/ru_RU-irina-medium.onnx"));

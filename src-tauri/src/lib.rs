@@ -4,10 +4,10 @@
 //! All native features live here, behind Tauri commands, events and plugins:
 //!
 //! - `audio`     WASAPI capture of cs2.exe (process loopback, device fallback), levels
-//! - `speech`    Silero VAD + whisper.cpp transcription of the captured voices
+//! - `speech`    Silero VAD + Parakeet (sherpa-onnx) transcription of the captured voices
 //! - `translation` translation into the user's language by the LLM the user
 //!   connects: a cloud provider with their own key, or Ollama / LM Studio on this PC
-//! - `pulse`     every 30 s of capture: sound, VAD segments, Whisper and translation counters in the journal
+//! - `pulse`     every 30 s of capture: sound, VAD segments, recognition and translation counters in the journal
 //! - `chat`      CS2 text chat read from console.log
 //! - `game`      CS2 process detection (names and PIDs only, the game is never opened)
 //! - `tray`      notification-area icon; the app keeps running when the window is closed
@@ -56,14 +56,6 @@ use tauri_plugin_autostart::MacosLauncher;
 pub const MINIMIZED_FLAG: &str = "--minimized";
 
 pub fn run() {
-    // GPU test in a separate process (speech::gpu_guard): a driver crash
-    // there only ends this process, never the app.
-    let args: Vec<String> = std::env::args().collect();
-    if let Some(i) = args.iter().position(|a| a == "--gpu-probe") {
-        std::process::exit(speech::gpu_guard::probe_main(
-            args.get(i + 1).map(String::as_str),
-        ));
-    }
     tauri::Builder::default()
         // Must be first: a second launch just focuses the running instance.
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
@@ -90,6 +82,8 @@ pub fn run() {
             speech::speech_models,
             speech::speech_configure,
             speech::speech_rescan,
+            speech::speech_legacy_whisper,
+            speech::speech_legacy_cleanup,
             translation::translation_status,
             wiring::translation_configure,
             translation::translation_rescan,
@@ -214,7 +208,6 @@ pub fn run() {
             app.manage(speaker);
             let gsi = gsi::GsiService::new(Arc::new(gsi::TauriGsiEvents {
                 app: handle.clone(),
-                speech: speech.clone(),
                 translation: translation.clone(),
                 reply,
             }));
@@ -285,7 +278,6 @@ pub fn run() {
                 if let Some(v) = app.try_state::<Arc<voice::VoiceService>>() {
                     v.shutdown();
                 }
-                speech::gpu_guard::clean_exit();
             }
         });
 }

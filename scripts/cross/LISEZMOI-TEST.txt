@@ -6,20 +6,25 @@ Ce que contient ce dossier
 - crosstalk.exe              l'application (version portable, sans installateur)
 - crosstalk-asr-bench.exe    banc d'essai : test en direct sur CS2, mesures
 - crosstalk-audio-probe.exe  diagnostic de la capture audio (déjà validé)
-- download-models.ps1        installe Whisper et la VAD Silero (la traduction
-                             n'utilise aucun modèle téléchargé : c'est le LLM
-                             connecté dans Audio & IA > Traduction IA)
+- download-models.ps1        installe le modèle de reconnaissance vocale
+                             (Parakeet TDT 0.6B v3) et la VAD Silero (la
+                             traduction n'utilise aucun modèle téléchargé :
+                             c'est le LLM connecté dans Audio & IA >
+                             Traduction IA)
 - fetch-asr-corpus.py        corpus de référence FLEURS (facultatif)
-- WebView2Loader.dll, libstdc++-6.dll, libgcc_s_seh-1.dll, libwinpthread-1.dll
-                             DLL nécessaires : gardez-les à côté des .exe
+- WebView2Loader.dll, sherpa-onnx-c-api.dll, onnxruntime.dll,
+  onnxruntime_providers_shared.dll
+                             DLL nécessaires (interface, reconnaissance
+                             vocale) : gardez-les à côté des .exe
 - SHA256SUMS.txt             empreintes des exécutables et des DLL
 
 IMPORTANT, à lire avant de tester
 ---------------------------------
 1. Compilé avec gcc (MinGW), et non avec MSVC comme la version officielle, via
    scripts/cross-build-windows-gnu.sh. Le code est exactement celui du
-   commit @COMMIT@ ; seule la chaîne de compilation diffère. Pour une
-   comparaison équitable, voir la section 6.
+   commit @COMMIT@ ; seule la chaîne de compilation diffère. La
+   reconnaissance vocale tourne dans les DLL officielles de sherpa-onnx et
+   d'ONNX Runtime, identiques dans les deux versions.
 2. Non signé : Windows SmartScreen affichera un avertissement
    (« Informations complémentaires » > « Exécuter quand même »).
 3. Fermez la version installée de Crosstalk (icône de la zone de
@@ -31,24 +36,25 @@ IMPORTANT, à lire avant de tester
    envoyé, jamais l'audio ni les pseudos). Sans moteur connecté, les
    phrases restent dans leur langue d'origine.
 
-1. Installer les modèles (Whisper base + VAD : environ 150 Mo)
---------------------------------------------------------------
+1. Installer les modèles (Parakeet + VAD : environ 671 Mo)
+----------------------------------------------------------
 PowerShell, dans ce dossier :
 
-    powershell -ExecutionPolicy Bypass -File .\download-models.ps1 -Models base
+    powershell -ExecutionPolicy Bypass -File .\download-models.ps1
 
 Test rapide de la traduction (CS2 fermé) : crosstalk.exe > Audio & IA >
 Traduction IA > « Tester une traduction », après avoir connecté un moteur.
 
 Les fichiers vont dans %LOCALAPPDATA%\Crosstalk\models. Le script vérifie la
-taille exacte et le SHA-1 officiel, puis affiche le SHA-256 : notez celui de
-ggml-silero-v5.1.2.bin.
-(Facultatif, plus précis mais plus lent : -Models base,small)
+taille exacte et le SHA-256 de chaque fichier ; un téléchargement coupé
+reprend là où il s'est arrêté quand on relance le script.
+Les anciens fichiers Whisper (ggml-*.bin) ne sont plus utilisés : Audio & IA
+propose de les supprimer, rien n'est effacé sans votre accord.
 
 2. Test de fumée, CS2 fermé (1 minute)
 --------------------------------------
     .\crosstalk-asr-bench.exe --vad-only --noise-only 60
-    .\crosstalk-asr-bench.exe --noise-only 60 --model base
+    .\crosstalk-asr-bench.exe --noise-only 60
 
 Attendu : « 0 fausses transcriptions affichées ».
 
@@ -64,18 +70,19 @@ Source de voix russe, au choix :
 3a. Mesure en ligne de commande, la plus précise
     Pendant la partie, dans un terminal :
 
-        .\crosstalk-asr-bench.exe --live 300 --model base
+        .\crosstalk-asr-bench.exe --live 300
 
-    Chaque phrase s'affiche : [RU] « ... » (audio, Whisper, latence).
+    Chaque phrase s'affiche : [RU] « ... » (audio, reconnaissance, latence).
     Au bout de 300 s, un bilan donne : segments, transcrits, rejets,
     latence p50 / p95, CPU moyen.
     Copiez TOUTE la sortie dans un fichier texte.
-    Variante si c'est lent : ajoutez --threads 6 (sans dépasser le nombre
-    de cœurs physiques) et comparez.
+    Variante si c'est lent : ajoutez --threads 2 ou --threads 4 et
+    comparez (4 fils par défaut au plus, la moitié des processeurs).
 
 3b. Dans l'application
     Lancez crosstalk.exe :
-    - Audio & IA : carte « Modèle local » = Whisper base (vert).
+    - Audio & IA : carte « Reconnaissance vocale » = Parakeet TDT 0.6B v3
+      (vert, « chargé en ... »).
     - Accueil > Démarrer.
     Quand un joueur parle russe :
     - « ● PAROLE DÉTECTÉE » apparaît en haut à droite ;
@@ -108,24 +115,9 @@ E) Impact FPS             : même scène (carte d'atelier « CS2 FPS
 5. Résultats à me renvoyer
 --------------------------
     Windows 11 build 26200 · CPU : ... · RAM : ... · GPU : ...
-    SHA-256 Silero : ...
     Test 2 : ... fausses transcriptions
     Test 3a (sortie complète collée) - latence p50 ... / p95 ..., CPU ... %
     C / P / F / manquées : ... / ... / ... / ...
     Faux positifs (2 min de combat sans parole) : ...
     FPS sans / avec : ... / ...  (1 % low : ... / ...)
     Application (3b) : ✅ / ❌ + remarques
-
-6. Comparaison gcc / MSVC (pour décider du compilateur)
--------------------------------------------------------
-Construisez la version officielle MSVC du même commit sur votre PC
-(scripts\validate.ps1, voir CONTRIBUTING.md). Lancez exactement la même
-commande avec les deux crosstalk-asr-bench.exe, sur le même fichier, CS2
-fermé :
-
-    .\crosstalk-asr-bench.exe --manifest mes-wav.tsv --scenario clean --model base
-
-(mes-wav.tsv : voir docs/testing/speech-recognition.md §1.4 ; un WAV
-enregistré avec crosstalk-audio-probe.exe --seconds 30 --wav partie.wav
-convient). Comparez la colonne « Whisper p50 / p95 ». Je ne changerai le
-compilateur de la version officielle qu'au vu de cette comparaison.

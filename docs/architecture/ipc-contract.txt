@@ -61,6 +61,8 @@ speaker_configure
 speaker_status
 speaker_test
 speech_configure
+speech_legacy_cleanup
+speech_legacy_whisper
 speech_models
 speech_rescan
 speech_stats

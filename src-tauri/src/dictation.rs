@@ -1,6 +1,6 @@
 //! Spoken reply: the user presses Ctrl+Alt+F6 (or "Dicter"), says a sentence
 //! in French; Crosstalk records the default microphone until the end of the
-//! sentence (or a second press), transcribes it with Whisper, translates it to
+//! sentence (or a second press), transcribes it with the speech recogniser, translates it to
 //! the teammates' language (src/features/reply) and copies it to the clipboard, ready to
 //! paste in CS2's chat. The microphone is only open while the user dictates
 //! (F-22, F-50); the audio stays in memory and is dropped afterwards.

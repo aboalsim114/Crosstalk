@@ -1,58 +1,45 @@
-# Downloads the speech models used by Crosstalk (Whisper and the Silero VAD)
-# into %LOCALAPPDATA%\Crosstalk\models and checks them, without the app
-# (offline PC, test machine). Crosstalk downloads them itself otherwise.
+# Downloads the speech models used by Crosstalk (Parakeet TDT 0.6B v3 for
+# sherpa-onnx, and the Silero VAD) into %LOCALAPPDATA%\Crosstalk\models and
+# checks them, without the app (offline PC, test machine). Crosstalk
+# downloads them itself otherwise. Interrupted downloads resume (curl.exe -C).
 # Translation needs no model file: it is done by the LLM the user connects
 # (Audio & IA > Traduction IA), a cloud provider or Ollama / LM Studio.
 #
-#   powershell -ExecutionPolicy Bypass -File scripts\download-models.ps1                    # base + VAD
-#   powershell -ExecutionPolicy Bypass -File scripts\download-models.ps1 -Models tiny,base,small
+#   powershell -ExecutionPolicy Bypass -File scripts\download-models.ps1
 #
 # The table below copies the catalogue of src-tauri/src/speech/models.rs; a
-# Rust test checks they stay equal.
+# Rust test checks that every SHA-256 is here.
 param(
-  [string[]]$Models = @('base'),
   [string]$Dir = (Join-Path $env:LOCALAPPDATA 'Crosstalk\models')
 )
 $ErrorActionPreference = 'Stop'
-$ProgressPreference = 'SilentlyContinue'
-# With powershell -File, "tiny,base" arrives as one string: split it.
-$Models = @($Models | ForEach-Object { $_ -split ',' } | Where-Object { $_ })
 
-# Exact sizes (Hugging Face) and SHA-1 (whisper.cpp models/README.md).
-$catalog = @{
-  'tiny'           = @{ File = 'ggml-tiny.bin';                Size = 77691713;   Sha1 = 'bd577a113a864445d4c299885e0cb97d4ba92b5f' }
-  'base'           = @{ File = 'ggml-base.bin';                Size = 147951465;  Sha1 = '465707469ff3a37a2b9b8d8f89f2f99de7299dac' }
-  'small'          = @{ File = 'ggml-small.bin';               Size = 487601967;  Sha1 = '55356645c2b361a969dfd0ef2c5a50d530afd8d5' }
-  'medium'         = @{ File = 'ggml-medium.bin';              Size = 1533763059; Sha1 = 'fd9727b6e1217c2f614f9b698455c4ffd82463b4' }
-  'large-v3-turbo' = @{ File = 'ggml-large-v3-turbo-q5_0.bin'; Size = 574041195;  Sha1 = 'e050f7970618a659205450ad97eb95a18d69c9ee' }
-}
-$vad = @{ File = 'ggml-silero-v5.1.2.bin'; Size = 885098 }
+# Licences: Parakeet TDT 0.6B v3 (NVIDIA) CC-BY-4.0; Silero VAD MIT.
+$parakeet = 'https://huggingface.co/csukuangfj/sherpa-onnx-nemo-parakeet-tdt-0.6b-v3-int8/resolve/main'
+$files = @(
+  @{ Url = 'https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/silero_vad.onnx'; Path = 'silero_vad.onnx'; Size = 643854; Sha256 = '9e2449e1087496d8d4caba907f23e0bd3f78d91fa552479bb9c23ac09cbb1fd6' }
+  @{ Url = "$parakeet/encoder.int8.onnx"; Path = 'parakeet-tdt-0.6b-v3-int8\encoder.int8.onnx'; Size = 652184281; Sha256 = 'acfc2b4456377e15d04f0243af540b7fe7c992f8d898d751cf134c3a55fd2247' }
+  @{ Url = "$parakeet/decoder.int8.onnx"; Path = 'parakeet-tdt-0.6b-v3-int8\decoder.int8.onnx'; Size = 11845275; Sha256 = '179e50c43d1a9de79c8a24149a2f9bac6eb5981823f2a2ed88d655b24248db4e' }
+  @{ Url = "$parakeet/joiner.int8.onnx"; Path = 'parakeet-tdt-0.6b-v3-int8\joiner.int8.onnx'; Size = 6355277; Sha256 = '3164c13fc2821009440d20fcb5fdc78bff28b4db2f8d0f0b329101719c0948b3' }
+  @{ Url = "$parakeet/tokens.txt"; Path = 'parakeet-tdt-0.6b-v3-int8\tokens.txt'; Size = 93939; Sha256 = 'd58544679ea4bc6ac563d1f545eb7d474bd6cfa467f0a6e2c1dc1c7d37e3c35d' }
+)
 
-New-Item -ItemType Directory -Force -Path $Dir | Out-Null
-
-function Get-Model($url, $path, $size, $sha1) {
-  if ((Test-Path $path) -and (Get-Item $path).Length -eq $size) {
-    Write-Host "deja present : $path"
+foreach ($f in $files) {
+  $path = Join-Path $Dir $f.Path
+  New-Item -ItemType Directory -Force -Path (Split-Path -Parent $path) | Out-Null
+  if ((Test-Path $path) -and (Get-Item $path).Length -eq $f.Size) {
+    Write-Host "deja present : $($f.Path)"
   } else {
-    Write-Host "telechargement : $url"
-    Invoke-WebRequest -Uri $url -OutFile "$path.part"
+    Write-Host "telechargement : $($f.Url)"
+    curl.exe -fL --retry 3 -C - -o "$path.part" $f.Url
+    if ($LASTEXITCODE -ne 0) { throw "telechargement interrompu : relancez le script pour reprendre ($($f.Path))" }
     Move-Item -Force "$path.part" $path
   }
   $len = (Get-Item $path).Length
-  if ($len -ne $size) { throw "taille inattendue pour $path : $len au lieu de $size" }
-  if ($sha1) {
-    $h = (Get-FileHash -Algorithm SHA1 $path).Hash.ToLower()
-    if ($h -ne $sha1) { Remove-Item $path; throw "SHA-1 invalide pour $path" }
-  }
-  $h256 = (Get-FileHash -Algorithm SHA256 $path).Hash.ToLower()
-  Write-Host "ok : $(Split-Path -Leaf $path)  sha256 $h256"
-}
-
-Get-Model "https://huggingface.co/ggml-org/whisper-vad/resolve/main/$($vad.File)" (Join-Path $Dir $vad.File) $vad.Size $null
-foreach ($m in $Models) {
-  $spec = $catalog[$m]
-  if (-not $spec) { throw "modele inconnu : $m (choix : $($catalog.Keys -join ', '))" }
-  Get-Model "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/$($spec.File)" (Join-Path $Dir $spec.File) $spec.Size $spec.Sha1
+  if ($len -ne $f.Size) { throw "taille inattendue pour $($f.Path) : $len au lieu de $($f.Size)" }
+  $h = (Get-FileHash -Algorithm SHA256 $path).Hash.ToLower()
+  if ($h -ne $f.Sha256) { Remove-Item $path; throw "SHA-256 invalide pour $($f.Path) : fichier supprime, relancez le script" }
+  Write-Host "ok : $($f.Path)"
 }
 
 Write-Host "Modeles installes dans $Dir. Dans Crosstalk : Audio & IA > Rechercher les modeles."

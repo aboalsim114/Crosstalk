@@ -8,18 +8,14 @@
 //!                                       [queue of 3, drops the oldest segment]
 //!                                                              ▼
 //!                                         speech-asr thread (normal priority)
-//!                                         stale check, Whisper, filter ──▶ events
+//!                                         stale check, recogniser, filter ──▶ events
 //! ```
 //!
 //! While someone speaks, the open segment is also transcribed every second
-//! (from 1.5 s on) when Whisper is idle: these **partial** transcripts let the
+//! (from 1.5 s on) when the recogniser is idle: these **partial** transcripts let the
 //! UI show the words live. The final transcript of the segment, with the same
 //! id, replaces them; if the segment is finally rejected, `retract` removes
 //! the line. Final segments always go first.
-//!
-//! When a heavy model cannot keep up during a capture (CS2 taking the
-//! processor), the service switches to whisper-base until the capture stops
-//! (`fallback`).
 //!
 //! Nothing is written to disk. `purge` (stop, emergency, CS2 closed) drops the
 //! open segment, the queue and any result still being computed.
@@ -32,7 +28,6 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use super::engine::{default_threads, sanitize_threads, Recognizer};
-use super::filter::prompt_with;
 use super::segmenter::Segment;
 use super::types::{
     EngineState, RejectReason, SpeechConfig, SpeechStats, SpeechStatus, Transcript, VoiceActivity,
@@ -41,22 +36,20 @@ use super::vad::VoiceDetector;
 use super::SpeechError;
 
 mod asr;
-mod fallback;
 mod front;
 mod queue;
 mod stats;
 
 use asr::asr_loop;
-use fallback::{is_light, Lag, LagWatch, FALLBACK_MODEL};
 use front::front_loop;
 pub use front::SpeechSink;
 use queue::JobQueue;
 use stats::StatsAcc;
 
-/// Segments older than this when Whisper gets to them are dropped: a callout
+/// Segments older than this when the recogniser gets to them are dropped: a callout
 /// shown 6 s late is misleading.
 pub const STALE_AFTER: Duration = Duration::from_secs(6);
-/// Segments waiting for Whisper; the oldest is dropped beyond this.
+/// Segments waiting for the recogniser; the oldest is dropped beyond this.
 pub const QUEUE_CAPACITY: usize = 3;
 /// Captured blocks buffered between the capture and the VAD (~10 ms each).
 const CHANNEL_BLOCKS: usize = 256;
@@ -66,11 +59,11 @@ pub const VAD_HOP_FRAMES: usize = 6;
 pub const PARTIAL_MIN_FRAMES: usize = 47;
 /// ...and this much new audio since the previous one (31 x 32 ms = 1 s).
 pub const PARTIAL_STEP_FRAMES: usize = 31;
-/// Live lines stop while Whisper needs more than this share of the audio
+/// Live lines stop while the recogniser needs more than this share of the audio
 /// duration: the final lines must not wait behind them.
 pub const PARTIAL_MAX_RTF: f32 = 0.5;
 /// A final segment this late after the voice ended, whose live line is on
-/// screen, becomes final with that live text instead of waiting for Whisper.
+/// screen, becomes final with that live text instead of waiting for the recogniser.
 pub const LIVE_FALLBACK_AFTER: Duration = Duration::from_secs(3);
 
 pub trait SpeechEvents: Send + Sync + 'static {
@@ -82,14 +75,14 @@ pub trait SpeechEvents: Send + Sync + 'static {
     fn retract(&self, id: u64);
 }
 
-/// Loads the models (whisper.cpp in the app, fakes in tests).
+/// Loads the models (sherpa-onnx in the app, fakes in tests).
 pub trait EngineLoader: Send + Sync + 'static {
     fn load_detector(&self, dir: &Path) -> Result<Box<dyn VoiceDetector>, SpeechError>;
     fn load_recognizer(
         &self,
         dir: &Path,
         model: &str,
-        accel: super::types::Accel,
+        threads: usize,
     ) -> Result<Box<dyn Recognizer>, SpeechError>;
     /// Path of the model file if installed (for the status).
     fn model_path(&self, dir: &Path, model: &str) -> Option<PathBuf>;
@@ -123,9 +116,9 @@ struct Live {
     shown: std::collections::HashSet<u64>,
     closed: VecDeque<u64>,
     /// Last live transcript of each shown utterance: the final line when the
-    /// segment comes too late for another Whisper pass.
+    /// segment comes too late for another recognition pass.
     last: std::collections::HashMap<u64, Transcript>,
-    /// Whisper time of the last live transcript, to pace the next ones.
+    /// Recogniser time of the last live transcript, to pace the next ones.
     partial_ms: u32,
 }
 
@@ -145,8 +138,6 @@ struct Inner {
     loader: Arc<dyn EngineLoader>,
     models_dir: PathBuf,
     config: Mutex<SpeechConfig>,
-    /// Callouts of the map being played (Game State Integration).
-    map_prompt: Mutex<Vec<String>>,
     engine: Mutex<EngineSlot>,
     recognizer: Mutex<Option<Box<dyn Recognizer>>>,
     queue: JobQueue,
@@ -165,81 +156,9 @@ struct Inner {
     /// "Focus voix" on (read by the capture thread).
     focus: AtomicBool,
     focus_db: Mutex<Option<f32>>,
-    /// Signs that Whisper cannot keep up, during the current capture.
-    lag: Mutex<LagWatch>,
-    /// The chosen model while whisper-base replaces it (until the capture stops).
-    fallback: Mutex<Option<String>>,
-    /// whisper-base missing when a fallback was needed: said once.
-    fallback_missing_said: AtomicBool,
 }
 
 impl Inner {
-    /// The model that should be loaded: the chosen one, or whisper-base
-    /// while it replaces it.
-    fn wanted_model(&self, config: &SpeechConfig) -> String {
-        match self.fallback.lock().unwrap().as_ref() {
-            Some(_) => FALLBACK_MODEL.to_string(),
-            None => config.model.clone(),
-        }
-    }
-
-    /// The loaded model, if it may transcribe: the wanted one, or the chosen
-    /// one while whisper-base is still loading to replace it.
-    fn usable_model(&self, config: &SpeechConfig) -> Option<String> {
-        let loaded = self.engine.lock().unwrap().loaded_model.clone()?;
-        let falling_back = self.fallback.lock().unwrap().is_some();
-        (loaded == self.wanted_model(config) || (falling_back && loaded == config.model))
-            .then_some(loaded)
-    }
-
-    /// Records a sign that Whisper cannot keep up with a heavy model.
-    fn note_lag(&self, lag: Lag) {
-        if is_light(&self.config.lock().unwrap().model) || self.fallback.lock().unwrap().is_some() {
-            return;
-        }
-        self.lag.lock().unwrap().note(lag, Instant::now());
-    }
-
-    /// Switches to whisper-base when the chosen model keeps lagging.
-    fn check_fallback(self: &Arc<Self>) {
-        let summary = {
-            let mut lag = self.lag.lock().unwrap();
-            if !lag.lagging() {
-                return;
-            }
-            let summary = lag.summary();
-            lag.clear();
-            summary
-        };
-        let chosen = self.config.lock().unwrap().model.clone();
-        if is_light(&chosen) || self.fallback.lock().unwrap().is_some() {
-            return;
-        }
-        if self
-            .loader
-            .model_path(&self.models_dir, FALLBACK_MODEL)
-            .is_none()
-        {
-            if !self.fallback_missing_said.swap(true, Ordering::SeqCst) {
-                crate::logs::warn(
-                    "asr",
-                    &format!(
-                        "whisper-{chosen} trop lent sur ce PC ({summary} en 1 min), et whisper-{FALLBACK_MODEL} n'est pas installé : installez-le (Audio & IA)"
-                    ),
-                );
-            }
-            return;
-        }
-        *self.fallback.lock().unwrap() = Some(chosen.clone());
-        crate::logs::warn(
-            "asr",
-            &format!(
-                "whisper-{chosen} trop lent sur ce PC ({summary} en 1 min) : bascule sur whisper-{FALLBACK_MODEL} jusqu'à l'arrêt de la capture"
-            ),
-        );
-        load_models(self, None);
-    }
-
     fn stats_snapshot(&self) -> SpeechStats {
         let mut s = self
             .stats
@@ -254,8 +173,7 @@ impl Inner {
         let config = self.config.lock().unwrap().clone();
         let e = self.engine.lock().unwrap();
         let model_path = self.loader.model_path(&self.models_dir, &config.model);
-        let wanted = self.wanted_model(&config);
-        let recognizer_ready = e.loaded_model.as_deref() == Some(wanted.as_str());
+        let recognizer_ready = e.loaded_model.as_deref() == Some(config.model.as_str());
         let state = if e.loading {
             EngineState::Loading
         } else if e.error.is_some() {
@@ -277,7 +195,9 @@ impl Inner {
                 .clone()
                 .unwrap_or_else(|| self.loader.backend()),
             threads: self.threads as u32,
-            fallback_from: self.fallback.lock().unwrap().clone(),
+            model_label: super::models::spec_or_default(&config.model)
+                .label
+                .to_string(),
             config,
         }
     }
@@ -354,14 +274,10 @@ impl SpeechService {
         let inner = Arc::new(Inner {
             focus: AtomicBool::new(focus),
             focus_db: Mutex::new(None),
-            lag: Mutex::new(LagWatch::default()),
-            fallback: Mutex::new(None),
-            fallback_missing_said: AtomicBool::new(false),
             events,
             loader,
             models_dir,
             config: Mutex::new(config.sanitized()),
-            map_prompt: Mutex::new(Vec::new()),
             engine: Mutex::new(EngineSlot {
                 loading: false,
                 error: None,
@@ -395,10 +311,9 @@ impl SpeechService {
         let inner = svc.inner.clone();
         std::thread::Builder::new()
             .name("speech-asr".into())
-            // Normal priority, like the game: whisper.cpp splits each step
-            // between this thread and its workers, which wait for it at every
-            // barrier. Below normal, CS2 starved it and a 2 s sentence took
-            // up to 60 s (journal of 16 October, whisper-base 1.2x to 29x).
+            // Normal priority, like the game: the inference library splits
+            // each step between this thread and its workers, which wait for
+            // it. Below normal, CS2 starved it (decision D-13).
             .spawn(move || asr_loop(&inner))
             .expect("spawn speech-asr thread");
 
@@ -421,22 +336,13 @@ impl SpeechService {
     /// The user's dictated reply (16 kHz mono) in their language, with the
     /// model that transcribes the game: waits for a callout in progress, then runs.
     pub fn dictate(&self, samples: &[f32], lang: &str) -> Result<String, String> {
-        let prompt = {
-            let config = self.inner.config.lock().unwrap();
-            prompt_with(&config.glossary, &self.inner.map_prompt.lock().unwrap())
-        };
         let mut slot = self.inner.recognizer.lock().unwrap();
         let recognizer = slot
             .as_mut()
-            .ok_or("modèle Whisper pas encore chargé (Audio & IA)")?;
+            .ok_or("modèle de reconnaissance pas encore chargé (Audio & IA)")?;
         recognizer
-            .transcribe_in(samples, lang, &prompt, self.inner.threads)
+            .transcribe_in(samples, lang)
             .map_err(|e| e.to_string())
-    }
-
-    /// Callouts of the map being played, added to Whisper's prompt (A-06).
-    pub fn set_map_prompt(&self, callouts: Vec<String>) {
-        *self.inner.map_prompt.lock().unwrap() = callouts;
     }
 
     /// Applies new settings; reloads the model only if it changed.
@@ -444,14 +350,12 @@ impl SpeechService {
         let config = config.sanitized();
         let model_changed = {
             let mut c = self.inner.config.lock().unwrap();
-            let changed = c.model != config.model || c.accel != config.accel;
+            let changed = c.model != config.model;
             *c = config.clone();
             self.inner.focus.store(config.voice_focus, Ordering::SeqCst);
             changed
         };
         if model_changed {
-            // An explicit choice ends any automatic fallback.
-            *self.inner.fallback.lock().unwrap() = None;
             self.purge();
             self.reload(false);
         }
@@ -470,25 +374,11 @@ impl SpeechService {
         load_models(&self.inner, with_vad.then(|| self.front.clone()));
     }
 
-    /// The capture stopped: back to the chosen model after a fallback.
-    pub fn end_session(&self) {
-        self.inner.lag.lock().unwrap().clear();
-        let Some(chosen) = self.inner.fallback.lock().unwrap().take() else {
-            return;
-        };
-        crate::logs::info(
-            "asr",
-            &format!("capture arrêtée : retour à whisper-{chosen}"),
-        );
-        self.reload(false);
-    }
-
     /// Drops everything in flight: open segment, queued segments, running result.
     pub fn purge(&self) {
         let _publication = self.inner.publication.lock().unwrap();
         self.inner.generation.fetch_add(1, Ordering::SeqCst);
         self.inner.queue.clear();
-        self.inner.lag.lock().unwrap().clear();
         let shown: Vec<u64> = {
             let mut live = self.inner.live.lock().unwrap();
             live.last.clear();
@@ -539,20 +429,17 @@ fn load_models(inner: &Arc<Inner>, front: Option<SyncSender<FrontMsg>>) {
                 }
             }
             loop {
-                let (model, accel) = {
-                    let c = inner.config.lock().unwrap();
-                    (inner.wanted_model(&c), c.accel)
-                };
+                let model = inner.config.lock().unwrap().model.clone();
                 let result = inner
                     .loader
-                    .load_recognizer(&inner.models_dir, &model, accel);
+                    .load_recognizer(&inner.models_dir, &model, inner.threads);
                 // Configuration may change during a slow load. Never install a
                 // superseded model, and keep loading until the current one wins.
                 // Wait for in-flight inference without holding the settings
                 // lock: status/configure must remain responsive.
                 let mut recognizer = inner.recognizer.lock().unwrap();
                 let config = inner.config.lock().unwrap();
-                if inner.wanted_model(&config) != model || config.accel != accel {
+                if config.model != model {
                     continue;
                 }
                 let mut error = detector_error.take();
