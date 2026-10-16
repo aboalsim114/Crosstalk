@@ -4,7 +4,7 @@ Sur Windows, avec l'application installée.
 
 | # | Action | Résultat attendu |
 | --- | --- | --- |
-| 1 | Lancer Crosstalk, ouvrir **Diagnostic** | Le journal (à droite) montre des lignes réelles horodatées : version et build, `cs2`, `asr` (whisper), `translation` (ru→fr, en→fr), `chat`. Le libellé indique « LOGS · 7 JOURS ». |
+| 1 | Lancer Crosstalk, ouvrir **Diagnostic** | Le journal (à droite) montre des lignes réelles horodatées : version et build, `cs2`, `asr` (Parakeet, CPU), `translation` (ru→fr, en→fr), `chat`. Le libellé indique « LOGS · 7 JOURS ». |
 | 2 | Lancer puis fermer CS2, démarrer puis arrêter une session | Lignes `cs2.exe lancé (PID …)`, `capture : cs2.exe ciblé…`, `capture arrêtée (user)`, `cs2.exe non lancé`. Une ligne par changement, pas de répétition. |
 | 3 | Laisser passer des phrases (voix et chat) | **Aucune** phrase, traduction ni pseudo n'apparaît dans le journal. |
 | 4 | Cliquer **Dossier des journaux** | L'Explorateur ouvre `%LOCALAPPDATA%\Crosstalk\logs` avec `crosstalk-<date>.log` ; le contenu correspond à l'écran. Le nom d'utilisateur Windows est remplacé par `[utilisateur]` dans les chemins. |

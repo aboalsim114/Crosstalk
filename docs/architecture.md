@@ -47,7 +47,7 @@ Le découpage se fait d'abord en **modules** de la crate existante (`src-tauri/s
 | `audio::capture` | WASAPI process loopback (repli : périphérique), format imposé 48 kHz float | **thread dédié**, priorité MMCSS « Pro Audio » |
 | `audio::dsp` | Passe-bande, rééchantillonnage 16 kHz, (exp.) mid/side, DeepFilterNet | thread DSP |
 | `audio::vad` | VAD Silero (ONNX), validation des segments, pré-roll et post-roll, segments ≤ 8 s | thread DSP |
-| `asr` | Trait `Transcriber`, whisper.cpp, filtre anti-hallucinations | **thread dédié**, priorité normale (voir `speech::service`) |
+| `asr` | Trait `Recognizer`, Parakeet TDT 0.6B v3 via sherpa-onnx (processeur), filtre anti-hallucinations | **thread dédié**, priorité normale (voir `speech::service`) |
 | `translation` | Moteur unique : LLM choisi par l'utilisateur (cloud compatible OpenAI ou Anthropic avec sa clé, Ollama / LM Studio local) ; file bornée, cache LRU, glossaire protégé, délais, pauses de quota, purge | thread `translate`, priorité basse |
 | `speaker` (exp.) | Windows Graphics Capture, détection de l'indicateur, OCR, corrélation, confiance | thread dédié, ~10 Hz, désactivé par défaut |
 | `gsi` | Serveur HTTP local Game State Integration : carte, phase de round | tâche tokio |
@@ -81,7 +81,7 @@ Annuler pendant les deux premières phases supprime le dossier temporaire : une 
 | session → UI | événements Tauri | — | l'overlay ne garde que les N derniers blocs |
 
 - Le thread de capture ne fait **aucune** allocation ni opération bloquante.
-- Whisper n'est **jamais** exécuté sur un worker tokio : il est bloquant et long.
+- La reconnaissance vocale n'est **jamais** exécutée sur un worker tokio : il est bloquant et long.
 - L'arrêt d'urgence ferme toutes les sources et vide toutes les files en moins de 200 ms.
 
 ## 5. Horloge commune et latence
@@ -106,7 +106,7 @@ Annuler pendant les deux premières phases supprime le dossier temporaire : une 
 | `audio.level` | niveau RMS, `speaking` (≤ 15 Hz) | anneau d'onde 3D, indicateur VAD |
 | `diagnostic` | composant, niveau, message expurgé | écran Diagnostic |
 
-Événements déjà en place pour la voix : `speech://transcript` (`id` d'énoncé, `partial`, texte, langue, latences). Pendant la parole, des transcriptions **partielles** (`partial: true`, environ une par seconde dès 1,5 s, quand Whisper est libre) partagent l'`id` de la transcription finale, qui les remplace. Seule la finale est traduite. Si le segment est finalement rejeté, `speech://retract` (`id`) retire la ligne en direct.
+Événements déjà en place pour la voix : `speech://transcript` (`id` d'énoncé, `partial`, texte, langue, latences). Pendant la parole, des transcriptions **partielles** (`partial: true`, environ une par seconde dès 1,5 s, quand la reconnaissance est libre) partagent l'`id` de la transcription finale, qui les remplace. Seule la finale est traduite. Si le segment est finalement rejeté, `speech://retract` (`id`) retire la ligne en direct.
 
 Commandes (interface → Rust) : `session_start`, `session_stop`, `session_pause`, `emergency_stop`, `settings_get` / `settings_set`, `glossary_*`, `model_download`, `audio_test`, `diagnostics_run`, plus `overlay_configure` (existante).
 

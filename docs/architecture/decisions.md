@@ -15,7 +15,7 @@ Chaque décision indique le contexte, le choix et ce qui le remettrait en cause.
   |---|---|---|
   | Domaine | Règles pures, sans E/S ni thread | `speech/segmenter.rs`, `speech/filter.rs`, `translation/models.rs`, `translation/glossary.rs`, `chat/lang.rs`, `chat/parser.rs` |
   | Application | Services : threads, files bornées, purge, état | `speech/service/`, `translation/service/`, `audio/service.rs`, `chat/mod.rs` (`ChatService`) |
-  | Infrastructure | Système, modèles, réseau, disque | `audio/wasapi.rs`, `speech/engine.rs` (whisper.cpp), `translation/marian.rs`, `downloads.rs` (`HttpFetcher`) |
+  | Infrastructure | Système, modèles, réseau, disque | `audio/wasapi.rs`, `speech/engine.rs` (sherpa-onnx), `translation/marian.rs`, `downloads.rs` (`HttpFetcher`) |
   | IPC | Commandes `#[tauri::command]` et adaptateurs `Tauri*Events` | `<module>/mod.rs` |
   | Composition | Création des services et colle entre eux | `lib.rs`, `wiring.rs` |
 
@@ -94,8 +94,32 @@ Chaque décision indique le contexte, le choix et ce qui le remettrait en cause.
 
   On les documente ([modules.md](modules.md#contrats-des-moteurs-dia)) et on les rend visibles : `translation/engine.rs`. On n'en ajoute pas sans second moteur réel. TranslateGemma (PR #60, en attente) s'est branché sur `translation::EngineLoader` sans modifier le service, ce qui montre que le contrat suffit. Les fichiers de modèles installés et leurs chemins ne changent pas.
 - **Remise en cause** : un second moteur de reconnaissance vocale.
+- **Suite** : [D-14](#d-14--reconnaissance-vocale--parakeet-tdt-06b-v3-via-sherpa-onnx-whisper-retiré) a remplacé whisper.cpp par sherpa-onnx derrière les mêmes traits (`Recognizer`, `EngineLoader`, `VoiceDetector`). Le volet GPU de ces contrats n'existe plus.
 
 ## D-13 — Whisper en priorité normale
 - **Contexte** : `speech-asr` tournait en priorité « inférieure à la normale » pour laisser le processeur à CS2. Journal du 16 octobre (build 276, whisper-base, processeur seul) : calcul de 1,2× à 29× la durée de voix, la plupart des segments jetés « trop tard ». whisper.cpp découpe chaque étape entre le fil appelant et ses fils de travail, qui l'attendent à chaque barrière : le fil appelant, affamé par CS2, ralentissait tout le calcul.
 - **Choix** : `speech-asr` reste en priorité normale, comme le jeu ; le nombre de fils de calcul reste limité (moitié des processeurs logiques, 4 au plus). La traduction (requêtes au LLM) garde la priorité basse.
 - **Remise en cause** : une baisse de FPS mesurée dans CS2 ; on réduirait alors le nombre de fils plutôt que la priorité.
+- **Depuis D-14** : volet Whisper remplacé par D-14 (whisper.cpp retiré) ; le choix de priorité reste appliqué tel quel à sherpa-onnx / ONNX Runtime (`speech-asr` en priorité normale, moitié des processeurs logiques, de 1 à 4 fils). Son effet avec le nouveau moteur n'a pas été mesuré dans CS2.
+
+## D-14 — Reconnaissance vocale : Parakeet TDT 0.6B v3 via sherpa-onnx, Whisper retiré
+- **Contexte** : Whisper (whisper.cpp via `whisper-rs`, modèles `ggml-*`) demandait CMake et LLVM pour le build, une option GPU Vulkan difficile à livrer en MSVC (CT-002), une bascule automatique sur whisper-base quand le modèle choisi prenait du retard, et inventait du texte sur les bruits de combat. Un banc synthétique a comparé les moteurs locaux gratuits : 517 extraits, voix Piper (ru, en, fr) et bruit de combat synthétique, sur le processeur d'un conteneur (pas l'i7-1165G7 de référence). Détails : [rapport](../reports/asr-engine-replacement.md).
+- **Résultats** :
+  - WER : Parakeet TDT 0.6B v3 46,6 % ; FastConformer multilingue 57,2 % ; whisper-base 60,7 % ;
+  - bruit seul : 1 fausse transcription sur 50 extraits pour Parakeet, 50 sur 50 pour whisper-base ;
+  - p50 ~480 ms par extrait avec 4 fils, ~0,8 Go de mémoire, chargement ~6 s.
+- **Choix** :
+  - reconnaissance : NVIDIA Parakeet TDT 0.6B v3, export int8 ONNX (`parakeet-tdt-0.6b-v3-int8`, ~671 Mo, CC-BY-4.0, 25 langues européennes dont ru, en, fr, de, es, uk, pl ; **pas le turc**) ;
+  - VAD : Silero VAD ONNX (`silero_vad.onnx`, MIT) ;
+  - exécution : sherpa-onnx 1.13.8 (crates officielles, Apache-2.0), API C des bibliothèques précompilées et ONNX Runtime (MIT), DLL livrées à côté de `crosstalk.exe` ; processeur seul, moitié des processeurs logiques, de 1 à 4 fils ;
+  - la langue est lue dans le texte transcrit, parmi les langues autorisées (`chat::lang::detect`) ;
+  - Whisper est retiré entièrement : plus d'option GPU, plus de bascule, plus de moteur de secours, plus d'invite ni de glossaire pour la reconnaissance. Les anciens `ggml-*.bin` ne sont jamais supprimés d'office : Audio & IA propose « Libérer l'espace ».
+- **Écartés** :
+  - Qwen3-ASR : sortie en chinois sur de courts extraits russes, 2 à 3 s par extrait ;
+  - Omnilingual 300M : translittère le russe en alphabet latin ;
+  - GigaAM v2 : russe seulement ;
+  - SenseVoice, Canary 180M : pas de russe ;
+  - Vosk : téléchargement bloqué dans l'environnement de test, modèles plus faibles.
+- **Licences** : vérifiées pour le modèle, la VAD, sherpa-onnx et ONNX Runtime.
+- **Non vérifié** : reconnaissance avec CS2 lancé, latence et CPU en partie, FPS, voix réelles de joueurs.
+- **Remise en cause** : un WER ou des fausses transcriptions nettement moins bons en partie réelle, un temps de calcul qui ne suit pas avec CS2 lancé, ou un besoin du turc à la voix.

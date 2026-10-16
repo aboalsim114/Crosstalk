@@ -56,7 +56,7 @@ Aucune clé n'est demandée, aucun accord d'envoi : rien ne quitte le PC (ou le 
 
 **TranslateGemma** (via Ollama ou LM Studio) est reconnu par son nom : il reçoit son format d'invite officiel (un seul message utilisateur, sans message système).
 
-Un modèle local tourne sur votre carte graphique, en même temps que CS2 et Whisper : vérifiez la latence avec « Tester une traduction » et surveillez vos FPS.
+Un modèle local tourne sur votre carte graphique, en même temps que CS2 et la reconnaissance vocale (sur le processeur) : vérifiez la latence avec « Tester une traduction » et surveillez vos FPS.
 
 ## Ce que voit la carte
 
@@ -66,7 +66,7 @@ Fournisseur, modèle, type (Cloud ou Local), serveur local (Ollama, LM Studio), 
 
 Toutes les fonctions passent par le même service (`src-tauri/src/translation/service`) et le même client LLM (`src-tauri/src/translation/llm`) :
 
-`WASAPI → Silero VAD → Whisper → LLM → Overlay`, ainsi que le chat, « Réponds dans leur langue » (écrite et dictée), les traductions provisoires et finales, l'historique, le mode streamer, le radar, le résumé de partie, le test de traduction et le diagnostic.
+`WASAPI → Silero VAD → Parakeet (sherpa-onnx) → LLM → Overlay`, ainsi que le chat, « Réponds dans leur langue » (écrite et dictée), les traductions provisoires et finales, l'historique, le mode streamer, le radar, le résumé de partie, le test de traduction et le diagnostic.
 
 Pour chaque ligne finale :
 
@@ -100,7 +100,7 @@ Le streaming n'est pas utilisé : une phrase de jeu tient en quelques jetons, la
 
 ## Confidentialité
 
-- **Seul le texte de la ligne est envoyé**, avec la consigne fixe. **Jamais l'audio** (transcrit sur le PC par whisper.cpp), **jamais les pseudos** des joueurs.
+- **Seul le texte de la ligne est envoyé**, avec la consigne fixe. **Jamais l'audio** (transcrit sur le PC par Parakeet via sherpa-onnx), **jamais les pseudos** des joueurs.
 - En **Local**, les transcriptions ne vont qu'au serveur choisi sur ce PC ou le réseau local.
 - En **Cloud**, l'accord d'envoi est demandé avant la première connexion. Lisez les conditions du fournisseur (conservation, entraînement…).
 

@@ -1,0 +1,7 @@
+corpus/
+models/
+results/
+tts/
+venv/
+real.tsv
+__pycache__/

@@ -4,7 +4,7 @@ Vous parlez dans votre langue, vos coéquipiers vous entendent dans la leur.
 
 **Ctrl+Alt+F6**, puis dites « Deux en B, attention au flash ». Crosstalk :
 
-1. transcrit la phrase (Whisper, sur ce PC) ;
+1. transcrit la phrase (Parakeet, sur le processeur de ce PC) ;
 2. la traduit dans la langue de vos coéquipiers (phrases CS toutes prêtes, sinon le LLM connecté dans Audio & IA › Traduction IA) ;
 3. la fait dire par une **voix neuronale locale** (Piper) dans le vocal de CS2 : « Двое на B, осторожно, флешка ».
 
@@ -74,7 +74,7 @@ Les phrases rapides du pop-up sont dites de la même façon. La carte Répondre 
 
 Les voix viennent de [rhasspy/piper-voices](https://huggingface.co/rhasspy/piper-voices) (v1.0.0). Chaque voix a sa propre licence, indiquée dans sa fiche (`MODEL_CARD`).
 
-Le moteur est Piper 2023.11.14-2 pour Windows (licence MIT), depuis les publications GitHub de `rhasspy/piper`. Son archive est vérifiée par taille et SHA-1. Les voix sont vérifiées par leur taille exacte, comme les modèles de traduction.
+Le moteur est Piper 2023.11.14-2 pour Windows (licence MIT), depuis les publications GitHub de `rhasspy/piper`. Son archive est vérifiée par taille et SHA-256. Les voix sont vérifiées par leur taille exacte, comme les modèles de traduction.
 
 ## Fonctionnement
 
