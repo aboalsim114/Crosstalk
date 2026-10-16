@@ -11,7 +11,7 @@
 | `version` | Numéro de build (`CROSSTALK_BUILD`) | — | — |
 | `audio` | Capture WASAPI de `cs2.exe` (par processus, repli périphérique), niveaux, micro de la dictée | `audio-capture` (un par démarrage) | `audio://status`, `audio://level` |
 | `game` | Détection de `cs2.exe` (noms et PID uniquement) | `cs2-watcher` | `cs2://status` |
-| `speech` | Conditionnement, VAD Silero, segmentation, Whisper, filtre anti-hallucinations, statistiques | `speech-vad`, `speech-asr` (priorité basse), `speech-load` | `speech://status`, `speech://stats`, `speech://retract` (+ ceux de `wiring`) |
+| `speech` | Conditionnement, VAD Silero, segmentation, Whisper, filtre anti-hallucinations, statistiques | `speech-vad`, `speech-asr` (priorité normale), `speech-load` | `speech://status`, `speech://stats`, `speech://retract` (+ ceux de `wiring`) |
 | `translation` | Catalogue Opus-MT, routage (direct ou pivot anglais), SentencePiece, Marian (candle), glossaire, lexique d'annonces, cache | `translate` (priorité basse) | `translation://status`, `translation://result` |
 | `chat` | Détection Steam / CS2, `-condebug`, suivi de `console.log`, analyse, langue du message | `chat-tail` | `chat://status` (+ `chat://message` via `wiring`) |
 | `gsi` | Serveur local Game State Integration : carte, phase de round | `gsi` | `gsi://status` |

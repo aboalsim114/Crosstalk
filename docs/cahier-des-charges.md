@@ -285,7 +285,7 @@ La solution retenue est donc l'**analyse du HUD par capture d'image et OCR**.
 
 | Domaine | Exigence |
 | --- | --- |
-| Performance | Latences de la section 1.3. Inférence sur un thread dédié de priorité inférieure au jeu. Overlay redessiné uniquement en cas de changement. Scène 3D de l'interface suspendue quand la fenêtre principale est masquée, et désactivable (mode performance). |
+| Performance | Latences de la section 1.3. Inférence sur un thread dédié, en priorité normale avec un nombre de fils limité (décision D-13 : en priorité basse, Whisper était affamé par le jeu). Overlay redessiné uniquement en cas de changement. Scène 3D de l'interface suspendue quand la fenêtre principale est masquée, et désactivable (mode performance). |
 | Concurrence | Modules isolés reliés par des files bornées. En cas de saturation, les éléments les plus anciens sont abandonnés plutôt que d'accumuler du retard. |
 | Ressources | RAM ≤ 300 Mo hors modèle ; CPU au repos ≤ 1 % ; VRAM ≤ 1,2 Go avec whisper-small. |
 | Configuration minimale | CPU 6 cœurs (2018+), 16 Go de RAM. Recommandée : GPU NVIDIA 6 Go+ (CUDA) ou AMD/Intel (Vulkan). |

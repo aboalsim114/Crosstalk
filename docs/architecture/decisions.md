@@ -94,3 +94,8 @@ Chaque décision indique le contexte, le choix et ce qui le remettrait en cause.
 
   On les documente ([modules.md](modules.md#contrats-des-moteurs-dia)) et on les rend visibles : `translation/engine.rs`. On n'en ajoute pas sans second moteur réel. TranslateGemma (PR #60, en attente) s'est branché sur `translation::EngineLoader` sans modifier le service, ce qui montre que le contrat suffit. Les fichiers de modèles installés et leurs chemins ne changent pas.
 - **Remise en cause** : un second moteur de reconnaissance vocale.
+
+## D-13 — Whisper en priorité normale
+- **Contexte** : `speech-asr` tournait en priorité « inférieure à la normale » pour laisser le processeur à CS2. Journal du 16 octobre (build 276, whisper-base, processeur seul) : calcul de 1,2× à 29× la durée de voix, la plupart des segments jetés « trop tard ». whisper.cpp découpe chaque étape entre le fil appelant et ses fils de travail, qui l'attendent à chaque barrière : le fil appelant, affamé par CS2, ralentissait tout le calcul.
+- **Choix** : `speech-asr` reste en priorité normale, comme le jeu ; le nombre de fils de calcul reste limité (moitié des processeurs logiques, 4 au plus). La traduction (requêtes au LLM) garde la priorité basse.
+- **Remise en cause** : une baisse de FPS mesurée dans CS2 ; on réduirait alors le nombre de fils plutôt que la priorité.

@@ -1,5 +1,14 @@
 [
   {
+    "id": "reconnaissance-plus-rapide-en-partie",
+    "date": "2026-10-16",
+    "title": "Reconnaissance vocale bien plus rapide en partie",
+    "items": [
+      "Pendant une partie, la reconnaissance vocale n'est plus ralentie par CS2 : les phrases de vos coéquipiers arrivent plus vite et sont moins souvent perdues.",
+      "Rien à régler : c'est automatique."
+    ]
+  },
+  {
     "id": "nouveautes-apres-mise-a-jour",
     "date": "2026-10-16",
     "title": "Les nouveautés expliquées à chaque mise à jour",

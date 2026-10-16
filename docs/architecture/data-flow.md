@@ -14,7 +14,7 @@ cs2.exe ──WASAPI (par processus)──► audio-capture
                                        │ JobQueue : 3 segments finaux (plein → le plus ancien est retiré : Overflow)
                                        │            + 1 emplacement de ligne provisoire (remplacé par la plus récente)
                                        ▼
-                         speech-asr (priorité basse)   Whisper, filtre anti-hallucinations
+                         speech-asr (priorité normale) Whisper, filtre anti-hallucinations
                                        │ SpeechEvents::transcript
                                        ▼
                          wiring                        1. nom du locuteur (speaker, si activé)

@@ -49,7 +49,8 @@ pub fn process_cpu_time() -> Option<Duration> {
 }
 
 /// Runs the calling thread below normal priority so the game keeps the CPU
-/// when both compete. No-op outside Windows.
+/// when both compete. No-op outside Windows. Not for Whisper: its worker
+/// threads wait for the calling one at every step (see `speech::service`).
 pub fn lower_current_thread_priority() {
     #[cfg(windows)]
     {
