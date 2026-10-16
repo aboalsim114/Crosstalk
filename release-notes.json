@@ -1,5 +1,15 @@
 [
   {
+    "id": "raccourcis-clavier-de-secours",
+    "date": "2026-10-17",
+    "title": "Ctrl+Alt+F6 et Ctrl+Alt+F7 sont de retour",
+    "items": [
+      "Ctrl+Alt+F7 ouvre de nouveau la fenêtre Répondre, en plus du bouton Mouse 4.",
+      "Ctrl+Alt+F6 lance de nouveau la dictée, en plus du bouton Mouse 5.",
+      "Si les boutons de la souris ne réagissent pas, vérifiez que le logiciel de votre souris ne les a pas réaffectés à une autre fonction."
+    ]
+  },
+  {
     "id": "raccourcis-boutons-souris",
     "date": "2026-10-17",
     "title": "Répondre et dicter avec les boutons latéraux de la souris",
