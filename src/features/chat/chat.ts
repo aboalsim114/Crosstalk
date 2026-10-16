@@ -45,6 +45,7 @@ export function chatEntry(m: ChatMessage, now = new Date(), target = useTargetLa
     tr: null,
     id: m.id + Math.random() / 10,
     tid: m.id,
+    at: now.getTime(),
     time: now.toLocaleTimeString('fr-FR'),
     shown: null,
     lat: null,

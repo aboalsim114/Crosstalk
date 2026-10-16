@@ -40,6 +40,12 @@ export type SourceLang = PlayerLang;
 
 export interface FeedEntry extends SimEvent {
   id: number;
+  /**
+   * When the line arrived or last changed (ms): the overlay and the radar show
+   * fresh lines only. Real ids are counters, not times; without `at`, the id
+   * of a simulated line is its arrival time.
+   */
+  at?: number;
   /** Id of the real transcript, to attach its translation. */
   tid?: number;
   /** Why a real transcript stays untranslated (model missing, disabled…). */
@@ -386,13 +392,14 @@ export const useApp = create<AppState & AppActions>()((set, get) => {
       const i = get().feed.findIndex((f) => f.tid === entry.tid && f.live);
       if (i < 0) return get().addLine(entry);
       // The provisional French stays shown until the final translation arrives.
-      set((st) => ({ feed: st.feed.map((f, k) => (k === i ? { ...entry, id: f.id, shown: f.shown } : f)) }));
+      set((st) => ({ feed: st.feed.map((f, k) => (k === i ? { ...entry, id: f.id, shown: f.shown, at: entry.at ?? f.at } : f)) }));
     },
     applyPartialTranslation: (t) =>
       set((st) => ({ feed: st.feed.map((f) => (f.tid === t.id && f.live && t.translated ? { ...f, shown: t.translated } : f)) })),
     retractTranscript: (tid) => set((st) => ({ feed: st.feed.filter((f) => !(f.tid === tid && f.live)) })),
     applyTranslation: (t) =>
-      set((st) => ({ feed: st.feed.map((f) => (f.tid === t.id && f.status === 'transcrit' && !f.live ? withTranslation(f, t) : f)) })),
+      // A line that just got its translation is shown again for the full duration.
+      set((st) => ({ feed: st.feed.map((f) => (f.tid === t.id && f.status === 'transcrit' && !f.live ? { ...withTranslation(f, t), ...(t.translated ? { at: Date.now() } : {}) } : f)) })),
 
     flash: (msg) => {
       clearTimeout(toastTimer);
@@ -429,6 +436,9 @@ const QUIET_FAILURES = ['traduction désactivée', 'aucun moteur de traduction c
 /** A transcript line once its translation arrived: French text, or the original with why. */
 /** A translation identical to the original: only Counter-Strike terms. */
 export const KEPT_NOTE = 'Termes CS conservés tels quels (glossaire, modifiable dans Langues & glossaire)';
+
+/** Arrival time of a line (ms), for the overlay and the radar. */
+export const arrivedAt = (f: Pick<FeedEntry, 'id' | 'at'>): number => f.at ?? f.id;
 
 export function withTranslation(f: FeedEntry, t: Translation): FeedEntry {
   const total = (f.lat ?? 0) + t.queueMs + t.ms;

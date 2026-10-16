@@ -48,6 +48,7 @@ export function transcriptEntry(t: Transcript, now = new Date()): FeedEntry {
     tr: null,
     id: t.id + Math.random() / 10,
     tid: t.id,
+    at: now.getTime(),
     time: now.toLocaleTimeString('fr-FR'),
     status: 'transcrit',
     shown: null,

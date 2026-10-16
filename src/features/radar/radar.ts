@@ -14,6 +14,8 @@ export interface Ping {
 /** What the radar needs of a feed line. */
 export interface RadarLine {
   id: number;
+  /** Arrival time (ms); without it, the id is the arrival time (simulated lines). */
+  at?: number;
   kind: 'voice' | 'chat';
   orig: string;
   shown: string | null;
@@ -40,14 +42,15 @@ export function layoutOf(map: string | null | undefined): MapLayout | null {
 export function pingsFrom(feed: RadarLine[], m: MapLayout, now: number, hold: number): Ping[] {
   const byZone = new Map<string, Ping>();
   // Oldest first, so that newer lines overwrite.
-  const recent = feed.filter((f) => !f.live && now - f.id < hold * 1000 && f.id <= now).sort((p, q) => p.id - q.id);
+  const when = (f: RadarLine) => f.at ?? f.id;
+  const recent = feed.filter((f) => !f.live && now - when(f) < hold * 1000 && when(f) <= now).sort((p, q) => when(p) - when(q));
   for (const f of recent) {
     for (const m2 of lineMentions(f.orig, f.shown, m)) {
       const prev = byZone.get(m2.zone);
       byZone.set(m2.zone, {
         zone: m2.zone,
         count: m2.count ?? (prev && now - prev.at < 4000 ? prev.count : null),
-        at: f.id,
+        at: when(f),
         kind: f.kind,
       });
     }
