@@ -7,7 +7,7 @@
 //!                                                              │
 //!                                       [queue of 3, drops the oldest segment]
 //!                                                              ▼
-//!                                         speech-asr thread (below normal priority)
+//!                                         speech-asr thread (normal priority)
 //!                                         stale check, Whisper, filter ──▶ events
 //! ```
 //!
@@ -39,7 +39,6 @@ use super::types::{
 };
 use super::vad::VoiceDetector;
 use super::SpeechError;
-use crate::cpu::lower_current_thread_priority;
 
 mod asr;
 mod fallback;
@@ -396,10 +395,11 @@ impl SpeechService {
         let inner = svc.inner.clone();
         std::thread::Builder::new()
             .name("speech-asr".into())
-            .spawn(move || {
-                lower_current_thread_priority();
-                asr_loop(&inner)
-            })
+            // Normal priority, like the game: whisper.cpp splits each step
+            // between this thread and its workers, which wait for it at every
+            // barrier. Below normal, CS2 starved it and a 2 s sentence took
+            // up to 60 s (journal of 16 October, whisper-base 1.2x to 29x).
+            .spawn(move || asr_loop(&inner))
             .expect("spawn speech-asr thread");
 
         svc.reload(true);

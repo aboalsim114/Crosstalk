@@ -19,7 +19,7 @@
 - **Temps réel** :
   - files bornées avec une politique d'abandon écrite en commentaire ;
   - purge par numéro de génération ;
-  - threads de calcul en priorité basse (`crate::cpu::lower_current_thread_priority`) ;
+  - threads de calcul en priorité basse (`crate::cpu::lower_current_thread_priority`), sauf Whisper : ses fils de travail attendent le fil appelant à chaque étape, qui doit rester en priorité normale ;
   - aucune allocation nouvelle sur le thread de capture ;
   - jamais de calcul long dans une commande Tauri synchrone (`#[tauri::command(async)]`).
 - **Erreurs** :
