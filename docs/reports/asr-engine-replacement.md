@@ -60,8 +60,8 @@ code d'exécution **et** des poids compatible avec la redistribution.
 | **Parakeet TDT 0.6B v3** (NVIDIA), int8 | sherpa-onnx + ONNX Runtime | Apache-2.0 / MIT | CC-BY-4.0 (attribution) | oui / oui / oui (25 langues européennes, sans le turc) | **Retenu** |
 | FastConformer multilingue (NeMo, 10 langues) | sherpa-onnx | Apache-2.0 | CC-BY-4.0 | oui | Moins précis (C) |
 | GigaAM v2 (Sber) | sherpa-onnx | Apache-2.0 | MIT | russe seulement | Écarté : une seule langue |
-| Qwen3-ASR 0.6B | sherpa-onnx | Apache-2.0 | Apache-2.0 | oui | Écarté : écrit en chinois sur des annonces russes courtes, 2 à 3 s par clip |
-| Omnilingual ASR 300M CTC (Meta) | sherpa-onnx | Apache-2.0 | Apache-2.0 | oui | Écarté : translittère le russe en alphabet latin, peu précis |
+| Qwen3-ASR 0.6B | sherpa-onnx | Apache-2.0 | Apache-2.0 | oui | Écarté : presque aussi précis, mais du chinois sur 64 clips (dont 42 annonces russes), 1,5 fois plus lent, 1,1 à 1,6 Go de RAM, 19 s de chargement (C) |
+| Omnilingual ASR 300M CTC (Meta) | sherpa-onnx | Apache-2.0 | Apache-2.0 | oui | Écarté : WER 76,9 %, translittère le russe en alphabet latin (C) |
 | SenseVoice small | sherpa-onnx | Apache-2.0 | licence du modèle FunASR | pas de russe | Écarté |
 | Canary 180M Flash | sherpa-onnx | Apache-2.0 | CC-BY-4.0 | pas de russe | Écarté |
 | Nemotron streaming | — | — | — | — | Absent du miroir sherpa-onnx, non testé |
@@ -110,6 +110,8 @@ Scripts : `scripts/asr-bench/` (reproductibles, graine 7).
 | FastConformer multi fp32 | 57,2 % | 37,0 % | 115/448 | 6/464 | 0/50 | 164 / 217 ms | 547 / 627 Mo | 1,9 s |
 | FastConformer multi int8 | 63,2 % | 43,1 % | 95/448 | 43/464 | 0/50 | 142 / 195 ms | 186 / 282 Mo | 1,5 s |
 | GigaAM v2 (russe seul) | 78,1 % (ru : 45,1 %) | 66,8 % | 64/448 | 32/464 | 0/50 | 333 / 450 ms | 289 / 408 Mo | 1,6 s |
+| Qwen3-ASR 0.6B int8 | 48,6 % | 33,4 % | 166/448 | 5/464 | 1/50 | 754 / 998 ms | 1099 / 1646 Mo | 19,0 s |
+| Omnilingual 300M CTC int8 | 76,9 % | 54,1 % | 51/448 | 7/464 | 0/50 | 733 / 1208 ms | 455 / 609 Mo | 3,9 s |
 | *Référence* whisper-base | 60,7 % | 45,3 % | 131/448 | 3/464 | 50/50 | 278 / 412 ms | 201 / 407 Mo | 1,2 s |
 | *Référence* whisper-small | 47,2 % | 34,0 % | 166/448 | 4/464 | 8/50 | 1086 / 2199 ms | 460 / 888 Mo | 2,6 s |
 | *Référence* whisper-small, langue donnée | 43,8 % | 26,5 % | 169/448 | 0/464 | 50/50 | 1061 / 3029 ms | 1258 / 2415 Mo | 8,3 s |
@@ -134,8 +136,9 @@ pour le même Parakeet, à cause de la charge du conteneur.
 Les enregistrements réels en anglais et en français sont transcrits mot pour
 mot, avec ou sans bruit.
 
-**Limite importante : le russe bruité ou faible.** Sur ces clips, Parakeet
-écrit souvent en alphabet latin (« Vojen a B », « Ekarm. »). Il fait alors
+**Limite importante : le russe bruité ou faible.** Sur 76 des 200 annonces
+russes, Parakeet n'écrit aucune lettre cyrillique : il passe à l'alphabet
+latin (« Vojen a B », « Ekarm. »). Il fait alors
 moins bien que GigaAM (ru `combat` 49,5 %) et à peu près comme whisper-small
 (73,0 %). Le corpus russe est entièrement synthétique, avec des voix Piper
 au timbre peu naturel : la fiche du modèle donne 5,51 % de WER sur FLEURS

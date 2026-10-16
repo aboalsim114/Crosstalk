@@ -115,7 +115,7 @@ Chaque décision indique le contexte, le choix et ce qui le remettrait en cause.
   - la langue est lue dans le texte transcrit, parmi les langues autorisées (`chat::lang::detect`) ;
   - Whisper est retiré entièrement : plus d'option GPU, plus de bascule, plus de moteur de secours, plus d'invite ni de glossaire pour la reconnaissance. Les anciens `ggml-*.bin` ne sont jamais supprimés d'office : Audio & IA propose « Libérer l'espace ».
 - **Écartés** :
-  - Qwen3-ASR : sortie en chinois sur de courts extraits russes, 2 à 3 s par extrait ;
+  - Qwen3-ASR : précision voisine (WER 48,6 %) mais sortie en chinois sur 64 clips (dont 42 annonces russes), 1,5 fois plus lent, 1,1 à 1,6 Go de RAM, 19 s de chargement ;
   - Omnilingual 300M : translittère le russe en alphabet latin ;
   - GigaAM v2 : russe seulement ;
   - SenseVoice, Canary 180M : pas de russe ;
