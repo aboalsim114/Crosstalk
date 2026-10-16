@@ -177,6 +177,15 @@ export function VoiceCard() {
         </span>
       </Step>
 
+      <div className="rounded-xl px-3.5 py-3" style={{ border: '1px solid rgba(255,255,255,.07)', background: 'rgba(255,255,255,.015)' }} data-testid="voice-typed">
+        <ToggleRow
+          title="Dire aussi mes réponses écrites"
+          sub="Pop-up Ctrl+Alt+F7 : Entrée traduit, copie et fait dire la phrase par la voix IA (touche vocale appuyée si l’appui automatique est activé)"
+          on={!!opts.speakTyped}
+          onClick={() => setOpts({ speakTyped: !opts.speakTyped })}
+        />
+      </div>
+
       <div className="flex flex-col gap-2.5 rounded-xl px-3.5 py-3" style={{ border: '1px solid rgba(255,255,255,.07)', background: 'rgba(255,255,255,.015)' }} data-testid="voice-ptt">
         <ToggleRow
           title="Appuyer automatiquement pour parler dans CS2"

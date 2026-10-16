@@ -47,6 +47,18 @@ Touches acceptées : lettres, chiffres, F1–F12, Space, Tab, CapsLock, Shift / 
 
 **Comment** : l'appui est émis avec `SendInput` (API Windows documentée pour les entrées synthétiques, en codes de balayage comme un vrai clavier), depuis le processus de Crosstalk. Rien n'est injecté dans CS2, sa mémoire n'est ni lue ni écrite, aucun hook clavier. Le premier plan est vérifié par la fenêtre active (`GetForegroundWindow`) et le nom de son processus (`cs2.exe`). Code : `src-tauri/src/voice/ptt.rs`.
 
+## Dire mes réponses écrites (facultatif)
+
+Option **« Dire aussi mes réponses écrites »** (carte Voix IA, désactivée par défaut). Dans le pop-up **Ctrl+Alt+F7**, Entrée :
+1. traduit le message dans la langue choisie (phrase CS vérifiée, sinon LLM) ;
+2. le copie dans le presse-papier, comme avant (Y ou U, Ctrl+V, Entrée pour le chat écrit) ;
+3. ferme le pop-up : Windows rend la main à CS2 ;
+4. fait dire la phrase par la voix IA ; avec l'appui automatique, la touche vocale est appuyée pendant la phrase.
+
+Les phrases rapides du pop-up sont dites de la même façon. La carte Répondre de la fenêtre principale ne parle pas toute seule : elle garde le bouton « 🔊 Dire en jeu ».
+
+**Retour au premier plan** : après la fermeture du pop-up, la touche attend jusqu'à 1,5 s que CS2 revienne au premier plan, sinon la phrase est jouée sans appui (la carte le dit). La dictée (Ctrl+Alt+F6) ferme aussi le pop-up avant de parler quand l'appui automatique est activé : auparavant, la fenêtre Répondre restait au premier plan et la touche n'était pas appuyée (« CS2 n'est pas au premier plan »).
+
 ## Voix disponibles
 
 | Langue | Voix | Taille |
@@ -78,7 +90,7 @@ voix Piper ──┘                └─► (option) votre casque
 - **Le routeur** (`src-tauri/src/voice/router.rs`, Windows) lit votre micro et l'écrit dans « CABLE Input », avec un tampon de 40 ms côté sortie. Il y ajoute la voix IA, rééchantillonnée au format du câble.
   - Les volumes du micro et de la voix sont réglables séparément.
 - **La dictée** (Ctrl+Alt+F6) enregistre le micro choisi à l'étape 2, et non le micro par défaut de Windows, qui est désormais le câble.
-- Une phrase dite apparaît dans la fenêtre Répondre (« 🔊 Dit en jeu par la voix IA »). Une réponse tapée peut aussi être dite avec le bouton « 🔊 Dire en jeu ».
+- Une phrase dite apparaît dans la fenêtre Répondre (« 🔊 Dit en jeu par la voix IA »). Une réponse tapée peut aussi être dite avec le bouton « 🔊 Dire en jeu », ou automatiquement avec « Dire aussi mes réponses écrites ».
 
 ## Respect du jeu et des règles
 

@@ -126,6 +126,7 @@ function restoreVoice(v: Record<string, unknown>, base: AppState['voice']): AppS
     pttKey: typeof v.pttKey === 'string' && /^[A-Za-z0-9]{1,8}$/.test(v.pttKey) ? v.pttKey : base.pttKey,
     pttLeadMs: inRange(50, 1000)(v.pttLeadMs) ? v.pttLeadMs : base.pttLeadMs,
     pttTailMs: inRange(100, 1500)(v.pttTailMs) ? v.pttTailMs : base.pttTailMs,
+    speakTyped: isBool(v.speakTyped) ? v.speakTyped : (base.speakTyped ?? false),
   };
 }
 

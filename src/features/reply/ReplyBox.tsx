@@ -51,10 +51,12 @@ interface Props {
   /** Called once the text is in the clipboard. */
   onCopied?: () => void;
   autoFocusKey?: number;
+  /** In the pop-up: with "Dire mes réponses écrites", each reply is also said in the game. */
+  speakOnSend?: boolean;
 }
 
 /** The user's language in, the teammates' language out, copied to the clipboard. */
-export function ReplyBox({ target, onTarget, onCopied, autoFocusKey }: Props) {
+export function ReplyBox({ target, onTarget, onCopied, autoFocusKey, speakOnSend }: Props) {
   const { me, targets } = useReplyLanguages(autoFocusKey);
   const myName = targetName(me);
   const [text, setText] = useState('');
@@ -64,10 +66,15 @@ export function ReplyBox({ target, onTarget, onCopied, autoFocusKey }: Props) {
   const input = useRef<HTMLInputElement>(null);
   // AI voice ready (on, cable fed): the translation can be said in the game.
   const [voiceReady, setVoiceReady] = useState(false);
+  // "Dire mes réponses écrites": read at each opening of the pop-up.
+  const [speakTyped, setSpeakTyped] = useState(false);
 
   useEffect(() => {
     reply.phrases().then(setPhrases);
-    voice.status().then((st) => setVoiceReady(!!st?.options.enabled && st.routing));
+    voice.status().then((st) => {
+      setVoiceReady(!!st?.options.enabled && st.routing);
+      setSpeakTyped(!!st?.options.speakTyped);
+    });
   }, []);
   useEffect(() => {
     input.current?.focus();
@@ -76,6 +83,15 @@ export function ReplyBox({ target, onTarget, onCopied, autoFocusKey }: Props) {
   const done = async (translated: string, note: string) => {
     const ok = await copyText(translated);
     setOut({ text: translated, note: ok ? `${note} · ${PASTE_HINT}` : 'Copie impossible : sélectionnez le texte ci-dessus.' });
+    if (speakOnSend && speakTyped && voiceReady) {
+      // The pop-up closes (CS2 back in front for the voice key), then the voice speaks.
+      try {
+        await reply.say(translated, target);
+      } catch (e) {
+        setOut({ text: translated, note: String(e), error: true });
+        return;
+      }
+    }
     if (ok) onCopied?.();
   };
   const send = async () => {

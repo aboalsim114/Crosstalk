@@ -5,6 +5,7 @@ import { recentLangs } from '../languages/langs';
 const translate = vi.fn();
 const voiceStatus = vi.fn(() => Promise.resolve(null as unknown));
 const say = vi.fn();
+const replySay = vi.fn();
 vi.mock('../../shared/ipc', async (orig) => {
   const real = await orig<typeof import('../../shared/ipc')>();
   return {
@@ -14,6 +15,7 @@ vi.mock('../../shared/ipc', async (orig) => {
       phrases: () => Promise.resolve([{ id: 'eco', fr: 'Éco', quick: true }]),
       phraseText: (id: string, target: string) => Promise.resolve(id === 'eco' ? (target === 'ru' ? 'Эко раунд' : 'Eco round') : null),
       translate: (text: string, target: string) => translate(text, target),
+      say: (text: string, target: string) => replySay(text, target),
     },
     voice: { ...real.voice, status: () => voiceStatus(), say: (text: string, lang: string) => say(text, lang) },
   };
@@ -95,5 +97,55 @@ describe('reply in the teammates’ language', () => {
     await act(async () => fireEvent.click(await screen.findByText('🔊 Dire en jeu')));
     expect(say).toHaveBeenCalledWith('Двое на B', 'ru');
     expect(await screen.findByText('Dit en jeu par la voix IA (1,5 s)')).toBeInTheDocument();
+  });
+
+  it('in the pop-up, says each typed reply when "Dire mes réponses écrites" is on', async () => {
+    voiceStatus.mockResolvedValueOnce({ options: { enabled: true, speakTyped: true }, routing: true });
+    translate.mockResolvedValueOnce({ text: 'Двое на B', via: 'phrasebook', ms: 1 });
+    replySay.mockResolvedValueOnce(1500);
+    const copied = vi.fn();
+    Object.assign(navigator, { clipboard: { writeText: () => Promise.resolve() } });
+    render(<ReplyBox target="ru" onTarget={() => {}} onCopied={copied} speakOnSend />);
+    const box = await screen.findByLabelText(/Message/);
+    await act(async () => {}); // voice status read
+    fireEvent.change(box, { target: { value: 'deux en B' } });
+    await act(async () => fireEvent.keyDown(box, { key: 'Enter' }));
+    expect(replySay).toHaveBeenCalledWith('Двое на B', 'ru');
+    expect(copied).toHaveBeenCalled();
+    expect(screen.getByTestId('reply-out').textContent).toBe('Двое на B');
+  });
+
+  it('does not speak when the option is off or outside the pop-up', async () => {
+    replySay.mockClear();
+    for (const [speakTyped, speakOnSend] of [
+      [false, true],
+      [true, false],
+    ]) {
+      voiceStatus.mockResolvedValueOnce({ options: { enabled: true, speakTyped }, routing: true });
+      translate.mockResolvedValueOnce({ text: 'Eco round', via: 'phrasebook', ms: 1 });
+      Object.assign(navigator, { clipboard: { writeText: () => Promise.resolve() } });
+      const { unmount } = render(<ReplyBox target="en" onTarget={() => {}} speakOnSend={speakOnSend} />);
+      const box = await screen.findByLabelText(/Message/);
+      await act(async () => {});
+      fireEvent.change(box, { target: { value: 'éco' } });
+      await act(async () => fireEvent.keyDown(box, { key: 'Enter' }));
+      unmount();
+    }
+    expect(replySay).not.toHaveBeenCalled();
+  });
+
+  it('shows the voice error and keeps the pop-up open', async () => {
+    voiceStatus.mockResolvedValueOnce({ options: { enabled: true, speakTyped: true }, routing: true });
+    translate.mockResolvedValueOnce({ text: 'Eco round', via: 'phrasebook', ms: 1 });
+    replySay.mockRejectedValueOnce('voix IA désactivée (Audio & IA › Voix IA)');
+    const copied = vi.fn();
+    Object.assign(navigator, { clipboard: { writeText: () => Promise.resolve() } });
+    render(<ReplyBox target="en" onTarget={() => {}} onCopied={copied} speakOnSend />);
+    const box = await screen.findByLabelText(/Message/);
+    await act(async () => {});
+    fireEvent.change(box, { target: { value: 'éco' } });
+    await act(async () => fireEvent.keyDown(box, { key: 'Enter' }));
+    expect(await screen.findByText(/voix IA désactivée/)).toBeInTheDocument();
+    expect(copied).not.toHaveBeenCalled();
   });
 });
