@@ -501,6 +501,12 @@ pub fn start(app: &AppHandle) -> Arc<VoiceService> {
     v
 }
 
+/// The AI voice is on.
+pub fn enabled(app: &AppHandle) -> bool {
+    app.try_state::<Arc<VoiceService>>()
+        .is_some_and(|v| v.options().enabled)
+}
+
 /// The AI voice is on and holds CS2's voice key: CS2 must be in front.
 pub fn presses_key(app: &AppHandle) -> bool {
     app.try_state::<Arc<VoiceService>>().is_some_and(|v| {

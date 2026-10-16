@@ -271,6 +271,10 @@ pub fn reply_hide(app: AppHandle) -> Result<(), String> {
 /// écrites"): the pop-up closes first so that CS2 is in front for the key.
 #[tauri::command(async)]
 pub fn reply_say(app: AppHandle, text: String, target: String) -> Result<u32, String> {
+    // Voice off: the pop-up stays open to show why.
+    if !crate::voice::enabled(&app) {
+        return Err("voix IA désactivée (Audio & IA › Voix IA)".into());
+    }
     let _ = hide(&app);
     crate::voice::say_reply(&app, &text, &target)
 }
