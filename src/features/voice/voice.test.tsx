@@ -184,9 +184,9 @@ describe('AI voice card', () => {
 });
 
 describe('voice key and the one-key shortcuts', () => {
-  it('warns when the voice key is Alt or Alt Gr (they open Répondre and the dictation)', async () => {
-    const { altConflict } = await import('./VoiceCard');
-    for (const k of ['Alt', 'LAlt', 'ralt', ' AltGr ']) expect(altConflict(k)).toBe(true);
-    for (const k of ['K', 'V', 'Mouse4', 'LCtrl']) expect(altConflict(k)).toBe(false);
+  it('warns when the voice key is Mouse4 or Mouse5 (they open Répondre and the dictation)', async () => {
+    const { shortcutConflict } = await import('./VoiceCard');
+    for (const k of ['Mouse4', 'mouse5', ' MOUSE 4 ']) expect(shortcutConflict(k)).toBe(true);
+    for (const k of ['K', 'V', 'Mouse3', 'LAlt']) expect(shortcutConflict(k)).toBe(false);
   });
 });

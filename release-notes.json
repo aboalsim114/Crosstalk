@@ -1,5 +1,17 @@
 [
   {
+    "id": "raccourcis-boutons-souris",
+    "date": "2026-10-17",
+    "title": "Répondre et dicter avec les boutons latéraux de la souris",
+    "items": [
+      "Bouton latéral Mouse 4 : ouvre la fenêtre Répondre.",
+      "Bouton latéral Mouse 5 : lance la dictée, et un nouveau clic la termine.",
+      "Alt et Alt Gr redeviennent des touches normales.",
+      "Vous pouvez cliquer en avançant, en marchant ou accroupi ; un clic maintenu longtemps n'ouvre rien.",
+      "Si Mouse 4 ou Mouse 5 sert déjà à quelque chose dans CS2, la commande du jeu s'exécute aussi : libérez ces boutons dans CS2 si besoin."
+    ]
+  },
+  {
     "id": "raccourcis-alt-et-alt-gr",
     "date": "2026-10-16",
     "title": "Répondre et dicter d'une seule touche",

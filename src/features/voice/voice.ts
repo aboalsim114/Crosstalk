@@ -55,7 +55,7 @@ export function voiceSummary(st: VoiceStatus | null, opts: VoiceOptions, ready: 
   if (!ready) return { value: 'Voix à télécharger', detail: 'Téléchargez le moteur et les voix (étape 3).', color: '#ffa24a' };
   if (st.speaking)
     return { value: 'La voix parle…', detail: opts.autoPtt ? 'Crosstalk maintient votre touche vocale pendant la phrase.' : 'Gardez votre touche vocale enfoncée si vous jouez en appui pour parler.', color: '#7fd4ff' };
-  if (st.routing) return { value: 'Prête', detail: 'Alt Gr, parlez : la traduction est dite en jeu par la voix choisie.', color: '#7fe0a8' };
+  if (st.routing) return { value: 'Prête', detail: 'Mouse 5, parlez : la traduction est dite en jeu par la voix choisie.', color: '#7fe0a8' };
   return { value: 'En attente', detail: 'Le câble n’est pas encore alimenté.', color: '#ffa24a' };
 }
 
