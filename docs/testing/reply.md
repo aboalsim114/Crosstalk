@@ -15,6 +15,7 @@ Sur Windows, avec l'application installée (installateur neuf : les modèles fr�
 | 9a | En partie, en avançant accroupi (W et Ctrl maintenus), cliquer **Mouse 4** | La fenêtre s'ouvre : les touches déjà enfoncées n'annulent pas le raccourci. |
 | 9b | Garder Mouse 4 enfoncé plus d'une demi-seconde ; appuyer sur R pendant le clic | Rien ne s'ouvre : seul un clic bref, sans nouvelle touche pendant le clic, compte. |
 | 9c | Cliquer **Mouse 5**, parler, cliquer Mouse 5 à nouveau | La dictée démarre puis s'arrête. |
-| 9 | Diagnostic › Raccourcis globaux | « Mouse 4 / Mouse 5 / Ctrl+Alt+F8 / F9 / F10 · aucun conflit » (ou le raccourci en conflit). |
+| 9d | **Ctrl+Alt+F7**, puis **Ctrl+Alt+F6** | Mêmes actions que Mouse 4 et Mouse 5 (raccourcis clavier de secours). |
+| 9 | Diagnostic › Raccourcis globaux | « Mouse 4 / Mouse 5 / Ctrl+Alt+F6 à F10 · aucun conflit » (ou le raccourci en conflit). |
 
 Les boutons latéraux sont lus avec `GetAsyncKeyState` (état des boutons, sans hook ni accès au jeu) ; tout le clavier n'est lu que pendant un clic sur l'un des deux. CS2 reçoit toujours le clic : si Mouse 4 ou Mouse 5 y est lié à une commande, elle s'exécute aussi. Crosstalk n'envoie aucune touche au jeu : l'utilisateur colle et envoie lui-même le message.

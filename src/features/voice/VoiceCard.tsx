@@ -86,7 +86,7 @@ export function VoiceCard() {
         <span style={{ font: fnt(500, 9.5, 'mono'), letterSpacing: '.12em', color: '#6e6961' }}>PIPER · SUR CE PC · GRATUIT</span>
       </div>
       <span style={body}>
-        Mouse 5, dites votre phrase dans votre langue : Crosstalk la traduit et une voix IA la dit dans le vocal de CS2, dans la langue de vos coéquipiers. La voix est produite sur votre PC, sans compte ni clé. En appui pour parler, Crosstalk peut maintenir votre touche vocale pendant la
+        Mouse 5 ou Ctrl+Alt+F6, dites votre phrase dans votre langue : Crosstalk la traduit et une voix IA la dit dans le vocal de CS2, dans la langue de vos coéquipiers. La voix est produite sur votre PC, sans compte ni clé. En appui pour parler, Crosstalk peut maintenir votre touche vocale pendant la
         phrase (option ci-dessous, désactivée par défaut).
       </span>
       <ToggleRow title="Dire mes réponses en jeu avec une voix IA" sub="Désactivé par défaut" on={opts.enabled} onClick={() => setOpts({ enabled: !opts.enabled })} />
@@ -186,7 +186,7 @@ export function VoiceCard() {
       <div className="rounded-xl px-3.5 py-3" style={{ border: '1px solid rgba(255,255,255,.07)', background: 'rgba(255,255,255,.015)' }} data-testid="voice-typed">
         <ToggleRow
           title="Dire aussi mes réponses écrites"
-          sub="Pop-up Mouse 4 : Entrée traduit, copie et fait dire la phrase par la voix IA (touche vocale appuyée si l’appui automatique est activé)"
+          sub="Pop-up Mouse 4 / Ctrl+Alt+F7 : Entrée traduit, copie et fait dire la phrase par la voix IA (touche vocale appuyée si l’appui automatique est activé)"
           on={!!opts.speakTyped}
           onClick={() => setOpts({ speakTyped: !opts.speakTyped })}
         />

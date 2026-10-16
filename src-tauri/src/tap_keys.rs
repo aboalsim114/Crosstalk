@@ -174,6 +174,11 @@ fn run(app: &tauri::AppHandle) {
     let mut detectors: Vec<TapDetector> = TAP_KEYS.iter().map(|_| TapDetector::default()).collect();
     let mut prev = KeySet::default();
     let mut scanning = false;
+    let mut was_down = [false; TAP_KEYS.len()];
+    crate::logs::info(
+        "raccourcis",
+        "boutons latéraux Mouse 4 / Mouse 5 surveillés",
+    );
     loop {
         let any_tap_key = TAP_KEYS.iter().any(|k| down(k.vk));
         // The whole keyboard is read only around a click (a few hundred ms):
@@ -189,10 +194,17 @@ fn run(app: &tauri::AppHandle) {
             let ours = app
                 .try_state::<std::sync::Arc<crate::voice::VoiceService>>()
                 .is_some_and(|v| v.holding_key());
-            for (key, det) in TAP_KEYS.iter().zip(detectors.iter_mut()) {
+            for (i, (key, det)) in TAP_KEYS.iter().zip(detectors.iter_mut()).enumerate() {
                 let mut others = now_set.others(&prev, key);
                 others.blocked |= ours;
-                if det.feed(now_set.has(key.vk), others, now) {
+                let is_down = now_set.has(key.vk);
+                if is_down && !was_down[i] {
+                    // Seen by Windows: tells a remapped button (mouse software) apart.
+                    crate::logs::info("raccourcis", &format!("{} appuyé", key.label));
+                }
+                was_down[i] = is_down;
+                if det.feed(is_down, others, now) {
+                    crate::logs::info("raccourcis", &format!("{} → {:?}", key.label, key.action));
                     crate::actions::dispatch(app, key.action);
                 }
             }
@@ -200,6 +212,7 @@ fn run(app: &tauri::AppHandle) {
             std::thread::sleep(ARMED_POLL);
         } else {
             scanning = false;
+            was_down = [false; TAP_KEYS.len()];
             for det in detectors.iter_mut() {
                 det.feed(false, Others::default(), Instant::now());
             }

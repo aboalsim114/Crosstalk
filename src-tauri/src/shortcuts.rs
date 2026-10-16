@@ -1,9 +1,9 @@
 //! System-wide hotkeys, active even while CS2 has the focus.
 //!
 //! Registered with `RegisterHotKey` through tauri-plugin-global-shortcut: no keyboard
-//! hook and nothing touches the game process. Répondre (Mouse 4) and the dictation
-//! (Mouse 5) are on the mouse's side buttons, which `RegisterHotKey` cannot do:
-//! see tap_keys.rs.
+//! hook and nothing touches the game process. Répondre (Ctrl+Alt+F7) and the dictation
+//! (Ctrl+Alt+F6) are also on the mouse's side buttons (Mouse 4, Mouse 5), which
+//! `RegisterHotKey` cannot do: see tap_keys.rs.
 
 use std::sync::Mutex;
 
@@ -13,7 +13,9 @@ use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut,
 
 use crate::actions::{self, Action};
 
-pub const BINDINGS: [(Code, Action, &str); 3] = [
+pub const BINDINGS: [(Code, Action, &str); 5] = [
+    (Code::F6, Action::Dictate, "Ctrl+Alt+F6"),
+    (Code::F7, Action::Reply, "Ctrl+Alt+F7"),
     (Code::F8, Action::Overlay, "Ctrl+Alt+F8"),
     (Code::F9, Action::Pause, "Ctrl+Alt+F9"),
     (Code::F10, Action::Emergency, "Ctrl+Alt+F10"),
@@ -96,6 +98,8 @@ mod tests {
 
     #[test]
     fn maps_ctrl_alt_function_keys_to_actions() {
+        assert_eq!(action_for(&shortcut(Code::F6)), Some(Action::Dictate));
+        assert_eq!(action_for(&shortcut(Code::F7)), Some(Action::Reply));
         assert_eq!(action_for(&shortcut(Code::F8)), Some(Action::Overlay));
         assert_eq!(action_for(&shortcut(Code::F9)), Some(Action::Pause));
         assert_eq!(action_for(&shortcut(Code::F10)), Some(Action::Emergency));

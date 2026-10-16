@@ -2,7 +2,7 @@
 
 Vous parlez dans votre langue, vos coéquipiers vous entendent dans la leur.
 
-**Mouse 5**, puis dites « Deux en B, attention au flash ». Crosstalk :
+**Mouse 5** ou **Ctrl+Alt+F6**, puis dites « Deux en B, attention au flash ». Crosstalk :
 
 1. transcrit la phrase (Parakeet, sur le processeur de ce PC) ;
 2. la traduit dans la langue de vos coéquipiers (phrases CS toutes prêtes, sinon le LLM connecté dans Audio & IA › Traduction IA) ;
@@ -49,7 +49,7 @@ Touches acceptées : lettres, chiffres, F1–F12, Space, Tab, CapsLock, Shift / 
 
 ## Dire mes réponses écrites (facultatif)
 
-Option **« Dire aussi mes réponses écrites »** (carte Voix IA, désactivée par défaut). Dans le pop-up **Mouse 4**, Entrée :
+Option **« Dire aussi mes réponses écrites »** (carte Voix IA, désactivée par défaut). Dans le pop-up **Mouse 4** ou **Ctrl+Alt+F7**, Entrée :
 1. traduit le message dans la langue choisie (phrase CS vérifiée, sinon LLM) ;
 2. le copie dans le presse-papier, comme avant (Y ou U, Ctrl+V, Entrée pour le chat écrit) ;
 3. ferme le pop-up : Windows rend la main à CS2 ;
@@ -57,7 +57,7 @@ Option **« Dire aussi mes réponses écrites »** (carte Voix IA, désactivée 
 
 Les phrases rapides du pop-up sont dites de la même façon. La carte Répondre de la fenêtre principale ne parle pas toute seule : elle garde le bouton « 🔊 Dire en jeu ».
 
-**Retour au premier plan** : après la fermeture du pop-up, la touche attend jusqu'à 1,5 s que CS2 revienne au premier plan, sinon la phrase est jouée sans appui (la carte le dit). La dictée (Mouse 5) ferme aussi le pop-up avant de parler quand l'appui automatique est activé : auparavant, la fenêtre Répondre restait au premier plan et la touche n'était pas appuyée (« CS2 n'est pas au premier plan »).
+**Retour au premier plan** : après la fermeture du pop-up, la touche attend jusqu'à 1,5 s que CS2 revienne au premier plan, sinon la phrase est jouée sans appui (la carte le dit). La dictée (Mouse 5 / Ctrl+Alt+F6) ferme aussi le pop-up avant de parler quand l'appui automatique est activé : auparavant, la fenêtre Répondre restait au premier plan et la touche n'était pas appuyée (« CS2 n'est pas au premier plan »).
 
 ## Voix disponibles
 
@@ -89,7 +89,7 @@ voix Piper ──┘                └─► (option) votre casque
   - Sous Wine (émulation Windows), même code avec le vrai `piper.exe` : 3,7 s puis 0,6 s.
 - **Le routeur** (`src-tauri/src/voice/router.rs`, Windows) lit votre micro et l'écrit dans « CABLE Input », avec un tampon de 40 ms côté sortie. Il y ajoute la voix IA, rééchantillonnée au format du câble.
   - Les volumes du micro et de la voix sont réglables séparément.
-- **La dictée** (Mouse 5) enregistre le micro choisi à l'étape 2, et non le micro par défaut de Windows, qui est désormais le câble.
+- **La dictée** (Mouse 5 / Ctrl+Alt+F6) enregistre le micro choisi à l'étape 2, et non le micro par défaut de Windows, qui est désormais le câble.
 - Une phrase dite apparaît dans la fenêtre Répondre (« 🔊 Dit en jeu par la voix IA »). Une réponse tapée peut aussi être dite avec le bouton « 🔊 Dire en jeu », ou automatiquement avec « Dire aussi mes réponses écrites ».
 
 ## Respect du jeu et des règles
@@ -119,5 +119,5 @@ voix Piper ──┘                └─► (option) votre casque
 
 - **Les callouts anglais dans une phrase russe** (« B », « smoke ») sont prononcés avec les règles de la langue de la voix.
 - **Une seule voix parle à la fois** : les phrases se suivent dans l'ordre.
-- **Appui automatique** : le bouton « Dire en jeu » de la carte est cliqué dans Crosstalk, donc CS2 n'est pas au premier plan : utilisez « Tester dans 5 s » ou Mouse 5 en jeu.
+- **Appui automatique** : le bouton « Dire en jeu » de la carte est cliqué dans Crosstalk, donc CS2 n'est pas au premier plan : utilisez « Tester dans 5 s » ou Mouse 5 / Ctrl+Alt+F6 en jeu.
 - **Si le micro choisi est débranché**, son passage s'arrête : la carte affiche l'erreur. Choisissez de nouveau le micro pour relancer.
