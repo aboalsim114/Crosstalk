@@ -139,7 +139,7 @@ export const de: Messages = {
   'radar.toggle': 'Callout-Radar',
   'radar.toggleSub': 'Im Overlay, sobald eine Zone angesagt wird',
   'radar.hold': 'Zone leuchtet',
-  'radar.noMap': 'Unbekannte Karte: aktiviere die CS2-Integration (Audio & KI), damit das Radar weiß, auf welcher Karte du spielst.',
+  'radar.noMap': 'Unbekannte Karte: aktiviere die CS2-Integration (Sprachen & Glossar), damit das Radar weiß, auf welcher Karte du spielst.',
   'radar.map': 'Karte: {map}',
   'radar.try': 'Ausprobieren',
   'radar.ago': 'vor {n} s',

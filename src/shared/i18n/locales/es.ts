@@ -139,7 +139,7 @@ export const es: Messages = {
   'radar.toggle': 'Radar de avisos',
   'radar.toggleSub': 'En el overlay, en cuanto se avisa una zona',
   'radar.hold': 'Zona iluminada',
-  'radar.noMap': 'Mapa desconocido: activa la integración de CS2 (Audio e IA) para que el radar sepa en qué mapa juegas.',
+  'radar.noMap': 'Mapa desconocido: activa la integración de CS2 (Idiomas y glosario) para que el radar sepa en qué mapa juegas.',
   'radar.map': 'Mapa: {map}',
   'radar.try': 'Probar',
   'radar.ago': 'hace {n} s',

@@ -139,7 +139,7 @@ export const pl: Messages = {
   'radar.toggle': 'Radar calloutów',
   'radar.toggleSub': 'W overlayu, gdy tylko padnie nazwa miejsca',
   'radar.hold': 'Podświetlenie',
-  'radar.noMap': 'Nieznana mapa: włącz integrację z CS2 (Dźwięk i AI), aby radar wiedział, na jakiej mapie grasz.',
+  'radar.noMap': 'Nieznana mapa: włącz integrację z CS2 (Języki i słownik), aby radar wiedział, na jakiej mapie grasz.',
   'radar.map': 'Mapa: {map}',
   'radar.try': 'Wypróbuj',
   'radar.ago': '{n} s temu',

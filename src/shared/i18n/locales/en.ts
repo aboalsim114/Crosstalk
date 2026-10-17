@@ -139,7 +139,7 @@ export const en: Messages = {
   'radar.toggle': 'Callout radar',
   'radar.toggleSub': 'In the overlay, as soon as a zone is called out',
   'radar.hold': 'Zone lit for',
-  'radar.noMap': 'Unknown map: turn on the CS2 integration (Audio & AI) so the radar knows which map you are on.',
+  'radar.noMap': 'Unknown map: turn on the CS2 integration (Languages & glossary) so the radar knows which map you are on.',
   'radar.map': 'Map: {map}',
   'radar.try': 'Try it',
   'radar.ago': '{n} s ago',

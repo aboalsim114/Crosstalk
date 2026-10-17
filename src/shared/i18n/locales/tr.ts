@@ -139,7 +139,7 @@ export const tr: Messages = {
   'radar.toggle': 'Callout radarı',
   'radar.toggleSub': 'Overlay’de, bir bölge söylenir söylenmez',
   'radar.hold': 'Bölge yanık kalır',
-  'radar.noMap': 'Bilinmeyen harita: radarın hangi haritada oynadığını bilmesi için CS2 entegrasyonunu açın (Ses ve YZ).',
+  'radar.noMap': 'Bilinmeyen harita: radarın hangi haritada oynadığını bilmesi için CS2 entegrasyonunu açın (Diller ve sözlük).',
   'radar.map': 'Harita: {map}',
   'radar.try': 'Dene',
   'radar.ago': '{n} sn önce',

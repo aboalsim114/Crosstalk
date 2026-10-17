@@ -139,7 +139,7 @@ export const ptBR: Messages = {
   'radar.toggle': 'Radar de calls',
   'radar.toggleSub': 'No overlay, assim que uma área é avisada',
   'radar.hold': 'Área acesa',
-  'radar.noMap': 'Mapa desconhecido: ative a integração com o CS2 (Áudio e IA) para o radar saber em que mapa você está.',
+  'radar.noMap': 'Mapa desconhecido: ative a integração com o CS2 (Idiomas e glossário) para o radar saber em que mapa você está.',
   'radar.map': 'Mapa: {map}',
   'radar.try': 'Testar',
   'radar.ago': 'há {n} s',

@@ -139,7 +139,7 @@ export const zhCN: Messages = {
   'radar.toggle': '报点雷达',
   'radar.toggleSub': '在叠加层中，一有人报点就显示',
   'radar.hold': '点位亮起时长',
-  'radar.noMap': '未知地图：请开启 CS2 集成（音频与 AI），让雷达知道您在哪张地图。',
+  'radar.noMap': '未知地图：请开启 CS2 集成（语言与术语表），让雷达知道您在哪张地图。',
   'radar.map': '地图：{map}',
   'radar.try': '试一试',
   'radar.ago': '{n} 秒前',

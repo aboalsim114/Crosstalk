@@ -146,7 +146,7 @@ export const fr = {
   'radar.toggle': 'Radar des annonces',
   'radar.toggleSub': 'Dans l’overlay, dès qu’une zone est annoncée',
   'radar.hold': 'Zone allumée',
-  'radar.noMap': 'Carte inconnue : activez l’intégration de CS2 (Audio & IA) pour que le radar sache sur quelle carte vous jouez.',
+  'radar.noMap': 'Carte inconnue : activez l’intégration de CS2 (Langues & glossaire) pour que le radar sache sur quelle carte vous jouez.',
   'radar.map': 'Carte : {map}',
   'radar.try': 'Essayer',
   'radar.ago': 'il y a {n} s',
