@@ -1,5 +1,15 @@
 [
   {
+    "id": "page-de-connexion-v3",
+    "date": "2026-10-17",
+    "title": "Page de connexion redessinée",
+    "items": [
+      "La page de connexion a un nouveau look, plus sobre et plus léger.",
+      "À droite, un aperçu en direct montre des annonces de coéquipiers traduites dans d'autres langues.",
+      "La connexion se fait toujours avec admin / admin pour l'instant."
+    ]
+  },
+  {
     "id": "page-de-connexion",
     "date": "2026-10-17",
     "title": "Nouvelle page de connexion",
