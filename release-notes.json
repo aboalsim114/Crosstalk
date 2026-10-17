@@ -1,5 +1,14 @@
 [
   {
+    "id": "traduction-phrases-completes",
+    "date": "2026-10-17",
+    "title": "Traductions plus naturelles",
+    "items": [
+      "Les annonces courtes de vos coéquipiers sont de nouveau traduites comme des phrases entières, et non plus mot à mot.",
+      "Les annonces CS connues (« rush B », « one low »…) retrouvent leur traduction instantanée en français."
+    ]
+  },
+  {
     "id": "langues-detectees-et-appels-fiables",
     "date": "2026-10-17",
     "title": "Langues détectées toutes seules, appels plus fiables",

@@ -9,20 +9,23 @@ pub const LANGUAGES: [&str; 12] = [
     "fr", "en", "ru", "de", "es", "pt", "uk", "pl", "tr", "ar", "zh", "ja",
 ];
 pub const DEFAULT_TARGET: &str = "fr";
-/// A line whose language could not be told for sure (speech `lang_prob`
-/// below [`CONFIDENT`]): never taken as the user's own, the LLM translates it
-/// and returns it unchanged when it is already in the user's language.
+/// A line that may be in the user's own language, without certainty (speech
+/// `lang_prob` below [`CONFIDENT`]): never taken as the user's own, the LLM
+/// translates it and returns it unchanged when it is already in that language.
 pub const UNSURE: &str = "auto";
 /// From this confidence on, the detected language is trusted (lines in the
 /// user's own language can be hidden).
 pub const CONFIDENT: f32 = 0.7;
 
-/// The language to translate a transcript from: its code, or [`UNSURE`].
-pub fn source_of(code: &'static str, confidence: f32) -> &'static str {
-    if confidence >= CONFIDENT {
-        code
-    } else {
+/// The language to translate a transcript from: the most probable one, which
+/// the LLM needs to translate whole sentences well ("from Russian"); [`UNSURE`]
+/// only when that guess is the user's own language without certainty, so a
+/// foreign line is never shown as is by mistake.
+pub fn source_of(code: &'static str, confidence: f32, target: &str) -> &'static str {
+    if confidence < CONFIDENT && code == target {
         UNSURE
+    } else {
+        code
     }
 }
 pub const DEFAULT_SOURCES: [&str; 2] = ["ru", "en"];
@@ -64,8 +67,10 @@ mod tests {
             assert!(is_target(l), "{l}");
         }
         assert!(!is_language("ko") && !is_language("it"));
-        assert_eq!(source_of("en", 0.9), "en");
-        assert_eq!(source_of("en", 0.5), UNSURE);
+        assert_eq!(source_of("en", 0.9, "en"), "en");
+        assert_eq!(source_of("en", 0.5, "en"), UNSURE);
+        // A foreign line keeps its most probable language, sure or not.
+        assert_eq!(source_of("ru", 0.5, "fr"), "ru");
         let players = vec![
             "ru".to_string(),
             "en".to_string(),

@@ -29,6 +29,8 @@ use crate::translation::{languages, TranslationConfig, TranslationService, Trans
 trait Translate {
     fn submit(&self, id: u64, lang: &str, text: &str);
     fn submit_partial(&self, id: u64, lang: &str, text: &str);
+    /// The user's language (translations go into it).
+    fn target(&self) -> String;
 }
 
 impl Translate for TranslationService {
@@ -37,6 +39,9 @@ impl Translate for TranslationService {
     }
     fn submit_partial(&self, id: u64, lang: &str, text: &str) {
         TranslationService::submit_partial(self, id, lang, text);
+    }
+    fn target(&self) -> String {
+        self.status().config.target
     }
 }
 
@@ -62,8 +67,9 @@ fn route_transcript(
     };
     show(transcript);
     if let Some(t) = translation {
-        // An uncertain language is never taken as the user's own (shown as is).
-        let lang = languages::source_of(transcript.lang.code(), transcript.lang_prob);
+        // The most probable language; never the user's own without certainty.
+        let target = t.target();
+        let lang = languages::source_of(transcript.lang.code(), transcript.lang_prob, &target);
         if transcript.partial {
             t.submit_partial(transcript.id, lang, &transcript.text);
         } else {
@@ -236,6 +242,9 @@ mod tests {
         fn submit_partial(&self, id: u64, lang: &str, text: &str) {
             self.push(format!("translate-live {id} {lang} {text}"));
         }
+        fn target(&self) -> String {
+            "fr".into()
+        }
     }
 
     fn transcript(partial: bool) -> Transcript {
@@ -266,6 +275,22 @@ mod tests {
             dead: false,
             lang: lang.map(str::to_string),
         }
+    }
+
+    #[test]
+    fn an_unsure_line_keeps_its_most_probable_language_unless_it_is_the_users() {
+        let log = Log::default();
+        let unsure = |lang, text: &str| Transcript {
+            lang,
+            lang_prob: 0.5,
+            text: text.into(),
+            ..transcript(false)
+        };
+        // Short Russian call, no telltale word: still "from Russian" for the LLM.
+        route_transcript(&unsure(Lang::Ru, "на B"), |_| None, |_| {}, Some(&log));
+        // Maybe French (the user's language): never taken as theirs.
+        route_transcript(&unsure(Lang::Fr, "go B"), |_| None, |_| {}, Some(&log));
+        assert_eq!(log.take(), ["translate 7 ru на B", "translate 7 auto go B"]);
     }
 
     #[test]
