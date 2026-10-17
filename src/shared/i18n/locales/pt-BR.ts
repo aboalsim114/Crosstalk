@@ -10,6 +10,7 @@ export const ptBR: Messages = {
   'nav.lang': 'Idiomas e glossário',
   'nav.hist': 'Histórico',
   'nav.diag': 'Diagnóstico',
+  'nav.guide': 'Guia',
   'nav.about': 'Sobre',
   'window.minimize': 'Minimizar',
   'window.maximize': 'Maximizar',

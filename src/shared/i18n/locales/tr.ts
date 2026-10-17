@@ -10,6 +10,7 @@ export const tr: Messages = {
   'nav.lang': 'Diller ve sözlük',
   'nav.hist': 'Geçmiş',
   'nav.diag': 'Tanılama',
+  'nav.guide': 'Kılavuz',
   'nav.about': 'Hakkında',
   'window.minimize': 'Simge durumuna küçült',
   'window.maximize': 'Ekranı kapla',

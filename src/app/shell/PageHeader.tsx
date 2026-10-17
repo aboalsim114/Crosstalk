@@ -2,6 +2,7 @@ import { useT, type MessageKey } from '../../shared/i18n';
 import { NAV } from '../state/data';
 import { isRunning, useApp, type Session } from '../state/store';
 import { fnt } from '../../shared/ui/atoms';
+import { GuideButton } from '../../features/guide/GuidePage';
 
 export const SESSION_BADGE: Record<Session, [MessageKey, string]> = {
   IDLE: ['session.idle', '#8f8a83'],
@@ -32,6 +33,7 @@ export function PageHeader() {
         <h1 style={{ font: fnt(400, 36, 'serif', 1), color: '#ece6dc', letterSpacing: '-.01em' }}>{t(`nav.${NAV[pi][0]}`)}</h1>
       </div>
       <div className="flex items-center gap-2.5">
+        <GuideButton page={page} />
         <div
           data-testid="session-badge"
           className="flex items-center gap-[9px] rounded-full px-3.5 py-2"

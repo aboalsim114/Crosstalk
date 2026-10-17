@@ -10,6 +10,7 @@ export const ru: Messages = {
   'nav.lang': 'Языки и глоссарий',
   'nav.hist': 'История',
   'nav.diag': 'Диагностика',
+  'nav.guide': 'Руководство',
   'nav.about': 'О программе',
   'window.minimize': 'Свернуть',
   'window.maximize': 'Развернуть',

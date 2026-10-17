@@ -13,6 +13,7 @@ export const fr = {
   'nav.lang': 'Langues & glossaire',
   'nav.hist': 'Historique',
   'nav.diag': 'Diagnostic',
+  'nav.guide': 'Guide',
   'nav.about': 'À propos',
 
   'window.minimize': 'Réduire',

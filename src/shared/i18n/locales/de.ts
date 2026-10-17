@@ -10,6 +10,7 @@ export const de: Messages = {
   'nav.lang': 'Sprachen & Glossar',
   'nav.hist': 'Verlauf',
   'nav.diag': 'Diagnose',
+  'nav.guide': 'Anleitung',
   'nav.about': 'Über',
   'window.minimize': 'Minimieren',
   'window.maximize': 'Maximieren',

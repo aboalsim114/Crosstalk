@@ -10,6 +10,7 @@ export const es: Messages = {
   'nav.lang': 'Idiomas y glosario',
   'nav.hist': 'Historial',
   'nav.diag': 'Diagnóstico',
+  'nav.guide': 'Guía',
   'nav.about': 'Acerca de',
   'window.minimize': 'Minimizar',
   'window.maximize': 'Maximizar',

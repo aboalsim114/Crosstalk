@@ -10,6 +10,7 @@ export const zhCN: Messages = {
   'nav.lang': '语言与术语表',
   'nav.hist': '历史记录',
   'nav.diag': '诊断',
+  'nav.guide': '使用指南',
   'nav.about': '关于',
   'window.minimize': '最小化',
   'window.maximize': '最大化',

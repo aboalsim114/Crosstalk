@@ -27,6 +27,7 @@ import { LangPage } from '../features/languages/LangPage';
 import { LanguageSetup } from '../features/languages/LanguagesCard';
 import { EngineSetup, engineSetupShown } from '../features/translation/EngineSetup';
 import { OverlayPage } from '../features/overlay/OverlayPage';
+import { GuidePage } from '../features/guide/GuidePage';
 import { Stage } from './scene/Stage';
 import type { PageId } from './state/data';
 import { startMeter, useApp } from './state/store';
@@ -40,6 +41,7 @@ const PAGES: Record<PageId, () => React.JSX.Element> = {
   lang: LangPage,
   hist: HistoryPage,
   diag: DiagPage,
+  guide: GuidePage,
   about: AboutPage,
 };
 
