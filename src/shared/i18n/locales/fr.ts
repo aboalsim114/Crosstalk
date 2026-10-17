@@ -15,6 +15,12 @@ export const fr = {
   'nav.diag': 'Diagnostic',
   'nav.guide': 'Guide',
   'nav.about': 'À propos',
+  'guide.help': '? Aide',
+  'guide.helpLabel': 'Aide sur cet écran (Guide)',
+  'guide.close': '← Fermer le guide',
+  'guide.search': 'Rechercher dans le guide',
+  'guide.searchHint': 'Rechercher…',
+  'guide.frOnly': 'Ce guide est pour l’instant disponible en français uniquement.',
 
   'window.minimize': 'Réduire',
   'window.maximize': 'Agrandir',

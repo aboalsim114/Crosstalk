@@ -4,8 +4,14 @@
 import { create } from 'zustand';
 import type { PageId } from '../../app/state/data';
 
-/** How far a feature can be trusted today. */
-export type FeatureStatus = 'disponible' | 'à configurer' | 'expérimental';
+/** How far a feature can be trusted today. None of them means "checked in a real match". */
+export type FeatureStatus = 'implémenté' | 'à configurer' | 'expérimental';
+
+export const STATUS_HELP: Record<FeatureStatus, string> = {
+  implémenté: 'Implémenté : présent et utilisable dans cette version. Ce n’est pas une garantie de résultat en partie.',
+  'à configurer': 'À configurer : demande un réglage, un compte ou un logiciel en plus avant de marcher.',
+  expérimental: 'Expérimental : désactivé par défaut, peut ne pas marcher sur tous les PC.',
+};
 
 export type CategoryId = 'start' | 'match' | 'more' | 'help';
 
@@ -34,8 +40,8 @@ export interface Chapter {
   status: FeatureStatus;
   /** Why it is not "disponible", or what is left to check. */
   statusNote?: string;
-  /** "Ouvrir les paramètres": the screen where it is set. */
-  settings?: { page: PageId; label: string };
+  /** The screen where it is set, and the card to look for on it (the link opens the screen only). */
+  settings?: { page: PageId; card?: string };
   purpose: string;
   prerequisites: string[];
   setup: string[];
@@ -110,15 +116,15 @@ export const PAGE_CHAPTER: Partial<Record<PageId, string>> = {
 interface GuideState {
   /** Chapter open, null for the table of contents (or 'faq'). */
   chapter: string | null;
+  /** On the FAQ page: the question to open (a search result). */
+  faq: string | null;
   query: string;
-  /** Screen to go back to when the guide is closed. */
-  returnTo: PageId;
-  set: (patch: Partial<Pick<GuideState, 'chapter' | 'query' | 'returnTo'>>) => void;
+  set: (patch: Partial<Pick<GuideState, 'chapter' | 'faq' | 'query'>>) => void;
 }
 
 export const useGuide = create<GuideState>((set) => ({
   chapter: null,
+  faq: null,
   query: '',
-  returnTo: 'dash',
   set: (patch) => set(patch),
 }));
