@@ -248,6 +248,7 @@ export const zhCN: Messages = {
   'myLang.players': '队友的语言（自动识别）',
   'myLang.playersHint': '无需勾选：每句话的语言都会自动识别。已经是您语言的句子不会被翻译。',
   'myLang.llmHint': '所有语言都由所选 LLM 直接翻译（音频与 AI › AI 翻译）。',
+  'auth.signOut': '退出登录',
   'myLang.hideOwn': '隐藏已是我的语言的句子',
   'myLang.hideOwnSub': '确定识别为你的语言的句子不会出现在叠加层、脚本或直播中（历史记录会保留）。语言不确定时仍然显示。',
   'setupEngine.title': '翻译引擎',

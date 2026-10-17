@@ -30,6 +30,8 @@ import { OverlayPage } from '../features/overlay/OverlayPage';
 import { Stage } from './scene/Stage';
 import type { PageId } from './state/data';
 import { startMeter, useApp } from './state/store';
+import { LoginPage } from '../features/login/LoginPage';
+import { useAuth } from '../features/login/auth';
 
 const PAGES: Record<PageId, () => React.JSX.Element> = {
   dash: Dashboard,
@@ -57,6 +59,8 @@ export default function App() {
   const entered = useApp((s) => s.entered);
   const showIntro = useApp((s) => s.showIntro);
   const Page = PAGES[page];
+  // Signed out: the sign-in page takes the whole window (the engines keep running behind).
+  const signedIn = useAuth((s) => s.user) != null;
   // "What's new" waits for the first-launch choices (languages, engine).
   const setupDone = useApp((s) => s.langSetupDone && !engineSetupShown(s));
 
@@ -141,5 +145,6 @@ export default function App() {
     </div>
   );
 
-  return isTauri ? shell : <div className="frame-host">{shell}</div>;
+  const view = signedIn ? shell : <LoginPage />;
+  return isTauri ? view : <div className="frame-host">{view}</div>;
 }

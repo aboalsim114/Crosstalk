@@ -248,6 +248,7 @@ export const es: Messages = {
   'myLang.players': 'Idiomas de tus compañeros, detectados automáticamente',
   'myLang.playersHint': 'Nada que marcar: se detecta el idioma de cada frase. Una frase ya en tu idioma no se traduce.',
   'myLang.llmHint': 'Todos los idiomas se traducen directamente con el LLM elegido (Audio e IA › Traducción IA).',
+  'auth.signOut': 'Cerrar sesión',
   'myLang.hideOwn': 'Ocultar las frases ya en mi idioma',
   'myLang.hideOwnSub': 'Una frase reconocida con seguridad en tu idioma no aparece en el overlay, el guion ni el stream (el historial la conserva). Si el idioma es dudoso, sigue visible.',
   'setupEngine.title': 'Motor de traducción',

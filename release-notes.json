@@ -1,5 +1,16 @@
 [
   {
+    "id": "page-de-connexion",
+    "date": "2026-10-17",
+    "title": "Nouvelle page de connexion",
+    "items": [
+      "Crosstalk s'ouvre désormais sur une page de connexion.",
+      "Pour l'instant, connectez-vous avec l'identifiant admin et le mot de passe admin.",
+      "Laissez « Rester connecté » activé pour ne pas avoir à vous reconnecter à chaque lancement.",
+      "« Se déconnecter » se trouve en bas du menu de gauche."
+    ]
+  },
+  {
     "id": "traduction-phrases-completes",
     "date": "2026-10-17",
     "title": "Traductions plus naturelles",
