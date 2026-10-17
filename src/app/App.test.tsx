@@ -38,16 +38,17 @@ describe('App', () => {
     expect(screen.getByTestId('session-badge')).toHaveTextContent('EN ÉCOUTE');
   });
 
-  it('navigates between the seven chapters', () => {
+  it('navigates between the eight chapters', () => {
     render(<App />);
     fireEvent.click(screen.getByText('Entrer'));
     for (const [label, chapter] of [
       ['Audio & IA', '03'],
       ['Diagnostic', '06'],
-      ['À propos', '07'],
+      ['Guide', '07'],
+      ['À propos', '08'],
     ]) {
       fireEvent.click(screen.getAllByText(label)[0]);
-      expect(screen.getByText(`CHAPITRE ${chapter} / 07`)).toBeInTheDocument();
+      expect(screen.getByText(`CHAPITRE ${chapter} / 08`)).toBeInTheDocument();
     }
     expect(screen.getByText('Injecter une DLL dans cs2.exe')).toBeInTheDocument();
   });
