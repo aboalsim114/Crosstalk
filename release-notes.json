@@ -1,5 +1,13 @@
 [
   {
+    "id": "carte-repondre-mise-en-page",
+    "date": "2026-10-17",
+    "title": "Carte Répondre mieux rangée",
+    "items": [
+      "Dans Langues & glossaire, les langues de la carte « Répondre dans leur langue » passent à la ligne au lieu de déborder sur le glossaire."
+    ]
+  },
+  {
     "id": "raccourcis-clavier-de-secours",
     "date": "2026-10-17",
     "title": "Ctrl+Alt+F6 et Ctrl+Alt+F7 sont de retour",
