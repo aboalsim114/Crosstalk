@@ -1,5 +1,17 @@
 [
   {
+    "id": "guide-integre",
+    "date": "2026-10-17",
+    "title": "Un guide intégré à l'application",
+    "items": [
+      "Nouvelle entrée « Guide » dans le menu de gauche : chaque fonction y est expliquée pas à pas, de l'installation au dépannage.",
+      "Sur chaque écran, le bouton « ? Aide » en haut ouvre directement le chapitre qui en parle ; « Fermer le guide » vous ramène où vous étiez.",
+      "Une recherche retrouve un sujet en quelques lettres, et une page de questions fréquentes répond aux soucis courants.",
+      "Chaque chapitre indique si la fonction est implémentée, à configurer ou expérimentale, et un bouton ouvre l'écran où elle se règle.",
+      "Le guide marche sans connexion internet. Il est pour l'instant en français uniquement."
+    ]
+  },
+  {
     "id": "page-de-connexion-v3",
     "date": "2026-10-17",
     "title": "Page de connexion redessinée",

@@ -66,6 +66,8 @@ export const sceneFx: SceneFx[] = [];
 
 export interface AppState {
   page: PageId;
+  /** The screen shown before `page` (Guide › « Fermer le guide » goes back to it). */
+  prevPage: PageId;
   session: Session;
   paused: boolean;
   feed: FeedEntry[];
@@ -161,6 +163,7 @@ export interface AppActions {
 
 const initial: AppState = {
   page: config.startPage,
+  prevPage: config.startPage,
   session: 'IDLE',
   paused: false,
   feed: [],
@@ -301,7 +304,7 @@ export const useApp = create<AppState & AppActions>()((set, get) => {
   return {
     ...initial,
     set: (patch) => set(patch),
-    setPage: (page) => set({ page }),
+    setPage: (page) => set((s) => (s.page === page ? {} : { page, prevPage: s.page })),
     toggle: (k) => set((s) => ({ tg: { ...s.tg, [k]: !s.tg[k] } })),
     setStream: (p) => set((s) => ({ stream: { ...s.stream, ...p } })),
     setSpeaker: (p) => set((s) => ({ speaker: { ...s.speaker, ...p } })),

@@ -32,7 +32,7 @@ export const EVENTS: SimEvent[] = [
 
 export const CHANNEL_NAME: Record<Channel, string> = { CT: 'ÉQUIPE CT', T: 'ÉQUIPE T', ALL: 'TOUS' };
 
-export type PageId = 'dash' | 'overlay' | 'audio' | 'lang' | 'hist' | 'diag' | 'about';
+export type PageId = 'dash' | 'overlay' | 'audio' | 'lang' | 'hist' | 'diag' | 'guide' | 'about';
 export const NAV: [PageId, string][] = [
   ['dash', 'Accueil'],
   ['overlay', 'Overlay'],
@@ -40,6 +40,7 @@ export const NAV: [PageId, string][] = [
   ['lang', 'Langues & glossaire'],
   ['hist', 'Historique'],
   ['diag', 'Diagnostic'],
+  ['guide', 'Guide'],
   ['about', 'À propos'],
 ];
 
