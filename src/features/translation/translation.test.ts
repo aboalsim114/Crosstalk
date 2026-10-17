@@ -155,3 +155,10 @@ describe('lines already in the user’s language', () => {
     expect(useApp.getState().tg.skipFr).toBe(true);
   });
 });
+
+describe('a translation that changed a count, a site or a side', () => {
+  it('leaves the original on screen with why, not as an engine error', () => {
+    const line = withTranslation(transcriptEntry(transcript), result({ translated: null, error: 'traduction écartée : nombre modifié' }));
+    expect(line).toMatchObject({ status: 'transcrit', err: false, note: 'traduction écartée : nombre modifié', shown: null });
+  });
+});

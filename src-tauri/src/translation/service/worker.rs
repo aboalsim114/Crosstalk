@@ -6,7 +6,10 @@ use std::time::{Duration, Instant};
 
 use super::cache::cache_key;
 use super::{failure, Inner, Job, Translation, MAX_WAIT};
-use crate::translation::{callouts, glossary, languages};
+use crate::translation::{callouts, glossary, guard, languages};
+
+/// Start of the reason shown when translation::guard rejected both answers.
+pub const REJECTED: &str = "traduction écartée";
 
 pub(super) fn worker_loop(inner: &Inner) {
     crate::cpu::lower_current_thread_priority();
@@ -122,6 +125,18 @@ pub(super) fn run(inner: &Inner, job: &Job) -> Option<Translation> {
             return None;
         }
         return match out {
+            // A live line that changed a count, a site or a side is not shown.
+            Ok((text, _))
+                if guard::check(
+                    &job.text,
+                    &job.lang,
+                    &callouts::clean_output(&text),
+                    &target,
+                )
+                .is_err() =>
+            {
+                None
+            }
             Ok((text, protected)) if !callouts::clean_output(&text).is_empty() => {
                 Some(Translation {
                     translated: Some(callouts::clean_output(&text)),
@@ -149,12 +164,30 @@ pub(super) fn run(inner: &Inner, job: &Job) -> Option<Translation> {
     }
     let outcome = glossary::translate(&job.text, &config.glossary, |t| {
         translator.translate(t, &job.lang, &target)
-    });
+    })
+    .map(|(t, p)| (callouts::clean_output(&t), p));
+    // Smart Comms: a count, a site or a side changed → once more, firmer;
+    // still changed → the line stays in its language, with why.
+    let checked = |text: &str| guard::check(&job.text, &job.lang, text, &target);
+    let outcome = match outcome {
+        Ok((text, p)) => match checked(&text) {
+            Ok(()) => Ok((text, p)),
+            Err(_) => glossary::translate(&job.text, &config.glossary, |t| {
+                translator.translate_strict(t, &job.lang, &target)
+            })
+            .map(|(t, p)| (callouts::clean_output(&t), p))
+            .and_then(|(t, p)| match checked(&t) {
+                Ok(()) => Ok((t, p)),
+                Err(issue) => Err(format!("{REJECTED} : {}", issue.reason())),
+            }),
+        },
+        e => e,
+    };
     let ms = started.elapsed().as_millis() as u32;
     if !manual && job.generation != inner.generation.load(Ordering::SeqCst) {
         return None;
     }
-    match outcome.map(|(t, p)| (callouts::clean_output(&t), p)) {
+    match outcome {
         Ok((text, protected)) if !text.trim().is_empty() => {
             let used = Some(translator.name().to_string());
             inner
@@ -172,6 +205,7 @@ pub(super) fn run(inner: &Inner, job: &Job) -> Option<Translation> {
             })
         }
         Ok(_) => fail("traduction vide"),
+        Err(e) if e.starts_with(REJECTED) => fail(&e),
         Err(e) => fail(&format!("LLM : {e}")),
     }
 }

@@ -212,6 +212,26 @@ impl LlmClient {
 
     /// Translates one line with the configured engine.
     pub fn translate(&self, text: &str, source: &str, target: &str) -> Result<String, String> {
+        self.translate_with(text, source, target, false)
+    }
+
+    /// Second try after an answer rejected by translation::guard.
+    pub fn translate_strict(
+        &self,
+        text: &str,
+        source: &str,
+        target: &str,
+    ) -> Result<String, String> {
+        self.translate_with(text, source, target, true)
+    }
+
+    fn translate_with(
+        &self,
+        text: &str,
+        source: &str,
+        target: &str,
+        strict: bool,
+    ) -> Result<String, String> {
         let config = self.config();
         let key = self.keys.get();
         if let Some(p) = Self::problem(&config, key.is_some()) {
@@ -221,7 +241,7 @@ impl LlmClient {
             return Err(why);
         }
         let started = Instant::now();
-        let result = self.call(&config, key.as_deref(), text, source, target);
+        let result = self.call(&config, key.as_deref(), text, source, target, strict);
         let ms = started.elapsed().as_millis() as u32;
         let mut st = self.stats.lock().unwrap();
         st.calls += 1;
@@ -284,8 +304,9 @@ impl LlmClient {
         text: &str,
         source: &str,
         target: &str,
+        strict: bool,
     ) -> Result<String, (String, Option<HttpError>)> {
-        let (url, headers, body) = prompt::request(config, key, text, source, target);
+        let (url, headers, body) = prompt::request_with(config, key, text, source, target, strict);
         let timeout = Self::timeout(config);
         let raw = self
             .transport
@@ -307,7 +328,7 @@ impl LlmClient {
         let out = match Self::problem(&config, key.is_some()) {
             Some(p) => Err(p),
             None => self
-                .call(&config, key.as_deref(), text, source, target)
+                .call(&config, key.as_deref(), text, source, target, false)
                 .map_err(|(e, _)| redact(&e, key.as_deref())),
         };
         if out.is_ok() {

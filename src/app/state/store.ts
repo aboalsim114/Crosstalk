@@ -428,7 +428,9 @@ export function startMeter(): () => void {
 }
 
 /** Untranslated on purpose (off, no engine connected yet…): the original stays, with the reason, not as an error. */
-const QUIET_FAILURES = ['traduction désactivée', 'aucun moteur de traduction connecté', 'langue non gérée'];
+// 'traduction écartée': the translation changed a count, a site or a side
+// (src-tauri translation::guard); the original stays, with why, not as an error.
+const QUIET_FAILURES = ['traduction désactivée', 'aucun moteur de traduction connecté', 'langue non gérée', 'traduction écartée'];
 
 /** A transcript line once its translation arrived: French text, or the original with why. */
 /** A translation identical to the original: only Counter-Strike terms. */

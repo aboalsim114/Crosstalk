@@ -76,6 +76,10 @@ impl Translator for LlmClient {
     fn translate_partial(&self, text: &str, source: &str, target: &str) -> Result<String, String> {
         LlmClient::translate_partial(self, text, source, target)
     }
+
+    fn translate_strict(&self, text: &str, source: &str, target: &str) -> Result<String, String> {
+        LlmClient::translate_strict(self, text, source, target)
+    }
 }
 
 #[cfg(test)]
