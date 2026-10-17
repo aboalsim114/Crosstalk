@@ -184,3 +184,25 @@ pub fn parse_models(json: &str) -> Vec<String> {
     ids.truncate(500);
     ids
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn names_every_target_language_in_the_prompt() {
+        for (code, name) in [
+            ("ar", "Arabic"),
+            ("zh", "Simplified Chinese"),
+            ("ja", "Japanese"),
+            ("pt", "Portuguese"),
+            ("tr", "Turkish"),
+        ] {
+            let p = system_prompt("ru", code);
+            assert!(p.contains(&format!("from Russian into {name}")), "{code}");
+        }
+        for code in crate::translation::languages::LANGUAGES {
+            assert_ne!(language_name(code), code, "{code} has no name");
+        }
+    }
+}

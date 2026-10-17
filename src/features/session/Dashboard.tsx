@@ -42,11 +42,12 @@ function Subtitle() {
           <span>{sub.tag}</span>
           <span style={{ color: '#5a5650' }}>{sub.sender}</span>
         </div>
-        <div className="max-w-[560px]" style={{ font: fnt(400, 13.5, 'mono', 1.5), color: '#8f8a83' }}>
+        <div className="max-w-[560px]" dir="auto" style={{ font: fnt(400, 13.5, 'mono', 1.5), color: '#8f8a83' }}>
           {sub.orig}
         </div>
         <div
           className="max-w-[600px]"
+          dir="auto"
           style={{
             font: fnt(400, 44, 'serif', 1.12),
             fontStyle: sub.italic ? 'italic' : 'normal',
@@ -204,11 +205,13 @@ function ScriptPanel() {
                     {e.status} <span style={{ color: '#5a5650' }}>{e.lat}</span>
                   </span>
                 </div>
-                <div style={{ font: fnt(400, 14.5, 'sans', 1.4), color: e.trColor, fontStyle: e.italic ? 'italic' : 'normal', textWrap: 'pretty' }}>
+                <div dir="auto" style={{ font: fnt(400, 14.5, 'sans', 1.4), color: e.trColor, fontStyle: e.italic ? 'italic' : 'normal', textWrap: 'pretty' }}>
                   {e.lead}
                   {e.shown}
                 </div>
-                <div style={{ font: fnt(400, 11.5, 'mono', 1.45), color: '#6e6961' }}>{e.orig}</div>
+                <div dir="auto" style={{ font: fnt(400, 11.5, 'mono', 1.45), color: '#6e6961' }}>
+                  {e.orig}
+                </div>
                 <div style={{ font: fnt(400, 10.5), color: e.noteColor }}>{e.note}</div>
               </motion.div>
             );

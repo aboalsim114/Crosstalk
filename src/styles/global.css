@@ -13,9 +13,11 @@
 /* Design tokens from the cinematic mockup (design/maquette). Exposed as Tailwind
    utilities (text-ember, bg-ink, font-serif…) and as CSS variables. */
 @theme static {
-  --font-serif: 'Instrument Serif', Georgia, serif;
-  --font-sans: 'Geist Sans', 'Geist', system-ui, sans-serif;
-  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+  /* Windows fonts after the design's ones: Arabic, Chinese and Japanese lines. */
+  --font-intl: 'Segoe UI', 'Segoe UI Arabic', 'Microsoft YaHei UI', 'Microsoft YaHei', 'Yu Gothic UI', 'Malgun Gothic', 'Noto Sans CJK SC', 'Noto Sans Arabic';
+  --font-serif: 'Instrument Serif', Georgia, var(--font-intl), serif;
+  --font-sans: 'Geist Sans', 'Geist', system-ui, var(--font-intl), sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, var(--font-intl), monospace;
 
   --color-ink: #020203;
   --color-text: #ece6dc;

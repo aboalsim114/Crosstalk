@@ -5,7 +5,7 @@
 <title>Crosstalk — sous-titres pour le stream</title>
 <style>
   html, body { margin: 0; height: 100%; background: transparent; overflow: hidden; }
-  body { font-family: 'Segoe UI', 'Geist', system-ui, sans-serif; --size: 34px; }
+  body { font-family: 'Segoe UI', 'Geist', system-ui, 'Segoe UI Arabic', 'Microsoft YaHei UI', 'Yu Gothic UI', sans-serif; --size: 34px; }
   #stack { position: absolute; left: 50%; bottom: 7%; transform: translateX(-50%); width: min(88vw, 1500px);
     display: flex; flex-direction: column; align-items: center; gap: 10px; }
   .line { max-width: 100%; padding: 10px 22px 12px; border-radius: 14px; background: rgba(10, 9, 8, .72);
@@ -27,14 +27,17 @@
 <script>
   const stack = document.getElementById('stack');
   const mark = document.getElementById('mark');
-  const LANG = { ru: 'russe', en: 'anglais', fr: 'français', xx: '' };
+  const LANG = { ru: 'russe', en: 'anglais', fr: 'français', de: 'allemand', es: 'espagnol', pt: 'portugais', uk: 'ukrainien', pl: 'polonais', tr: 'turc', ar: 'arabe', zh: 'chinois', ja: 'japonais', xx: '' };
   const CHANNEL = { CT: 'CT', T: 'T', ALL: 'tous' };
   let cfg = { enabled: false, max: 3, duration: 8, size: 34, watermark: true };
 
   function el(tag, cls, text) {
     const e = document.createElement(tag);
     if (cls) e.className = cls;
-    if (text) e.textContent = text;
+    if (text) {
+      e.textContent = text;
+      e.dir = 'auto'; // Arabic reads right to left
+    }
     return e;
   }
   function applyConfig(c) {

@@ -77,8 +77,15 @@ export function OverlayStack({ s, outline }: { s: Pick<AppState, 'feed' | 'maxBl
           style={{ background: `rgba(6,6,8,${(s.opacity / 100).toFixed(2)})`, opacity: o.opacity, border: '1px solid rgba(255,255,255,.05)' }}
         >
           {s.fmt !== 'minimal' && <div style={{ font: fnt(600, 9.5, 'mono'), letterSpacing: '.14em', color: o.color }}>{o.head}</div>}
-          {s.fmt === 'bilingue' && <div style={{ font: fnt(400, 11.5, 'mono', 1.4), color: '#a49d92', textShadow: '0 1px 2px #000' }}>{o.orig}</div>}
-          <div style={{ font: fnt(500, size, 'sans', 1.32), color: '#fff', textShadow: '0 1px 2px #000,0 0 10px rgba(0,0,0,.85)' }}>{o.line}</div>
+          {s.fmt === 'bilingue' && (
+            <div dir="auto" style={{ font: fnt(400, 11.5, 'mono', 1.4), color: '#a49d92', textShadow: '0 1px 2px #000' }}>
+              {o.orig}
+            </div>
+          )}
+          {/* dir="auto": Arabic reads right to left, from its first letter. */}
+          <div dir="auto" style={{ font: fnt(500, size, 'sans', 1.32), color: '#fff', textShadow: '0 1px 2px #000,0 0 10px rgba(0,0,0,.85)' }}>
+            {o.line}
+          </div>
         </div>
       ))}
     </div>
