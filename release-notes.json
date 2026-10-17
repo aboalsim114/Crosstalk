@@ -1,5 +1,18 @@
 [
   {
+    "id": "langues-detectees-et-appels-fiables",
+    "date": "2026-10-17",
+    "title": "Langues détectées toutes seules, appels plus fiables",
+    "items": [
+      "Plus besoin de choisir la langue de vos coéquipiers : elle est reconnue automatiquement. Choisissez seulement votre langue dans Langues › Mes langues.",
+      "Nouvelles langues : portugais, arabe, chinois et japonais. À la voix : anglais, français, russe, allemand, espagnol, portugais, ukrainien et polonais. Le turc, l'arabe, le chinois et le japonais sont traduits depuis le chat écrit.",
+      "Les phrases déjà dans votre langue ne s'affichent plus dans l'overlay ni dans le Script. Pour les revoir : Langues › Mes langues › « Masquer les phrases déjà dans ma langue ». En cas de doute, la phrase reste affichée.",
+      "Les nombres de joueurs, les sites A et B et la gauche ou la droite sont vérifiés dans chaque traduction. Si la traduction les change, la phrase reste dans sa langue d'origine avec la mention « traduction écartée ».",
+      "Les phrases apparaissent plus vite quand le processeur est chargé : Crosstalk ne calcule plus de texte provisoire une fois la phrase terminée.",
+      "L'arabe s'affiche de droite à gauche, et les caractères chinois et japonais s'affichent correctement dans l'overlay."
+    ]
+  },
+  {
     "id": "carte-repondre-mise-en-page",
     "date": "2026-10-17",
     "title": "Carte Répondre mieux rangée",
