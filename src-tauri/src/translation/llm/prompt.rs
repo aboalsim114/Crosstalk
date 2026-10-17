@@ -23,6 +23,8 @@ pub fn language_name(code: &str) -> &str {
         "ar" => "Arabic",
         "zh" => "Simplified Chinese",
         "ja" => "Japanese",
+        // Language not told for sure (translation::languages::UNSURE).
+        "auto" => "the original language",
         other => other,
     }
 }
@@ -46,6 +48,7 @@ pub fn system_prompt(source: &str, target: &str) -> String {
          smoke, flash, molotov, HE, kevlar, defuse kit) and game terms (rush, rotate, eco, \
          force buy, save, plant, defuse, lurk, low, lit).\n\
          - Keep codes such as KZ1, KZ2 exactly as written.\n\
+         - If the message is already in {tgt}, reply with it unchanged.\n\
          - Insults are translated as they are, without softening or commenting.",
         src = language_name(source),
         tgt = language_name(target),
@@ -63,6 +66,15 @@ pub fn is_translategemma(model: &str) -> bool {
 
 pub fn translategemma_prompt(source: &str, target: &str, text: &str) -> String {
     let (src, tgt) = (language_name(source), language_name(target));
+    if source == "auto" {
+        // Language not told for sure: TranslateGemma has no wording for it.
+        return format!(
+            "You are a professional translator into {tgt} ({target}). Produce only the {tgt} \
+             translation, without any additional explanations or commentary. If the text is \
+             already in {tgt}, return it unchanged. Please translate the following text into \
+             {tgt}:\n\n\n{text}"
+        );
+    }
     format!(
         "You are a professional {src} ({source}) to {tgt} ({target}) translator. Your goal is to \
          accurately convey the meaning and nuances of the original {src} text while adhering to \

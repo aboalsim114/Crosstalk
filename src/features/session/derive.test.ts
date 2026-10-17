@@ -74,7 +74,9 @@ describe('overlayBlocks', () => {
     expect(overlayBlocks([], 2).every((x) => x.opacity === 1)).toBe(true);
   });
   it('prefixes chat lines with the sender', () => {
-    expect(overlayBlocks([chat({ shown: 'Je prends B' })], 3)[0]).toMatchObject({ line: 'Lucas : « Je prends B »', head: 'CHAT • ÉQUIPE CT • FRANÇAIS → FRANÇAIS' });
+    expect(overlayBlocks([chat({ status: 'final', src: 'en', orig: 'I take B', shown: 'Je prends B' })], 3)[0]).toMatchObject({ line: 'Lucas : « Je prends B »', head: 'CHAT • ÉQUIPE CT • ANGLAIS → FRANÇAIS' });
+    // Already in French: once, without "FRANÇAIS → FRANÇAIS".
+    expect(overlayBlocks([chat()], 3)[0]).toMatchObject({ line: 'Lucas : « je prends B »', head: 'CHAT • ÉQUIPE CT • FRANÇAIS', orig: '' });
   });
 });
 

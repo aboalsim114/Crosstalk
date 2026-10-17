@@ -248,6 +248,8 @@ export const ptBR: Messages = {
   'myLang.players': 'Idiomas dos colegas, detectados automaticamente',
   'myLang.playersHint': 'Nada para marcar: o idioma de cada frase é detectado. Uma frase já no seu idioma não é traduzida.',
   'myLang.llmHint': 'Todos os idiomas são traduzidos diretamente pelo LLM escolhido (Áudio e IA › Tradução por IA).',
+  'myLang.hideOwn': 'Ocultar as frases já no meu idioma',
+  'myLang.hideOwnSub': 'Uma frase reconhecida com certeza no seu idioma não aparece no overlay, no roteiro nem na live (o histórico a guarda). Se o idioma for incerto, ela continua visível.',
   'setupEngine.title': 'Mecanismo de tradução',
   'setupEngine.lead': 'O Crosstalk traduz com o LLM que você escolher. Dá para mudar a qualquer momento em Áudio e IA › Tradução por IA.',
   'setupEngine.cloud': 'API na nuvem',

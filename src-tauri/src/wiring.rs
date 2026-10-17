@@ -62,10 +62,12 @@ fn route_transcript(
     };
     show(transcript);
     if let Some(t) = translation {
+        // An uncertain language is never taken as the user's own (shown as is).
+        let lang = languages::source_of(transcript.lang.code(), transcript.lang_prob);
         if transcript.partial {
-            t.submit_partial(transcript.id, transcript.lang.code(), &transcript.text);
+            t.submit_partial(transcript.id, lang, &transcript.text);
         } else {
-            t.submit(transcript.id, transcript.lang.code(), &transcript.text);
+            t.submit(transcript.id, lang, &transcript.text);
         }
     }
 }

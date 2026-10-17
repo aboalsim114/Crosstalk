@@ -255,6 +255,8 @@ export const fr = {
   'myLang.players': 'Langues de vos coéquipiers, reconnues automatiquement',
   'myLang.playersHint': 'Rien à cocher : la langue de chaque phrase est détectée. Une phrase déjà dans votre langue n’est pas traduite.',
   'myLang.llmHint': 'Toutes les langues se traduisent directement par le LLM choisi (Audio & IA › Traduction IA).',
+  'myLang.hideOwn': 'Masquer les phrases déjà dans ma langue',
+  'myLang.hideOwnSub': 'Une phrase reconnue avec certitude dans votre langue n’apparaît ni dans l’overlay, ni dans le Script, ni en stream (l’historique la garde). En cas de doute sur la langue, elle reste affichée.',
   'setupEngine.title': 'Moteur de traduction',
   'setupEngine.lead': 'Crosstalk traduit avec le LLM de votre choix. Vous pourrez changer à tout moment dans Audio & IA › Traduction IA.',
   'setupEngine.cloud': 'API Cloud',

@@ -1,4 +1,4 @@
-import { fnt } from '../../shared/ui/atoms';
+import { ToggleRow, fnt } from '../../shared/ui/atoms';
 import { useT } from '../../shared/i18n';
 import { isSpeechLang, NATIVE_NAME, PLAYER_LANGS, SPEECH_LANGS, TARGET_LANGS, type TargetLang } from './langs';
 import { useApp } from '../../app/state/store';
@@ -63,10 +63,13 @@ export function LanguagePicker() {
 /** Langues › Mes langues. */
 export function MyLanguagesCard() {
   const t = useT();
+  const hideOwn = useApp((s) => s.tg.skipFr);
+  const toggle = useApp((s) => s.toggle);
   return (
     <div className="glass flex flex-col gap-4 p-5" data-testid="my-languages">
       <span className="lbl">{t('myLang.title')}</span>
       <LanguagePicker />
+      <ToggleRow title={t('myLang.hideOwn')} sub={t('myLang.hideOwnSub')} on={hideOwn} onClick={() => toggle('skipFr')} label={t('myLang.hideOwn')} />
     </div>
   );
 }

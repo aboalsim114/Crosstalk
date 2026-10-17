@@ -78,3 +78,8 @@ export function recentLangs(feed: { src: string; tid?: number }[], n = 20): stri
     .slice(0, n)
     .map((f) => f.src);
 }
+
+/** Language of a line not told for sure (src-tauri translation::languages::UNSURE). */
+export const UNSURE_LANG = 'auto';
+/** From this confidence on, a detected language is trusted (as in the Rust core). */
+export const CONFIDENT = 0.7;

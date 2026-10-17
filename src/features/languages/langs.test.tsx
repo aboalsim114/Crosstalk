@@ -2,7 +2,7 @@ import { act, fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { useTargetLang } from '../../shared/i18n';
 import { feedRow } from '../session/derive';
-import { LanguagePicker, LanguageSetup } from './LanguagesCard';
+import { LanguagePicker, LanguageSetup, MyLanguagesCard } from './LanguagesCard';
 import { chatEntry } from '../chat/chat';
 import { guessTarget, isSpeechLang, PLAYER_LANGS, SPEECH_LANGS, TARGET_LANGS } from './langs';
 import { restore, snapshot } from '../../app/state/persist';
@@ -99,5 +99,17 @@ describe('first launch', () => {
     expect(useApp.getState().langSetupDone).toBe(true);
     rerender(<LanguageSetup />);
     expect(screen.queryByRole('dialog')).toBeNull();
+  });
+});
+
+describe('hiding the lines already in my language', () => {
+  it('is a switch of Mes langues, on by default, and saved', () => {
+    useApp.setState({ tg: { ...useApp.getState().tg, skipFr: true } });
+    render(<MyLanguagesCard />);
+    const sw = screen.getByRole('switch', { name: 'Masquer les phrases déjà dans ma langue' });
+    expect(sw.getAttribute('aria-checked')).toBe('true');
+    fireEvent.click(sw);
+    expect(useApp.getState().tg.skipFr).toBe(false);
+    expect((snapshot(useApp.getState(), null).config.settings as { tg?: object }).tg).toMatchObject({ skipFr: false });
   });
 });

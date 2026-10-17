@@ -248,6 +248,8 @@ export const tr: Messages = {
   'myLang.players': 'Takım arkadaşlarının dilleri otomatik algılanır',
   'myLang.playersHint': 'İşaretlenecek bir şey yok: her cümlenin dili algılanır. Zaten sizin dilinizde olan cümle çevrilmez.',
   'myLang.llmHint': 'Tüm diller seçilen LLM ile doğrudan çevrilir (Ses ve YZ › YZ çevirisi).',
+  'myLang.hideOwn': 'Zaten benim dilimde olan cümleleri gizle',
+  'myLang.hideOwnSub': 'Kesin olarak sizin dilinizde tanınan bir cümle overlay’de, metinde ve yayında görünmez (geçmiş saklar). Dil belirsizse görünür kalır.',
   'setupEngine.title': 'Çeviri motoru',
   'setupEngine.lead': 'Crosstalk seçtiğin LLM ile çevirir. İstediğin zaman Ses ve YZ › YZ çevirisi bölümünden değiştirebilirsin.',
   'setupEngine.cloud': 'Bulut API',

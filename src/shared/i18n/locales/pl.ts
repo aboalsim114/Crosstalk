@@ -248,6 +248,8 @@ export const pl: Messages = {
   'myLang.players': 'Języki kolegów, rozpoznawane automatycznie',
   'myLang.playersHint': 'Nic do zaznaczania: język każdej wypowiedzi jest rozpoznawany. Wypowiedź w twoim języku nie jest tłumaczona.',
   'myLang.llmHint': 'Wszystkie języki są tłumaczone bezpośrednio przez wybrany LLM (Dźwięk i AI › Tłumaczenie AI).',
+  'myLang.hideOwn': 'Ukryj zdania już w moim języku',
+  'myLang.hideOwnSub': 'Zdanie rozpoznane na pewno w Twoim języku nie pojawia się w nakładce, skrypcie ani na streamie (historia je zachowuje). Gdy język jest niepewny, pozostaje widoczne.',
   'setupEngine.title': 'Silnik tłumaczenia',
   'setupEngine.lead': 'Crosstalk tłumaczy za pomocą wybranego LLM. Możesz to zmienić w dowolnej chwili: Dźwięk i AI › Tłumaczenie AI.',
   'setupEngine.cloud': 'API w chmurze',

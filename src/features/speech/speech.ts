@@ -6,7 +6,7 @@ import { t } from '../../shared/i18n';
 import { create } from 'zustand';
 import { isTauri, speech, type ModelInfo, type RejectReason, type SpeechConfig, type SpeechStats, type SpeechStatus, type Transcript, type VoiceActivity } from '../../shared/ipc';
 import type { AppState, FeedEntry } from '../../app/state/store';
-import { SPEECH_LANGS } from '../languages/langs';
+import { CONFIDENT, SPEECH_LANGS } from '../languages/langs';
 
 export interface SpeechState {
   native: boolean;
@@ -61,8 +61,13 @@ export function speechConfigFrom(s: Pick<AppState, 'model' | 'vad'> & Partial<Pi
   };
 }
 
-/** A real transcript as a Script / overlay line: original text, translation pending. */
-export function transcriptEntry(t: Transcript, now = new Date()): FeedEntry {
+/**
+ * A real transcript as a Script / overlay line: original text, translation
+ * pending; already in the user's language (`target`) when it was detected
+ * with confidence (an unsure language is always translated, never hidden).
+ */
+export function transcriptEntry(t: Transcript, now = new Date(), target?: string): FeedEntry {
+  const own = t.lang === target && t.langProb >= CONFIDENT;
   return {
     kind: 'voice',
     src: t.lang,
@@ -72,7 +77,7 @@ export function transcriptEntry(t: Transcript, now = new Date()): FeedEntry {
     tid: t.id,
     at: now.getTime(),
     time: now.toLocaleTimeString('fr-FR'),
-    status: 'transcrit',
+    status: own ? 'original' : 'transcrit',
     shown: null,
     lat: t.partial ? null : t.latencyMs,
     err: false,

@@ -192,6 +192,17 @@ fn the_users_own_language_is_never_sent() {
 }
 
 #[test]
+fn an_unsure_language_goes_to_the_llm_without_the_shortcuts() {
+    let (svc, rx, llm) = service(0);
+    // Maybe French, maybe not: never taken as the user's own, no lexicon.
+    svc.submit(4, crate::translation::languages::UNSURE, "CT, go, go.");
+    let t = next(&rx);
+    assert_eq!(t.translated.as_deref(), Some("FR:CT, go, go."));
+    assert_eq!(t.error, None);
+    assert_eq!(calls(&llm), 1);
+}
+
+#[test]
 fn live_lines_wait_for_final_ones_and_only_the_latest_is_kept() {
     let (svc, rx, _) = service(150);
     svc.submit(1, "ru", "первая фраза");

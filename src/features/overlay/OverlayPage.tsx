@@ -2,7 +2,7 @@ import { isTauri } from '../../shared/ipc';
 import { Seg, Slider, ToggleRow, fnt } from '../../shared/ui/atoms';
 import { channelName, langName, quote, t, useT, type MessageKey, targetName } from '../../shared/i18n';
 import { SAMPLE_OVERLAY, type OverlayLine } from '../../app/state/data';
-import { useApp, type AppState, type Corner, type OverlayFormat } from '../../app/state/store';
+import { useApp, visibleFeed, type AppState, type Corner, type OverlayFormat } from '../../app/state/store';
 import { StreamCard } from '../stream/StreamCard';
 import { RadarCard } from '../radar/RadarCard';
 
@@ -33,6 +33,17 @@ export function overlayBlocks(feed: OverlayLine[], maxBlocks: number): OverlayBl
     const text = f.shown || f.orig;
     // A real transcript is the original text: never labelled as French.
     const transcript = f.status === 'transcrit';
+    // Already in the user's language (option off): shown once, without "→".
+    if (f.status === 'original') {
+      return {
+        key: `${i}-${f.orig}`,
+        color: voice ? '#ffa24a' : '#7fd4ff',
+        head: `${kind} • ${langName(f.src)}`,
+        orig: '',
+        line: f.sender ? `${f.sender} : ${quote(f.orig + (f.live ? ' …' : ''))}` : quote(f.orig + (f.live ? ' …' : '')),
+        opacity: i === maxBlocks - 1 && maxBlocks > 2 ? 0.5 : 1,
+      };
+    }
     // Provisional French of a line still being spoken (or whose final translation is pending).
     if (transcript && f.shown) {
       return {
@@ -125,7 +136,7 @@ export function OverlayPage() {
                   transition: 'all .6s cubic-bezier(.2,.7,.1,1)',
                 }}
               >
-                <OverlayStack s={s} outline={s.repos ? '1px dashed #ffa24a' : undefined} />
+                <OverlayStack s={{ ...s, feed: visibleFeed(s.feed, s.tg.skipFr) }} outline={s.repos ? '1px dashed #ffa24a' : undefined} />
               </div>
             )}
           </div>

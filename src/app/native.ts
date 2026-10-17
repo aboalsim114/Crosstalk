@@ -13,7 +13,7 @@ import { recentLangs } from '../features/languages/langs';
 import { radarPayload, type RadarPayload } from '../features/radar/radar';
 import { useGsi } from '../features/recap/gsi';
 import { refreshVoice, useVoice } from '../features/voice/voice';
-import { isRunning, useApp, type AppState, type FeedEntry, type Session } from './state/store';
+import { isRunning, useApp, visibleFeed, type AppState, type FeedEntry, type Session } from './state/store';
 
 export interface OverlayPayload {
   feed: FeedEntry[];
@@ -36,7 +36,7 @@ export interface OverlayPayload {
 
 export function overlayPayload(s: AppState): OverlayPayload {
   return {
-    feed: s.feed.slice(0, 3),
+    feed: visibleFeed(s.feed, s.tg.skipFr).slice(0, 3),
     maxBlocks: s.maxBlocks,
     fmt: s.fmt,
     opacity: s.opacity,
@@ -309,7 +309,7 @@ function startSpeechBridge(): Promise<() => void>[] {
       const d = displayDelay(t);
       if (d != null) useSpeech.setState((s) => ({ display: noteDisplay(s.display, d) }));
       const app = useApp.getState();
-      if (capturesDuring(app.session)) app.upsertTranscript(transcriptEntry(t));
+      if (capturesDuring(app.session)) app.upsertTranscript(transcriptEntry(t, new Date(), app.target));
     }),
   );
   unlisten.push(speech.onRetract((id) => useApp.getState().retractTranscript(id)));
@@ -349,7 +349,7 @@ export function startNativeBridge(): () => void {
 
   const sync = (s: AppState, prev?: AppState) => {
     windowFlags.sync(s, prev);
-    if (!prev || prev.feed !== s.feed || prev.fmt !== s.fmt || prev.opacity !== s.opacity || prev.textSize !== s.textSize || prev.maxBlocks !== s.maxBlocks || prev.duration !== s.duration || prev.corner !== s.corner || prev.repos !== s.repos || prev.uiLang !== s.uiLang || prev.target !== s.target || prev.radar !== s.radar || prev.radarDemo !== s.radarDemo) push();
+    if (!prev || prev.feed !== s.feed || prev.fmt !== s.fmt || prev.opacity !== s.opacity || prev.textSize !== s.textSize || prev.maxBlocks !== s.maxBlocks || prev.duration !== s.duration || prev.corner !== s.corner || prev.repos !== s.repos || prev.uiLang !== s.uiLang || prev.target !== s.target || prev.radar !== s.radar || prev.radarDemo !== s.radarDemo || prev.tg.skipFr !== s.tg.skipFr) push();
   };
   sync(useApp.getState());
   const unsub = useApp.subscribe(sync);

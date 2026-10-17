@@ -95,11 +95,11 @@ pub(super) fn run(inner: &Inner, job: &Job) -> Option<Translation> {
             });
         }
     }
-    if !languages::is_language(&job.lang) {
+    let unsure = job.lang == languages::UNSURE;
+    if !unsure && !languages::is_language(&job.lang) {
         return fail("langue non gérée");
     }
-    // A language the user did not choose (Langues) is shown as is.
-    if !manual && !config.sources.contains(&job.lang) {
+    if !manual && !unsure && !config.sources.contains(&job.lang) {
         return fail("langue non choisie (Langues)");
     }
     // A live line older than 2 s has been replaced on screen: skip it.

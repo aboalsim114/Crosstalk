@@ -248,6 +248,8 @@ export const en: Messages = {
   'myLang.players': 'Teammates’ languages, detected automatically',
   'myLang.playersHint': 'Nothing to tick: the language of each line is detected. A line already in your language is not translated.',
   'myLang.llmHint': 'Every language is translated directly by the chosen LLM (Audio & AI › AI translation).',
+  'myLang.hideOwn': 'Hide lines already in my language',
+  'myLang.hideOwnSub': 'A line recognised for sure in your language is left out of the overlay, the Script and the stream (the history keeps it). When the language is unsure, it stays visible.',
   'setupEngine.title': 'Translation engine',
   'setupEngine.lead': 'Crosstalk translates with the LLM of your choice. You can change it any time in Audio & AI › AI translation.',
   'setupEngine.cloud': 'Cloud API',
