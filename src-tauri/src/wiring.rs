@@ -246,6 +246,9 @@ mod tests {
             audio_ms: 900,
             latency_ms: 400,
             asr_ms: 300,
+            close_ms: 0,
+            queue_ms: 0,
+            emitted_at_ms: 0,
             model: "base".into(),
             speaker: None,
         }

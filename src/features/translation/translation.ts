@@ -6,7 +6,7 @@ import { create } from 'zustand';
 import { isTauri, translation, type Translation, type TranslationConfig, type TranslationStatus } from '../../shared/ipc';
 import { GLOSSARY, type GlossEntry } from '../../app/state/data';
 import type { AppState } from '../../app/state/store';
-import { chosenSources } from '../languages/langs';
+import { PLAYER_LANGS } from '../languages/langs';
 
 export interface TranslationState {
   native: boolean;
@@ -18,7 +18,7 @@ export interface TranslationState {
 export const useTranslation = create<TranslationState>()(() => ({ native: isTauri, status: null, times: [] }));
 
 /** Rust translation settings from the UI: on/off switch and glossary. */
-export function translationConfigFrom(s: Pick<AppState, 'tg' | 'gloss'> & Partial<Pick<AppState, 'target' | 'src'>>): TranslationConfig {
+export function translationConfigFrom(s: Pick<AppState, 'tg' | 'gloss'> & Partial<Pick<AppState, 'target'>>): TranslationConfig {
   const target = s.target ?? 'fr';
   // The built-in renderings are French: into another language the term is kept as spoken.
   const builtIn = (term: string, rendering: string) => GLOSSARY.some(([t, m, r]) => t === term && m === 'Traduire' && r === rendering);
@@ -26,7 +26,8 @@ export function translationConfigFrom(s: Pick<AppState, 'tg' | 'gloss'> & Partia
     enabled: s.tg.translate,
     glossary: s.gloss.map(([source, mode, rendering]: GlossEntry) => ({ source, target: mode === 'Traduire' && (target === 'fr' || !builtIn(source, rendering)) ? rendering : null })),
     target,
-    sources: s.src ? chosenSources(s.src) : ['ru', 'en'],
+    // Every detected language is translated: there is nothing to choose.
+    sources: [...PLAYER_LANGS],
   };
 }
 

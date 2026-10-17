@@ -19,6 +19,10 @@ pub fn language_name(code: &str) -> &str {
         "uk" => "Ukrainian",
         "pl" => "Polish",
         "tr" => "Turkish",
+        "pt" => "Portuguese",
+        "ar" => "Arabic",
+        "zh" => "Simplified Chinese",
+        "ja" => "Japanese",
         other => other,
     }
 }

@@ -105,7 +105,6 @@ export interface AppState {
   /** "Essayer": time the sample radar was asked for (not saved). */
   radarDemo: number | null;
   /** The players' languages (Langues › Mes langues). */
-  src: Record<SourceLang, boolean>;
   /** The user's language: everything is translated into it. */
   target: TargetLang;
   /** Languages chosen once (first launch asks before anything else). */
@@ -139,7 +138,6 @@ export interface AppActions {
   enter: () => void;
   enterStart: () => void;
   toggleOverlay: () => void;
-  toggleSource: (k: SourceLang) => void;
   runTest: () => void;
   runDiag: () => void;
   addTerm: () => void;
@@ -193,7 +191,6 @@ const initial: AppState = {
   radar: RADAR_DEFAULTS,
   voice: VOICE_DEFAULTS,
   radarDemo: null,
-  src: { fr: false, en: true, ru: true, de: false, es: false, uk: false, pl: false, tr: false },
   target: 'fr',
   langSetupDone: false,
   engineSetupDone: false,
@@ -308,7 +305,6 @@ export const useApp = create<AppState & AppActions>()((set, get) => {
     setStream: (p) => set((s) => ({ stream: { ...s.stream, ...p } })),
     setSpeaker: (p) => set((s) => ({ speaker: { ...s.speaker, ...p } })),
     setLlm: (p) => set((s) => ({ llm: { ...s.llm, ...p } })),
-    toggleSource: (k) => set((s) => ({ src: { ...s.src, [k]: !s.src[k] } })),
     toggleOverlay: () => set((s) => ({ overlayOn: !s.overlayOn })),
 
     toggleSession: () => {

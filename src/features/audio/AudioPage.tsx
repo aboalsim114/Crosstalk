@@ -7,7 +7,7 @@ import { LevelMeter } from '../../shared/ui/LevelMeter';
 import { SpeakerCard } from '../speaker/SpeakerCard';
 import { captureSummary, cs2Summary, isCapturing, refreshDevices, runCaptureTest, testMessage, useAudio } from './audio';
 import { MODELS, type ModelId } from '../../app/state/data';
-import { engineSummary, formatMs, rescanModels, statsLine, useSpeech } from '../speech/speech';
+import { engineSummary, formatMs, rescanModels, stagesLine, statsLine, useSpeech } from '../speech/speech';
 import { useApp, type CaptureSource } from '../../app/state/store';
 import { percentile, refreshTranslation, translationSummary, useTranslation } from '../translation/translation';
 import { engineLabel } from '../translation/llm';
@@ -207,10 +207,7 @@ function VadCard() {
 
 const mb = (bytes: number) => `${Math.round(bytes / 1_000_000)} Mo`;
 
-const LANG_NAMES: Record<SpeechLang, string> = { fr: 'français', en: 'anglais', ru: 'russe', de: 'allemand', es: 'espagnol', uk: 'ukrainien', pl: 'polonais', tr: 'turc' };
-
-/** Languages Parakeet TDT 0.6B v3 does not recognise (it knows 25 European languages). */
-export const UNSUPPORTED_LANGS: SpeechLang[] = ['tr'];
+const LANG_NAMES: Record<SpeechLang, string> = { fr: 'français', en: 'anglais', ru: 'russe', de: 'allemand', es: 'espagnol', pt: 'portugais', uk: 'ukrainien', pl: 'polonais' };
 
 /** Languages the recogniser listens for, e.g. "russe, anglais, français". */
 export function languagesNote(langs: SpeechLang[] | undefined): string {
@@ -277,11 +274,9 @@ function NativeModelCard() {
       <span data-testid="engine-langs" style={{ font: fnt(400, 10.5, 'sans', 1.45), color: '#6e6961' }}>
         Langues écoutées : {languagesNote(st?.config.languages)} · moteur sherpa-onnx (ONNX Runtime, processeur) · détection de voix Silero
       </span>
-      {st?.config.languages.some((l) => UNSUPPORTED_LANGS.includes(l)) && (
-        <span data-testid="unsupported-langs" style={{ font: fnt(400, 10.5, 'sans', 1.45), color: '#ffa24a' }}>
-          Le turc n’est pas reconnu par ce modèle : les voix turques ne seront pas transcrites correctement (le chat écrit reste traduit).
-        </span>
-      )}
+      <span data-testid="chat-only-langs" style={{ font: fnt(400, 10.5, 'sans', 1.45), color: '#6e6961' }}>
+        Langue détectée automatiquement. Turc, arabe, chinois et japonais : non reconnus à la voix par ce modèle, traduits depuis le chat écrit.
+      </span>
       {sp.models.map((m) => {
         const on = s.model === m.id;
         return (
@@ -320,6 +315,11 @@ function NativeModelCard() {
           Latence p50 {stats.latencyP50Ms != null ? formatMs(stats.latencyP50Ms) : '—'} · p95 {stats.latencyP95Ms != null ? formatMs(stats.latencyP95Ms) : '—'}
           {stats.lastRtf != null && ` · RTF ${stats.lastRtf.toFixed(2).replace('.', ',')}`}
           {stats.cpuPercent != null && ` · CPU ${Math.round(stats.cpuPercent)} % de la machine`}
+          {stagesLine(stats, sp.display) && (
+            <div data-testid="asr-stages" style={{ color: '#6e6961' }}>
+              {stagesLine(stats, sp.display)}
+            </div>
+          )}
         </div>
       )}
       <div className="flex items-center gap-3 pt-1">

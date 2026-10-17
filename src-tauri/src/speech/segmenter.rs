@@ -114,6 +114,16 @@ impl Segmenter {
         self.active
     }
 
+    /// Unvoiced frames at the end of the open segment: the voice may have
+    /// just stopped (the segment closes after `hang_frames` of them).
+    pub fn trailing_silence(&self) -> usize {
+        if self.active {
+            self.silence_run
+        } else {
+            0
+        }
+    }
+
     /// Frames of the segment being recorded (0 when nobody speaks).
     pub fn open_frames(&self) -> usize {
         if self.active {

@@ -149,6 +149,22 @@ fn list(
     (total, text)
 }
 
+/// "latence p50 900 / p95 1400 ms (fin de phrase 610/640, attente 0/350, calcul 280/420)".
+fn latency_line(s: &SpeechStats) -> Option<String> {
+    let (p50, p95) = (s.latency_p50_ms?, s.latency_p95_ms?);
+    let st = &s.stages;
+    let pair = |p: crate::speech::Percentiles| match (p.p50_ms, p.p95_ms) {
+        (Some(a), Some(b)) => format!("{a}/{b}"),
+        _ => "—".into(),
+    };
+    Some(format!(
+        "latence p50 {p50} / p95 {p95} ms (fin de phrase {}, attente {}, calcul {})",
+        pair(st.close),
+        pair(st.queue),
+        pair(st.asr)
+    ))
+}
+
 fn with_reasons(n: u64, text: &str) -> String {
     if text.is_empty() {
         n.to_string()
@@ -297,6 +313,12 @@ impl Pulse {
                 ", calcul {}× la durée de voix",
                 format!("{rtf:.1}").replace('.', ",")
             ));
+        }
+        // Where the delay goes (last 100 lines): the stage that grows is the cause.
+        if d.transcribed > 0 {
+            if let Some(line) = latency_line(&self.stats) {
+                asr.push_str(&format!(", {line}"));
+            }
         }
         let tr = format!(
             "traduction : {} ok, {} laissée(s) telle(s) quelle(s), {} erreur(s)",
@@ -515,6 +537,11 @@ mod tests {
             ],
         );
         (now.asr_ms, now.asr_audio_ms) = (2_400, 4_000);
+        (now.latency_p50_ms, now.latency_p95_ms) = (Some(900), Some(1400));
+        now.stages.close = crate::speech::Percentiles {
+            p50_ms: Some(610),
+            p95_ms: Some(640),
+        };
         p.stats(now);
         assert!(p.translation(true, None).is_empty());
         assert!(p
@@ -537,7 +564,7 @@ mod tests {
         );
         assert!(
             line.contains(
-                "Reconnaissance : 3 gardée(s), rejetées : 1 (hallucination 1), calcul 0,6× la durée de voix"
+                "Reconnaissance : 3 gardée(s), rejetées : 1 (hallucination 1), calcul 0,6× la durée de voix, latence p50 900 / p95 1400 ms (fin de phrase 610/640, attente —, calcul —)"
             ),
             "{line}"
         );

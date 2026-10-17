@@ -43,6 +43,18 @@ export function teammatesLanguage(langs: string[], targets: ReplyTarget[] = ['en
   return best ?? (targets.includes('en') ? 'en' : (targets[0] ?? 'en'));
 }
 
+/** Always offered: the usual CS2 languages. */
+const QUICK_TARGETS = ['en', 'ru'];
+
+/**
+ * Reply languages shown at first: the chosen one, English, Russian and the
+ * languages heard in the match (every language can be a target since the
+ * players' languages are detected). The others behind "+N".
+ */
+export function quickTargets(targets: ReplyTarget[], target: ReplyTarget, heard: string[] = []): ReplyTarget[] {
+  return targets.filter((t) => t === target || QUICK_TARGETS.includes(t) || heard.includes(t));
+}
+
 export const PASTE_HINT = 'Copié ✓ — dans CS2 : Y (tous) ou U (équipe), Ctrl+V, Entrée';
 
 interface Props {
@@ -53,11 +65,16 @@ interface Props {
   autoFocusKey?: number;
   /** In the pop-up: with "Dire mes réponses écrites", each reply is also said in the game. */
   speakOnSend?: boolean;
+  /** Languages heard in the match, offered first. */
+  heard?: string[];
 }
 
 /** The user's language in, the teammates' language out, copied to the clipboard. */
-export function ReplyBox({ target, onTarget, onCopied, autoFocusKey, speakOnSend }: Props) {
+export function ReplyBox({ target, onTarget, onCopied, autoFocusKey, speakOnSend, heard }: Props) {
   const { me, targets } = useReplyLanguages(autoFocusKey);
+  const [allTargets, setAllTargets] = useState(false);
+  const offered = quickTargets(targets, target, heard);
+  const shownTargets = allTargets ? targets : offered;
   const myName = targetName(me);
   const [text, setText] = useState('');
   const [phrases, setPhrases] = useState<ReplyPhrase[]>([]);
@@ -128,7 +145,7 @@ export function ReplyBox({ target, onTarget, onCopied, autoFocusKey, speakOnSend
       <div className="flex flex-wrap items-center gap-2" data-testid="reply-langs">
         <span className="lbl flex-none whitespace-nowrap">RÉPONDRE EN</span>
         {targets.length === 0 && <span style={{ font: fnt(400, 11.5), color: '#8f8a83' }}>aucune langue de coéquipier (Langues › Mes langues)</span>}
-        {targets.map((t) => (
+        {shownTargets.map((t) => (
           <div
             key={t}
             role="button"
@@ -136,10 +153,16 @@ export function ReplyBox({ target, onTarget, onCopied, autoFocusKey, speakOnSend
             onClick={() => onTarget(t)}
             className={`pill whitespace-nowrap px-3 py-1 ${target === t ? 'pill-ember' : ''}`}
             style={{ font: fnt(500, 11.5) }}
+            dir="auto"
           >
             {targetName(t)}
           </div>
         ))}
+        {targets.length > offered.length && (
+          <div role="button" aria-expanded={allTargets} onClick={() => setAllTargets((v) => !v)} className="pill whitespace-nowrap px-3 py-1" style={{ font: fnt(500, 11.5), color: '#8f8a83' }}>
+            {allTargets ? 'Moins' : `+${targets.length - offered.length}`}
+          </div>
+        )}
       </div>
       <div className="flex gap-2">
         <input

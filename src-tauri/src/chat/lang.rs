@@ -118,6 +118,15 @@ const TR_WORDS: &[&str] = &[
     "kanka",
 ];
 
+/// Portuguese: words and the nasal vowels ã / õ no other language here uses.
+const PT_WORDS: &[&str] = &[
+    "não", "você", "vocês", "está", "estão", "eles", "elas", "dois", "três", "quatro", "cinco",
+    "aqui", "ali", "cuidado", "atrás", "obrigado", "obrigada", "valeu", "onde", "agora", "tudo",
+    "muito", "também", "mas", "com", "uma", "um", "nós", "isso", "esse", "essa", "tem", "temos",
+    "pra", "para", "os", "do", "da", "dos", "das", "na", "no", "ele", "ela", "bora", "espera",
+    "esquerda", "direita", "vai", "vão", "galera", "mano",
+];
+
 /// Letters only one of the Latin-script languages uses.
 fn marks(lang: &str) -> &'static str {
     match lang {
@@ -126,6 +135,7 @@ fn marks(lang: &str) -> &'static str {
         "es" => "ñáíóú¿¡",
         "pl" => "ąćęłńśźż",
         "tr" => "ğışİ",
+        "pt" => "ãõ",
         _ => "",
     }
 }
@@ -135,20 +145,25 @@ const UK_LETTERS: &str = "іїєґІЇЄҐ";
 /// Russian letters absent from Ukrainian.
 const RU_LETTERS: &str = "ыэъЫЭЪ";
 
-/// `fr`, `en`, `ru`, `de`, `es`, `uk`, `pl`, `tr`, or another ISO code for
-/// scripts Crosstalk cannot translate; `None` when the message gives no clue
-/// (`gg`, `?`, `rush b`).
+/// `fr`, `en`, `ru`, `de`, `es`, `pt`, `uk`, `pl`, `tr`, `ar`, `zh`, `ja`, or
+/// another ISO code for scripts Crosstalk cannot translate; `None` when the
+/// message gives no clue (`gg`, `?`, `rush b`).
 pub fn detect(text: &str) -> Option<&'static str> {
-    let (mut cyr, mut latin, mut other) = (0usize, 0usize, None);
+    let (mut cyr, mut latin) = (0usize, 0usize);
+    let (mut han, mut kana, mut hangul, mut arabic, mut greek) = (0usize, 0, 0, 0, 0);
     for c in text.chars().filter(|c| c.is_alphabetic()) {
         match c {
             '\u{0400}'..='\u{04FF}' => cyr += 1,
             c if c.is_ascii_alphabetic() || ('\u{00C0}'..='\u{024F}').contains(&c) => latin += 1,
-            '\u{4E00}'..='\u{9FFF}' => other = Some("zh"),
-            '\u{3040}'..='\u{30FF}' => other = Some("ja"),
-            '\u{AC00}'..='\u{D7AF}' => other = Some("ko"),
-            '\u{0600}'..='\u{06FF}' => other = Some("ar"),
-            '\u{0370}'..='\u{03FF}' => other = Some("el"),
+            '\u{4E00}'..='\u{9FFF}' | '\u{3400}'..='\u{4DBF}' => han += 1,
+            '\u{3040}'..='\u{30FF}' | '\u{31F0}'..='\u{31FF}' => kana += 1,
+            '\u{AC00}'..='\u{D7AF}' | '\u{1100}'..='\u{11FF}' => hangul += 1,
+            // Arabic, its supplement and the presentation forms.
+            '\u{0600}'..='\u{06FF}'
+            | '\u{0750}'..='\u{077F}'
+            | '\u{FB50}'..='\u{FDFF}'
+            | '\u{FE70}'..='\u{FEFF}' => arabic += 1,
+            '\u{0370}'..='\u{03FF}' => greek += 1,
             _ => {}
         }
     }
@@ -157,10 +172,21 @@ pub fn detect(text: &str) -> Option<&'static str> {
         let ru = text.chars().filter(|c| RU_LETTERS.contains(*c)).count();
         return Some(if uk > ru { "uk" } else { "ru" });
     }
-    if let Some(o) = other {
-        if latin == 0 {
-            return Some(o);
-        }
+    // Another script at least as present as Latin letters (callouts such as
+    // "AWP" or "B" stay in Latin letters in every language). Japanese mixes
+    // kana with kanji: any kana says Japanese, kanji alone say Chinese.
+    let cjk = han + kana;
+    let other = [
+        (cjk, if kana > 0 { "ja" } else { "zh" }),
+        (arabic, "ar"),
+        (hangul, "ko"),
+        (greek, "el"),
+    ]
+    .into_iter()
+    .max_by_key(|(n, _)| *n)
+    .filter(|(n, _)| *n > 0 && *n >= latin);
+    if let Some((_, code)) = other {
+        return Some(code);
     }
     if latin == 0 {
         return None;
@@ -182,6 +208,7 @@ pub fn detect(text: &str) -> Option<&'static str> {
         ("es", score("es", ES_WORDS)),
         ("pl", score("pl", PL_WORDS)),
         ("tr", score("tr", TR_WORDS)),
+        ("pt", score("pt", PT_WORDS)),
     ];
     let best = scores.iter().map(|s| s.1).max().unwrap_or(0);
     let leaders: Vec<&str> = scores.iter().filter(|s| s.1 == best).map(|s| s.0).collect();
@@ -215,6 +242,25 @@ mod tests {
         assert_eq!(detect("bekle, sağ taraftan gidiyoruz"), Some("tr"));
         assert_eq!(detect("Двоє на Б, у них снайперка, їх троє"), Some("uk"));
         assert_eq!(detect("Двое на Б, ещё трое"), Some("ru"));
+    }
+
+    #[test]
+    fn tells_the_new_languages_apart() {
+        assert_eq!(detect("não, eles estão no B, cuidado"), Some("pt"));
+        assert_eq!(detect("valeu galera, bora"), Some("pt"));
+        // Spanish stays Spanish.
+        assert_eq!(detect("espera, vamos por la derecha"), Some("es"));
+        assert_eq!(detect("هم في الموقع B"), Some("ar"));
+        // Presentation forms (some keyboards and fonts).
+        assert_eq!(detect("ﻣﺮﺣﺒﺎ"), Some("ar"));
+        assert_eq!(detect("两个人在B点"), Some("zh"));
+        // Kana anywhere make it Japanese, even with kanji first or last.
+        assert_eq!(detect("B に二人いる"), Some("ja"));
+        assert_eq!(detect("敵はBにいます"), Some("ja"));
+        assert_eq!(detect("気をつけて"), Some("ja"));
+        // A callout in Latin letters does not hide the script around it.
+        assert_eq!(detect("AWP 在中路"), Some("zh"));
+        assert_eq!(detect("안녕"), Some("ko"));
     }
 
     #[test]

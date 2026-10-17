@@ -8,8 +8,8 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use super::{
-    diagnostic_rejection, FrontMsg, Inner, Job, PARTIAL_MAX_RTF, PARTIAL_MIN_FRAMES,
-    PARTIAL_STEP_FRAMES, VAD_HOP_FRAMES,
+    diagnostic_rejection, FrontMsg, Inner, Job, PARTIAL_MAX_RTF, PARTIAL_MAX_SILENCE_FRAMES,
+    PARTIAL_MIN_FRAMES, PARTIAL_STEP_FRAMES, VAD_HOP_FRAMES,
 };
 use crate::audio::{AudioBlock, BlockSink};
 use crate::speech::dsp::{Conditioner, SAMPLE_RATE};
@@ -283,6 +283,9 @@ fn request_partial(inner: &Inner, st: &mut Front) {
     }
     if partial_ms as f32 > PARTIAL_MAX_RTF * (n * FRAME_MS as usize) as f32 {
         return;
+    }
+    if st.segmenter.trailing_silence() >= PARTIAL_MAX_SILENCE_FRAMES {
+        return; // the voice paused: the final line is coming
     }
     if inner.transcribing.load(Ordering::SeqCst) {
         return; // retried at the next hop

@@ -416,6 +416,9 @@ fn a_late_final_segment_takes_its_live_text() {
         audio_ms: 2000,
         latency_ms: 300,
         asr_ms: 300,
+        close_ms: 0,
+        queue_ms: 0,
+        emitted_at_ms: 0,
         model: "base".into(),
         speaker: None,
     };

@@ -3,7 +3,7 @@ import type { SpeechStatus, Transcript } from '../../shared/ipc';
 import { feedRow, subtitle } from '../session/derive';
 import { overlayBlocks } from '../overlay/OverlayPage';
 import { useAudio } from '../audio/audio';
-import { engineSummary, formatMs, speechConfigFrom, statsLine, transcriptEntry } from './speech';
+import { displayDelay, engineSummary, formatMs, noteDisplay, speechConfigFrom, stagesLine, statsLine, transcriptEntry } from './speech';
 import { sceneFx, useApp } from '../../app/state/store';
 
 const t: Transcript = {
@@ -34,13 +34,8 @@ const status = (over: Partial<SpeechStatus> = {}): SpeechStatus => ({
 
 describe('speech settings', () => {
   it('maps the UI settings to the Rust config', () => {
-    const c = speechConfigFrom({ model: 'parakeet-tdt-0.6b-v3', vad: 55, src: { ru: true, en: false, de: true, es: false, fr: false, uk: false, pl: false, tr: false } });
-    expect(c).toEqual({ model: 'parakeet-tdt-0.6b-v3', languages: ['ru', 'de'], vadThreshold: 0.55, voiceFocus: false });
-  });
-
-  it("listens to the players' languages and to the user's own", () => {
-    const c = speechConfigFrom({ ...useApp.getState(), target: 'ru', src: { ...useApp.getState().src, ru: false, en: true, de: true } });
-    expect(c.languages).toEqual(['en', 'de', 'ru']);
+    const c = speechConfigFrom({ model: 'parakeet-tdt-0.6b-v3', vad: 55 });
+    expect(c).toEqual({ model: 'parakeet-tdt-0.6b-v3', languages: ['en', 'fr', 'ru', 'es', 'de', 'pt', 'uk', 'pl'], vadThreshold: 0.55, voiceFocus: false });
   });
 
   it('sends "Focus voix", off by default', () => {
@@ -52,10 +47,8 @@ describe('speech settings', () => {
     expect(speechConfigFrom(useApp.getState()).model).toBe('parakeet-tdt-0.6b-v3');
   });
 
-  it('never sends an empty language list or an out-of-range threshold', () => {
-    const none = { ru: false, en: false, de: false, es: false, fr: false, uk: false, pl: false, tr: false };
-    const c = speechConfigFrom({ model: 'parakeet-tdt-0.6b-v3', vad: 5, src: none });
-    expect(c.languages).toEqual(['ru', 'en']);
+  it('never sends an out-of-range threshold', () => {
+    const c = speechConfigFrom({ model: 'parakeet-tdt-0.6b-v3', vad: 5 });
     expect(c.vadThreshold).toBe(0.2);
   });
 });
@@ -209,5 +202,22 @@ describe('store with real voices', () => {
     upsertTranscript(transcriptEntry({ ...t, id: 4, partial: true, text: 'Бомба' }));
     useApp.getState().emergency();
     expect(useApp.getState().feed).toHaveLength(0);
+  });
+});
+
+describe('latency stage by stage', () => {
+  it('measures the core → interface delay of final lines only', () => {
+    expect(displayDelay({ ...t, emittedAtMs: 10_000 }, 10_012)).toBe(12);
+    expect(displayDelay({ ...t, partial: true, emittedAtMs: 10_000 }, 10_012)).toBeNull();
+    expect(displayDelay(t, 10_012)).toBeNull(); // an older core: not stamped
+    const many = Array.from({ length: 120 }, (_, i) => i);
+    expect(many.reduce(noteDisplay, [] as number[])).toHaveLength(100);
+  });
+
+  it('says where the delay goes', () => {
+    const p = (a: number, b: number) => ({ p50Ms: a, p95Ms: b });
+    const stats = { segments: 5, transcribed: 5, rejected: {}, droppedBlocks: 0, latencyP50Ms: 700, latencyP95Ms: 800, lastRtf: 0.2, cpuPercent: null, stages: { close: p(510, 600), queue: p(0, 5), asr: p(170, 240) } };
+    expect(stagesLine(stats, [3, 4, 9])).toBe('fin de phrase 510/600 ms · attente 0/5 · calcul 170/240 · affichage 4/9');
+    expect(stagesLine({ ...stats, stages: undefined }, [])).toBeNull();
   });
 });

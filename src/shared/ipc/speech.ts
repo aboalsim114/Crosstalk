@@ -5,7 +5,7 @@ import { listen } from '@tauri-apps/api/event';
 import { isTauri, noop } from './core';
 
 /** Recognised languages: the players' and the user's own (src/features/languages/langs.ts). */
-export type SpeechLang = 'fr' | 'en' | 'ru' | 'de' | 'es' | 'uk' | 'pl' | 'tr';
+export type SpeechLang = 'fr' | 'en' | 'ru' | 'de' | 'es' | 'pt' | 'uk' | 'pl';
 export type EngineState = 'missing' | 'loading' | 'ready' | 'error';
 export type RejectReason =
   | 'short'
@@ -52,6 +52,12 @@ export interface Transcript {
   audioMs: number;
   latencyMs: number;
   asrMs: number;
+  /** End of the voice → segment closed (silence that ends it, VAD hop). */
+  closeMs?: number;
+  /** Segment closed → recognition started (queue). */
+  queueMs?: number;
+  /** When the core sent it (Unix ms): the interface measures its own delay. */
+  emittedAtMs?: number;
   model: string;
   /** Name read on CS2's voice indicator while it was spoken ("Qui parle ?", opt-in). */
   speaker?: string;
@@ -71,6 +77,20 @@ export interface SpeechStats {
   cpuPercent: number | null;
   /** Game sound removed by "Focus voix" over the last second (dB); null when off or mono. */
   focusDb?: number | null;
+  /** Latency of the final lines, stage by stage. */
+  stages?: StageLatency;
+}
+
+export interface Percentiles {
+  p50Ms: number | null;
+  p95Ms: number | null;
+}
+
+/** Segment closing after the voice, wait before recognition, recognition. */
+export interface StageLatency {
+  close: Percentiles;
+  queue: Percentiles;
+  asr: Percentiles;
 }
 
 export interface VoiceActivity {

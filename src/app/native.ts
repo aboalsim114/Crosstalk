@@ -3,7 +3,7 @@
 
 import { resolveLocale, type Locale } from '../shared/i18n';
 import { audioCapture, chat, cs2, dictation, isTauri, llm, voice, modelDownload, onNativeAction, overlayWindow, reply, speech, translation, type CaptureStatus, type NativeAction, type OverlayWindowConfig } from '../shared/ipc';
-import { refreshModels, speechConfigFrom, transcriptEntry, useSpeech } from '../features/speech/speech';
+import { displayDelay, noteDisplay, refreshModels, speechConfigFrom, transcriptEntry, useSpeech } from '../features/speech/speech';
 import { recordTime, translationConfigFrom, useTranslation } from '../features/translation/translation';
 import { llmConfigFrom, refreshLlm, useLlm } from '../features/translation/llm';
 import { setupNeeds, startSetup, useSetup } from '../features/setup/setup';
@@ -306,6 +306,8 @@ function startSpeechBridge(): Promise<() => void>[] {
   unlisten.push(speech.onActivity((activity) => useSpeech.setState({ activity })));
   unlisten.push(
     speech.onTranscript((t) => {
+      const d = displayDelay(t);
+      if (d != null) useSpeech.setState((s) => ({ display: noteDisplay(s.display, d) }));
       const app = useApp.getState();
       if (capturesDuring(app.session)) app.upsertTranscript(transcriptEntry(t));
     }),

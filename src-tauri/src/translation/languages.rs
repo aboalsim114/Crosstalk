@@ -2,8 +2,12 @@
 //! reads. With an LLM, every pair translates directly: no model per pair, no
 //! route through English.
 
-/// Spoken by players and recognised by Whisper.
-pub const LANGUAGES: [&str; 8] = ["fr", "en", "ru", "de", "es", "uk", "pl", "tr"];
+/// Spoken or written by players (detected in each line) and readable by the
+/// user. Turkish, Arabic, Chinese and Japanese come from the written chat
+/// only: the speech recogniser does not write them (speech::types::Lang).
+pub const LANGUAGES: [&str; 12] = [
+    "fr", "en", "ru", "de", "es", "pt", "uk", "pl", "tr", "ar", "zh", "ja",
+];
 pub const DEFAULT_TARGET: &str = "fr";
 pub const DEFAULT_SOURCES: [&str; 2] = ["ru", "en"];
 
@@ -37,7 +41,13 @@ mod tests {
             is_target("pl") && is_target("tr"),
             "the LLM writes every language"
         );
-        assert!(!is_language("ja"));
+        // The 10 languages asked for, plus Ukrainian and Polish.
+        for l in [
+            "en", "fr", "ar", "ru", "zh", "es", "de", "pt", "tr", "ja", "uk", "pl",
+        ] {
+            assert!(is_target(l), "{l}");
+        }
+        assert!(!is_language("ko") && !is_language("it"));
         let players = vec![
             "ru".to_string(),
             "en".to_string(),

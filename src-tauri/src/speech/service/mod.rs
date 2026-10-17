@@ -62,6 +62,10 @@ pub const PARTIAL_STEP_FRAMES: usize = 31;
 /// Live lines stop while the recogniser needs more than this share of the audio
 /// duration: the final lines must not wait behind them.
 pub const PARTIAL_MAX_RTF: f32 = 0.5;
+/// No live line once the voice has paused this long (2 VAD frames): the
+/// final segment comes within the hang, and a live pass started now would
+/// make it wait (measured: up to 0.8 s at p95 with the CPU loaded).
+pub const PARTIAL_MAX_SILENCE_FRAMES: usize = 2;
 /// A final segment this late after the voice ended, whose live line is on
 /// screen, becomes final with that live text instead of waiting for the recogniser.
 pub const LIVE_FALLBACK_AFTER: Duration = Duration::from_secs(3);

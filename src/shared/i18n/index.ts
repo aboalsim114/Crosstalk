@@ -92,7 +92,7 @@ export function useT() {
   return (key: MessageKey, params?: Params) => translate(locale, key, params);
 }
 
-const SPOKEN = ['fr', 'en', 'ru', 'de', 'es', 'uk', 'pl', 'tr'] as const;
+const SPOKEN = ['fr', 'en', 'ru', 'de', 'es', 'pt', 'uk', 'pl', 'tr', 'ar', 'zh', 'ja'] as const;
 
 /** Name of a spoken language (`ru`, `de`… , `xx` = unknown), in capitals. */
 export function langName(code: string): string {

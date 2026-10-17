@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { IDLE_CAPTURE } from '../../shared/ipc';
 import { useAudio } from './audio';
 import { useSpeech } from '../speech/speech';
@@ -101,11 +101,8 @@ describe('speech recognition cards in the desktop app', () => {
     render(<AudioPage />);
     expect(screen.getByTestId('engine-state')).toHaveTextContent('Parakeet TDT 0.6B v3');
     expect(screen.getByTestId('engine-state')).toHaveTextContent('chargé en 6,1 s');
-    // Turkish is not among the model's languages: said plainly.
-    cleanup();
-    useSpeech.setState({ status: { ...useSpeech.getState().status!, config: { model: 'parakeet-tdt-0.6b-v3', languages: ['tr', 'en'], vadThreshold: 0.55 } } });
-    render(<AudioPage />);
-    expect(screen.getByTestId('unsupported-langs')).toHaveTextContent('Le turc n’est pas reconnu');
+    // Languages the model cannot hear are said plainly: chat only.
+    expect(screen.getByTestId('chat-only-langs')).toHaveTextContent('Turc, arabe, chinois et japonais : non reconnus à la voix');
     expect(screen.getByText('Actif')).toBeInTheDocument();
   });
 

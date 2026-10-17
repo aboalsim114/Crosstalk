@@ -80,15 +80,39 @@ pub(super) fn finalize_from_live(inner: &Inner, job: &Job) -> bool {
         t
     };
     let latency_ms = job.voice_end.elapsed().as_millis() as u32;
-    inner.stats.lock().unwrap().transcribed(latency_ms);
+    let close_ms = close_ms(job);
+    let queue_ms = job.queued_at.elapsed().as_millis() as u32;
+    inner
+        .stats
+        .lock()
+        .unwrap()
+        .transcribed(latency_ms, [close_ms, queue_ms, 0]);
     inner.events.transcript(&Transcript {
         partial: false,
         latency_ms,
         audio_ms: job.segment.duration_ms(),
+        close_ms,
+        queue_ms,
+        asr_ms: 0,
+        emitted_at_ms: now_ms(),
         ..last
     });
     inner.publish_stats();
     true
+}
+
+/// End of the voice → segment closed and queued.
+fn close_ms(job: &Job) -> u32 {
+    job.queued_at
+        .saturating_duration_since(job.voice_end)
+        .as_millis() as u32
+}
+
+/// Unix time in ms, for the interface's own delay.
+pub(super) fn now_ms() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |d| d.as_millis() as u64)
 }
 
 /// Judge again after inference: a fresh queue entry may expire during computation.
@@ -187,7 +211,8 @@ pub(super) fn transcribe(inner: &Inner, job: Job) {
         }
         Ok(text) => {
             let latency_ms = job.voice_end.elapsed().as_millis() as u32;
-            stats.transcribed(latency_ms);
+            let close_ms = close_ms(&job);
+            stats.transcribed(latency_ms, [close_ms, queue_ms as u32, asr_ms]);
             drop(stats);
             {
                 let mut live = inner.live.lock().unwrap();
@@ -203,6 +228,9 @@ pub(super) fn transcribe(inner: &Inner, job: Job) {
                 audio_ms,
                 latency_ms,
                 asr_ms,
+                close_ms,
+                queue_ms: queue_ms as u32,
+                emitted_at_ms: now_ms(),
                 model,
                 speaker: None,
             });
@@ -226,6 +254,7 @@ pub(super) fn transcribe_partial(inner: &Inner, job: Job) {
         return;
     }
     inner.set_activity(None, Some(true));
+    let queue_ms = job.queued_at.elapsed().as_millis() as u32;
     let started = Instant::now();
     let result = recognizer.recognize(
         &job.segment.samples,
@@ -262,6 +291,9 @@ pub(super) fn transcribe_partial(inner: &Inner, job: Job) {
         audio_ms,
         latency_ms: asr_ms,
         asr_ms,
+        close_ms: 0,
+        queue_ms,
+        emitted_at_ms: now_ms(),
         model,
         speaker: None,
     };
