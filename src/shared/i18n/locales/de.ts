@@ -248,6 +248,7 @@ export const de: Messages = {
   'myLang.players': 'Sprachen der Mitspieler, automatisch erkannt',
   'myLang.playersHint': 'Nichts anzukreuzen: Die Sprache jeder Zeile wird erkannt. Eine Zeile in Ihrer Sprache wird nicht übersetzt.',
   'myLang.llmHint': 'Alle Sprachen werden direkt vom gewählten LLM übersetzt (Audio & KI › KI-Übersetzung).',
+  'auth.signOut': 'Abmelden',
   'myLang.hideOwn': 'Sätze in meiner Sprache ausblenden',
   'myLang.hideOwnSub': 'Ein sicher in Ihrer Sprache erkannter Satz erscheint weder im Overlay noch im Skript noch im Stream (der Verlauf behält ihn). Bei unsicherer Sprache bleibt er sichtbar.',
   'setupEngine.title': 'Übersetzungs-Engine',

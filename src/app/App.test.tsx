@@ -4,12 +4,15 @@ import App, { handleShortcut } from './App';
 import { FALLBACK_INFO, getAppInfo, isTauri } from '../shared/ipc';
 import { useApp } from './state/store';
 import { introVersion } from './shell/Intro';
+import { useAuth } from '../features/login/auth';
 
 const initial = useApp.getState();
 
 beforeEach(() => {
   vi.useFakeTimers();
   useApp.setState(initial, true);
+  // Signed in: these tests are about the app behind the sign-in page.
+  useAuth.setState({ user: 'admin' });
 });
 afterEach(() => {
   useApp.getState().emergency();

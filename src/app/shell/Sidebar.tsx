@@ -2,6 +2,7 @@ import { useT, type MessageKey } from '../../shared/i18n';
 import { NAV } from '../state/data';
 import { useApp } from '../state/store';
 import { fnt } from '../../shared/ui/atoms';
+import { useAuth } from '../../features/login/auth';
 
 const SHORTCUTS: [MessageKey, string, string][] = [
   ['action.overlay', '⌃⌥F8', '#bdb6ab'],
@@ -12,6 +13,8 @@ const SHORTCUTS: [MessageKey, string, string][] = [
 export function Sidebar() {
   const page = useApp((s) => s.page);
   const setPage = useApp((s) => s.setPage);
+  const user = useAuth((s) => s.user);
+  const logout = useAuth((s) => s.logout);
   const t = useT();
   return (
     <nav
@@ -50,6 +53,14 @@ export function Sidebar() {
             <span style={{ font: fnt(500, 10, 'mono'), color }}>{keys}</span>
           </div>
         ))}
+        <div className="flex items-center justify-between pt-2" style={{ font: fnt(400, 11.5), color: '#8f8a83' }}>
+          <span data-testid="signed-in" style={{ font: fnt(500, 10, 'mono'), letterSpacing: '.14em', color: '#6e6961' }}>
+            {user?.toUpperCase()}
+          </span>
+          <span role="button" className="cursor-pointer" onClick={logout} style={{ color: '#8f8a83' }}>
+            {t('auth.signOut')}
+          </span>
+        </div>
       </div>
     </nav>
   );
