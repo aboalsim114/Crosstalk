@@ -27,7 +27,8 @@ describe('css()', () => {
       position: 'absolute',
       background: 'radial-gradient(circle 150px at var(--mx,50%) var(--my,50%),rgba(255,236,226,.5),transparent)',
       WebkitBackdropFilter: 'blur(4px)',
-      font: "500 10px 'Geist Sans'",
+      // Geist has no Cyrillic: a sans-serif fallback follows it.
+      font: "500 10px 'Geist Sans','Segoe UI',system-ui,sans-serif",
       '--mx': '3%',
     });
     expect(css("font:800 60px/.94 'Archivo'").font).toBe("800 60px/.94 'Archivo Variable'");

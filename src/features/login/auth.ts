@@ -13,10 +13,10 @@ export function checkCredentials(user: string, password: string): string | null 
   return user.trim().toLowerCase() === ADMIN.user && password === ADMIN.password ? ADMIN.user : null;
 }
 
-/** Name shown on the welcome screen: the part before "@" of an e-mail, upper case. */
+/** Name shown on the welcome screen: the part before "@" of an e-mail. */
 export function displayName(user: string): string {
   const u = user.trim();
-  return (u.includes('@') ? u.split('@')[0] : u).toUpperCase();
+  return u.includes('@') ? u.split('@')[0] : u;
 }
 
 // Storage can be missing or refused (private profile): the session then lasts until the app closes.

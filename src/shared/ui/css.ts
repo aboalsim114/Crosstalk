@@ -25,7 +25,12 @@ export function css(text: string): CSSProperties {
     if (k < 0) continue;
     const prop = d.slice(0, k).trim();
     // The design names the families; the bundled (offline) fonts register these names.
-    const value = d.slice(k + 1).trim().replace(/'Archivo'/g, "'Archivo Variable'").replace(/'Geist'/g, "'Geist Sans'");
+    // Geist has no Cyrillic: a sans-serif fallback, not the browser's serif default.
+    const value = d
+      .slice(k + 1)
+      .trim()
+      .replace(/'Archivo'/g, "'Archivo Variable'")
+      .replace(/'Geist'/g, "'Geist Sans','Segoe UI',system-ui,sans-serif");
     if (!prop) continue;
     const name = prop.startsWith('--') ? prop : prop.replace(/^-(webkit|moz|ms)-/, (_, p: string) => p.charAt(0).toUpperCase() + p.slice(1) + '-').replace(/-([a-z])/g, (_, l: string) => l.toUpperCase());
     out[name] = value;
