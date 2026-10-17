@@ -34,3 +34,4 @@ L'application affiche ces nouveautés avant la mise à jour (À propos, bannièr
 - Pas de GitHub Actions : validation locale (voir `CONTRIBUTING.md`).
 - `npm run check:anticheat` doit passer : aucune lecture mémoire, injection ou hook de `cs2.exe`.
 - Ne jamais affirmer qu'un test a réussi sans l'avoir exécuté.
+- Tickets Linear : `/linear-ticket SAB-XX [--dry-run]`, lancé uniquement par l'utilisateur (voir `docs/development/linear-workflow.md`).
