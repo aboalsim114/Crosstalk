@@ -14,7 +14,7 @@ export function LangPage() {
   const s = useApp();
   return (
     <div className="grid items-start gap-4" style={{ gridTemplateColumns: '310px minmax(0,1fr)' }}>
-      <div className="flex flex-col gap-4">
+      <div className="flex min-w-0 flex-col gap-4">
         <UiLangCard />
         <MyLanguagesCard />
         <ChatCard />

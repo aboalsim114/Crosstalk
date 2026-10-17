@@ -124,8 +124,9 @@ export function ReplyBox({ target, onTarget, onCopied, autoFocusKey, speakOnSend
 
   return (
     <div className="flex flex-col gap-3">
-      <div className="flex items-center gap-2">
-        <span className="lbl">RÉPONDRE EN</span>
+      {/* Up to 8 languages: they wrap instead of spilling out of the card. */}
+      <div className="flex flex-wrap items-center gap-2" data-testid="reply-langs">
+        <span className="lbl flex-none whitespace-nowrap">RÉPONDRE EN</span>
         {targets.length === 0 && <span style={{ font: fnt(400, 11.5), color: '#8f8a83' }}>aucune langue de coéquipier (Langues › Mes langues)</span>}
         {targets.map((t) => (
           <div
@@ -133,7 +134,7 @@ export function ReplyBox({ target, onTarget, onCopied, autoFocusKey, speakOnSend
             role="button"
             aria-pressed={target === t}
             onClick={() => onTarget(t)}
-            className={`pill px-3 py-1 ${target === t ? 'pill-ember' : ''}`}
+            className={`pill whitespace-nowrap px-3 py-1 ${target === t ? 'pill-ember' : ''}`}
             style={{ font: fnt(500, 11.5) }}
           >
             {targetName(t)}

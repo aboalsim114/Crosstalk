@@ -24,10 +24,12 @@ export function ReplyCard() {
   }, [langKey]);
   const problem = langs.find((l) => !l.ready)?.problem ?? null;
   return (
-    <div className="glass flex flex-col gap-3.5 p-5" data-testid="reply-card">
-      <div className="flex items-baseline justify-between">
-        <span className="lbl">RÉPONDRE DANS LEUR LANGUE</span>
-        <span style={{ font: fnt(400, 10, 'mono'), color: '#5a5650' }}>en jeu : Mouse 4 / Ctrl+Alt+F7</span>
+    <div className="glass flex min-w-0 flex-col gap-3.5 p-5" data-testid="reply-card">
+      <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+        <span className="lbl whitespace-nowrap">RÉPONDRE DANS LEUR LANGUE</span>
+        <span className="whitespace-nowrap" style={{ font: fnt(400, 10, 'mono'), color: '#5a5650' }}>
+          en jeu : Mouse 4 / Ctrl+Alt+F7
+        </span>
       </div>
       <span style={{ font: fnt(400, 11.5, 'sans', 1.5), color: '#6e6961' }}>
         Écrivez dans votre langue : le moteur de « Traduction IA » traduit et Crosstalk copie le message. Dans CS2, ouvrez le chat (Y ou U), collez (Ctrl+V), Entrée. Rien n’est tapé dans le jeu à votre place.
