@@ -55,7 +55,8 @@ describe('real chat lines', () => {
     const unknown = chatEntry(msg({ lang: null, message: 'gg' }));
     expect(unknown.src).toBe('xx');
     expect(feedRow(unknown).note).toBe('Non traduit — langue non reconnue');
-    expect(feedRow(chatEntry(msg({ lang: 'zh', message: '你好' }))).note).toBe('Non traduit — langue non gérée (zh)');
+    expect(feedRow(chatEntry(msg({ lang: 'zh', message: '你好' }))).note).toBe('Message en langue originale — traduction en cours');
+    expect(feedRow(chatEntry(msg({ lang: 'ko', message: '안녕' }))).note).toBe('Non traduit — langue non gérée (ko)');
     expect(chatEntry(msg({ dead: true })).sender).toBe('Иван (mort)');
   });
 });

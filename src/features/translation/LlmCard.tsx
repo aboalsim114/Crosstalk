@@ -2,7 +2,7 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { llm, LLM_DEFAULT_URL, LLM_SERVICES, llmService, serviceOf, type LlmProvider, type LlmService, type LocalServer } from '../../shared/ipc';
 import { Seg, fnt } from '../../shared/ui/atoms';
 import { useApp } from '../../app/state/store';
-import { NATIVE_NAME, PLAYER_LANGS, translatedSources, type PlayerLang } from '../languages/langs';
+import { NATIVE_NAME, PLAYER_LANGS, type PlayerLang } from '../languages/langs';
 import { clearLlmKey, detectLocal, isLocalChoice, llmConfigFrom, llmStatsLine, llmSummary, loadModels, localServer, MODEL_EXAMPLES, runLlmTest, runTranslateTest, saveLlmKey, serviceChange, testAdvice, testKey, useLlm } from './llm';
 
 const PROVIDERS: [LlmProvider, string][] = [
@@ -86,7 +86,6 @@ export function LlmCard() {
   const opts = useApp((s) => s.llm);
   const setLlm = useApp((s) => s.setLlm);
   const target = useApp((s) => s.target);
-  const src = useApp((s) => s.src);
   const { native, status, test, testedWith, testing, local, detecting, models, modelsFor, loadingModels } = useLlm();
   const isLocal = isLocalChoice(opts);
   const [mode, setMode] = useState<'cloud' | 'local'>(isLocal ? 'local' : 'cloud');
@@ -106,7 +105,6 @@ export function LlmCard() {
   const modelChoices = mode === 'local' && server ? server.models : (listed?.models ?? []);
   const summary = !native && opts.enabled ? { value: 'État disponible dans l’application Windows', color: '#8f8a83' } : llmSummary(status, opts.enabled);
   const serviceName = info?.name ?? (opts.baseUrl.trim() || 'adresse personnalisée');
-  const langs = translatedSources(target, src);
 
   useEffect(() => {
     if (mode === 'local' && native && !local && !detecting) detectLocal();
@@ -386,7 +384,7 @@ export function LlmCard() {
           <Info k="Modèle" v={opts.model.trim() || '—'} />
           <Info k="Type" v={isLocal ? 'Local (rien ne quitte ce PC ou le réseau local)' : 'Cloud (texte envoyé au fournisseur)'} />
           {isLocal && <Info k="Serveur local" v={status?.backend ?? (info?.local ? LOCAL_NAMES[opts.service as LocalServer['kind']] : 'adresse manuelle')} />}
-          <Info k="Langues" v={`${langs.map((l) => l.toUpperCase()).join(', ') || '—'} → ${target.toUpperCase()}`} />
+          <Info k="Langues" v={`détectées automatiquement → ${target.toUpperCase()}`} />
           {status && <Info k="Activité" v={llmStatsLine(status)} />}
           {status?.lastError && <Info k="Dernière erreur" v={status.lastError} color="#ff8a7a" />}
         </div>

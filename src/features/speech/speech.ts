@@ -6,7 +6,7 @@ import { t } from '../../shared/i18n';
 import { create } from 'zustand';
 import { isTauri, speech, type ModelInfo, type RejectReason, type SpeechConfig, type SpeechStats, type SpeechStatus, type Transcript, type VoiceActivity } from '../../shared/ipc';
 import type { AppState, FeedEntry } from '../../app/state/store';
-import { chosenSources } from '../languages/langs';
+import { CONFIDENT, SPEECH_LANGS } from '../languages/langs';
 
 export interface SpeechState {
   native: boolean;
@@ -14,6 +14,8 @@ export interface SpeechState {
   stats: SpeechStats | null;
   models: ModelInfo[];
   activity: VoiceActivity;
+  /** Core → interface delay of the last final lines (ms). */
+  display: number[];
 }
 
 export const useSpeech = create<SpeechState>()(() => ({
@@ -22,25 +24,50 @@ export const useSpeech = create<SpeechState>()(() => ({
   stats: null,
   models: [],
   activity: { speaking: false, transcribing: false },
+  display: [],
 }));
+
+/** Core → interface delay of a final transcript (ms), when the core stamped it. */
+export function displayDelay(t: Transcript, now = Date.now()): number | null {
+  return t.partial || !t.emittedAtMs ? null : Math.max(0, now - t.emittedAtMs);
+}
+
+/** Keeps the last 100 display delays. */
+export function noteDisplay(delays: number[], d: number | null): number[] {
+  return d == null ? delays : [...delays, d].slice(-100);
+}
+
+/** "fin de phrase 610/640 ms · attente 0/350 · calcul 280/420 · affichage 3/9" (p50/p95). */
+export function stagesLine(st: SpeechStats | null, display: number[]): string | null {
+  const s = st?.stages;
+  if (!s || s.close.p50Ms == null) return null;
+  const pair = (p: { p50Ms: number | null; p95Ms: number | null }) => (p.p50Ms == null ? '—' : `${p.p50Ms}/${p.p95Ms ?? p.p50Ms}`);
+  const sorted = [...display].sort((a, b) => a - b);
+  const pick = (q: number) => sorted[Math.min(sorted.length - 1, Math.floor(q * sorted.length))];
+  const shown = sorted.length ? ` · affichage ${pick(0.5)}/${pick(0.95)}` : '';
+  return `fin de phrase ${pair(s.close)} ms · attente ${pair(s.queue)} · calcul ${pair(s.asr)}${shown}`;
+}
 
 // ---------- pure helpers (unit-tested) ----------
 
 /** Rust speech settings from the UI settings (threshold %, languages, model). */
-export function speechConfigFrom(s: Pick<AppState, 'model' | 'vad' | 'src'> & Partial<Pick<AppState, 'voiceFocus' | 'target'>>): SpeechConfig {
-  // The recogniser may hear the players' languages and the user's own (shown as is).
-  const languages = chosenSources(s.src);
-  if (languages.length && s.target && !languages.includes(s.target)) languages.push(s.target);
+export function speechConfigFrom(s: Pick<AppState, 'model' | 'vad'> & Partial<Pick<AppState, 'voiceFocus'>>): SpeechConfig {
+  // Every language the recogniser writes: the spoken language is detected, never chosen.
   return {
     model: s.model,
-    languages: languages.length ? languages : ['ru', 'en'],
+    languages: [...SPEECH_LANGS],
     vadThreshold: Math.min(0.9, Math.max(0.2, s.vad / 100)),
     voiceFocus: s.voiceFocus ?? false,
   };
 }
 
-/** A real transcript as a Script / overlay line: original text, translation pending. */
-export function transcriptEntry(t: Transcript, now = new Date()): FeedEntry {
+/**
+ * A real transcript as a Script / overlay line: original text, translation
+ * pending; already in the user's language (`target`) when it was detected
+ * with confidence (an unsure language is always translated, never hidden).
+ */
+export function transcriptEntry(t: Transcript, now = new Date(), target?: string): FeedEntry {
+  const own = t.lang === target && t.langProb >= CONFIDENT;
   return {
     kind: 'voice',
     src: t.lang,
@@ -50,7 +77,7 @@ export function transcriptEntry(t: Transcript, now = new Date()): FeedEntry {
     tid: t.id,
     at: now.getTime(),
     time: now.toLocaleTimeString('fr-FR'),
-    status: 'transcrit',
+    status: own ? 'original' : 'transcrit',
     shown: null,
     lat: t.partial ? null : t.latencyMs,
     err: false,

@@ -211,7 +211,7 @@ describe('TRADUCTION IA card', () => {
     expect(state).toHaveTextContent('OpenAI');
     expect(state).toHaveTextContent('gpt-4o-mini');
     expect(state).toHaveTextContent('Cloud (texte envoyé au fournisseur)');
-    expect(state).toHaveTextContent('EN, RU → FR');
+    expect(state).toHaveTextContent('détectées automatiquement → FR');
     expect(state).toHaveTextContent('5 traductions · 7 appels · 2 échecs · dernière latence 812 ms');
     expect(state).toHaveTextContent('quota ou limite de débit atteint (429)');
     expect(screen.getByTestId('llm-badge')).toHaveTextContent('CLOUD · CONNECTÉ');

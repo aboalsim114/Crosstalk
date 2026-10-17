@@ -97,11 +97,9 @@ describe('simulated pipeline', () => {
 });
 
 describe('settings', () => {
-  it('toggles switches and source languages', () => {
+  it('toggles switches', () => {
     s().toggle('hist');
     expect(s().tg.hist).toBe(true);
-    s().toggleSource('de');
-    expect(s().src.de).toBe(true);
   });
 
   it('adds and removes glossary terms', () => {

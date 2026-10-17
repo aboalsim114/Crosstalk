@@ -2,7 +2,7 @@ import { isTauri } from '../../shared/ipc';
 import { Seg, Slider, ToggleRow, fnt } from '../../shared/ui/atoms';
 import { channelName, langName, quote, t, useT, type MessageKey, targetName } from '../../shared/i18n';
 import { SAMPLE_OVERLAY, type OverlayLine } from '../../app/state/data';
-import { useApp, type AppState, type Corner, type OverlayFormat } from '../../app/state/store';
+import { useApp, visibleFeed, type AppState, type Corner, type OverlayFormat } from '../../app/state/store';
 import { StreamCard } from '../stream/StreamCard';
 import { RadarCard } from '../radar/RadarCard';
 
@@ -33,6 +33,17 @@ export function overlayBlocks(feed: OverlayLine[], maxBlocks: number): OverlayBl
     const text = f.shown || f.orig;
     // A real transcript is the original text: never labelled as French.
     const transcript = f.status === 'transcrit';
+    // Already in the user's language (option off): shown once, without "→".
+    if (f.status === 'original') {
+      return {
+        key: `${i}-${f.orig}`,
+        color: voice ? '#ffa24a' : '#7fd4ff',
+        head: `${kind} • ${langName(f.src)}`,
+        orig: '',
+        line: f.sender ? `${f.sender} : ${quote(f.orig + (f.live ? ' …' : ''))}` : quote(f.orig + (f.live ? ' …' : '')),
+        opacity: i === maxBlocks - 1 && maxBlocks > 2 ? 0.5 : 1,
+      };
+    }
     // Provisional French of a line still being spoken (or whose final translation is pending).
     if (transcript && f.shown) {
       return {
@@ -77,8 +88,15 @@ export function OverlayStack({ s, outline }: { s: Pick<AppState, 'feed' | 'maxBl
           style={{ background: `rgba(6,6,8,${(s.opacity / 100).toFixed(2)})`, opacity: o.opacity, border: '1px solid rgba(255,255,255,.05)' }}
         >
           {s.fmt !== 'minimal' && <div style={{ font: fnt(600, 9.5, 'mono'), letterSpacing: '.14em', color: o.color }}>{o.head}</div>}
-          {s.fmt === 'bilingue' && <div style={{ font: fnt(400, 11.5, 'mono', 1.4), color: '#a49d92', textShadow: '0 1px 2px #000' }}>{o.orig}</div>}
-          <div style={{ font: fnt(500, size, 'sans', 1.32), color: '#fff', textShadow: '0 1px 2px #000,0 0 10px rgba(0,0,0,.85)' }}>{o.line}</div>
+          {s.fmt === 'bilingue' && (
+            <div dir="auto" style={{ font: fnt(400, 11.5, 'mono', 1.4), color: '#a49d92', textShadow: '0 1px 2px #000' }}>
+              {o.orig}
+            </div>
+          )}
+          {/* dir="auto": Arabic reads right to left, from its first letter. */}
+          <div dir="auto" style={{ font: fnt(500, size, 'sans', 1.32), color: '#fff', textShadow: '0 1px 2px #000,0 0 10px rgba(0,0,0,.85)' }}>
+            {o.line}
+          </div>
         </div>
       ))}
     </div>
@@ -118,7 +136,7 @@ export function OverlayPage() {
                   transition: 'all .6s cubic-bezier(.2,.7,.1,1)',
                 }}
               >
-                <OverlayStack s={s} outline={s.repos ? '1px dashed #ffa24a' : undefined} />
+                <OverlayStack s={{ ...s, feed: visibleFeed(s.feed, s.tg.skipFr) }} outline={s.repos ? '1px dashed #ffa24a' : undefined} />
               </div>
             )}
           </div>

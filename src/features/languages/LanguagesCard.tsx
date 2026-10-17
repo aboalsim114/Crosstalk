@@ -1,6 +1,6 @@
-import { fnt } from '../../shared/ui/atoms';
+import { ToggleRow, fnt } from '../../shared/ui/atoms';
 import { useT } from '../../shared/i18n';
-import { NATIVE_NAME, PLAYER_LANGS, TARGET_LANGS, translatedSources, type PlayerLang, type TargetLang } from './langs';
+import { isSpeechLang, NATIVE_NAME, PLAYER_LANGS, SPEECH_LANGS, TARGET_LANGS, type TargetLang } from './langs';
 import { useApp } from '../../app/state/store';
 
 function Chip({ on, disabled, onClick, children, role }: { on: boolean; disabled?: boolean; onClick: () => void; children: React.ReactNode; role: 'radio' | 'checkbox' }) {
@@ -24,15 +24,11 @@ function Chip({ on, disabled, onClick, children, role }: { on: boolean; disabled
   );
 }
 
-/** The user's language (one) and the players' languages (several). */
+/** The user's language (one); the players' languages are detected, only listed. */
 export function LanguagePicker() {
   const t = useT();
   const target = useApp((s) => s.target);
-  const src = useApp((s) => s.src);
-  const set = useApp.setState;
-  const routes = translatedSources(target, src);
-  const setTarget = (l: TargetLang) => set({ target: l });
-  const toggle = (l: PlayerLang) => set((s) => ({ src: { ...s.src, [l]: !s.src[l] } }));
+  const setTarget = (l: TargetLang) => useApp.setState({ target: l });
   return (
     <div className="flex flex-col gap-4" data-testid="language-picker">
       <div className="flex flex-col gap-2">
@@ -40,32 +36,24 @@ export function LanguagePicker() {
         <div role="radiogroup" aria-label={t('myLang.me')} className="flex flex-wrap gap-1.5">
           {TARGET_LANGS.map((l) => (
             <Chip key={l} role="radio" on={target === l} onClick={() => setTarget(l)}>
-              {NATIVE_NAME[l]}
+              <span dir="auto">{NATIVE_NAME[l]}</span>
             </Chip>
           ))}
         </div>
       </div>
-      <div className="flex flex-col gap-2">
+      <div className="flex flex-col gap-2" data-testid="detected-languages">
         <span className="lbl">{t('myLang.players')}</span>
-        <div role="group" aria-label={t('myLang.players')} className="flex flex-wrap gap-1.5">
-          {PLAYER_LANGS.map((l) => (
-            <Chip key={l} role="checkbox" on={l !== target && !!src[l]} disabled={l === target} onClick={() => toggle(l)}>
-              {NATIVE_NAME[l]}
-            </Chip>
+        <div className="flex flex-col gap-1">
+          {[
+            [SPEECH_LANGS.filter((l) => l !== target), t('myLang.voice')] as const,
+            [PLAYER_LANGS.filter((l) => !isSpeechLang(l) && l !== target), t('myLang.chatOnly')] as const,
+          ].map(([langs, how]) => (
+            <span key={how} style={{ font: fnt(400, 11.5, 'sans', 1.5), color: '#8f8a83' }}>
+              <span dir="auto">{langs.map((l) => NATIVE_NAME[l]).join(' · ')}</span> <span style={{ color: '#5a5650' }}>— {how}</span>
+            </span>
           ))}
         </div>
         <span style={{ font: fnt(400, 10.5, 'sans', 1.5), color: '#5a5650' }}>{t('myLang.playersHint')}</span>
-      </div>
-      <div className="flex flex-col gap-1" data-testid="language-routes">
-        {routes.length === 0 ? (
-          <span style={{ font: fnt(400, 11.5, 'sans', 1.5), color: '#ffa24a' }}>{t('myLang.none')}</span>
-        ) : (
-          routes.map((s) => (
-            <span key={s} style={{ font: fnt(400, 11.5, 'mono'), color: '#8f8a83' }}>
-              {s.toUpperCase()} → {target.toUpperCase()}
-            </span>
-          ))
-        )}
       </div>
       <span style={{ font: fnt(400, 10.5, 'sans', 1.5), color: '#5a5650' }}>{t('myLang.llmHint')}</span>
     </div>
@@ -75,10 +63,13 @@ export function LanguagePicker() {
 /** Langues › Mes langues. */
 export function MyLanguagesCard() {
   const t = useT();
+  const hideOwn = useApp((s) => s.tg.skipFr);
+  const toggle = useApp((s) => s.toggle);
   return (
     <div className="glass flex flex-col gap-4 p-5" data-testid="my-languages">
       <span className="lbl">{t('myLang.title')}</span>
       <LanguagePicker />
+      <ToggleRow title={t('myLang.hideOwn')} sub={t('myLang.hideOwnSub')} on={hideOwn} onClick={() => toggle('skipFr')} label={t('myLang.hideOwn')} />
     </div>
   );
 }

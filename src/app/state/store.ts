@@ -4,7 +4,7 @@ import { config } from '../config';
 import { isCapturing, useAudio } from '../../features/audio/audio';
 import type { UiLang } from '../../shared/i18n';
 import { DEFAULT_MODEL, EVENTS, GLOSSARY, type GlossEntry, type ModelId, type PageId, type SimEvent } from './data';
-import type { PlayerLang, TargetLang } from '../../features/languages/langs';
+import { UNSURE_LANG, type PlayerLang, type TargetLang } from '../../features/languages/langs';
 import { RADAR_DEFAULTS, type RadarOpts } from '../../features/radar/radar';
 import { useTargetLang } from '../../shared/i18n';
 
@@ -15,6 +15,7 @@ export type FeedMode = 'text' | 'voice' | 'mixed';
 export type OverlayFormat = 'minimal' | 'bilingue' | 'accessible';
 export type Corner = 'tl' | 'tr' | 'bl' | 'br';
 export type CaptureSource = 'process' | 'device' | 'wav';
+/** `skipFr`: hide the lines already in the user's language (any language, the name is historic). */
 export type ToggleKey = 'click' | 'noise' | 'translate' | 'hist' | 'skipFr' | 'ignoreOwn';
 /** Mode streamer: subtitles for OBS (src-tauri/src/stream). */
 export type { StreamOpts } from '../../shared/ipc';
@@ -105,7 +106,6 @@ export interface AppState {
   /** "Essayer": time the sample radar was asked for (not saved). */
   radarDemo: number | null;
   /** The players' languages (Langues › Mes langues). */
-  src: Record<SourceLang, boolean>;
   /** The user's language: everything is translated into it. */
   target: TargetLang;
   /** Languages chosen once (first launch asks before anything else). */
@@ -139,7 +139,6 @@ export interface AppActions {
   enter: () => void;
   enterStart: () => void;
   toggleOverlay: () => void;
-  toggleSource: (k: SourceLang) => void;
   runTest: () => void;
   runDiag: () => void;
   addTerm: () => void;
@@ -193,7 +192,6 @@ const initial: AppState = {
   radar: RADAR_DEFAULTS,
   voice: VOICE_DEFAULTS,
   radarDemo: null,
-  src: { fr: false, en: true, ru: true, de: false, es: false, uk: false, pl: false, tr: false },
   target: 'fr',
   langSetupDone: false,
   engineSetupDone: false,
@@ -308,7 +306,6 @@ export const useApp = create<AppState & AppActions>()((set, get) => {
     setStream: (p) => set((s) => ({ stream: { ...s.stream, ...p } })),
     setSpeaker: (p) => set((s) => ({ speaker: { ...s.speaker, ...p } })),
     setLlm: (p) => set((s) => ({ llm: { ...s.llm, ...p } })),
-    toggleSource: (k) => set((s) => ({ src: { ...s.src, [k]: !s.src[k] } })),
     toggleOverlay: () => set((s) => ({ overlayOn: !s.overlayOn })),
 
     toggleSession: () => {
@@ -395,7 +392,7 @@ export const useApp = create<AppState & AppActions>()((set, get) => {
       set((st) => ({ feed: st.feed.map((f, k) => (k === i ? { ...entry, id: f.id, shown: f.shown, at: entry.at ?? f.at } : f)) }));
     },
     applyPartialTranslation: (t) =>
-      set((st) => ({ feed: st.feed.map((f) => (f.tid === t.id && f.live && t.translated ? { ...f, shown: t.translated } : f)) })),
+      set((st) => ({ feed: st.feed.map((f) => (f.tid === t.id && f.live && f.status === 'transcrit' && t.translated ? { ...f, shown: t.translated } : f)) })),
     retractTranscript: (tid) => set((st) => ({ feed: st.feed.filter((f) => !(f.tid === tid && f.live)) })),
     applyTranslation: (t) =>
       // A line that just got its translation is shown again for the full duration.
@@ -431,7 +428,9 @@ export function startMeter(): () => void {
 }
 
 /** Untranslated on purpose (off, no engine connected yet…): the original stays, with the reason, not as an error. */
-const QUIET_FAILURES = ['traduction désactivée', 'aucun moteur de traduction connecté', 'langue non gérée'];
+// 'traduction écartée': the translation changed a count, a site or a side
+// (src-tauri translation::guard); the original stays, with why, not as an error.
+const QUIET_FAILURES = ['traduction désactivée', 'aucun moteur de traduction connecté', 'langue non gérée', 'traduction écartée'];
 
 /** A transcript line once its translation arrived: French text, or the original with why. */
 /** A translation identical to the original: only Counter-Strike terms. */
@@ -440,13 +439,26 @@ export const KEPT_NOTE = 'Termes CS conservés tels quels (glossaire, modifiable
 /** Arrival time of a line (ms), for the overlay and the radar. */
 export const arrivedAt = (f: Pick<FeedEntry, 'id' | 'at'>): number => f.at ?? f.id;
 
+/** An unsure line the LLM gave back unchanged: probably the user's language, kept visible. */
+export const UNSURE_NOTE = 'Langue incertaine : probablement déjà dans votre langue, laissée visible';
+
+/**
+ * The lines to display: without those already in the user's language when
+ * "Masquer les phrases déjà dans ma langue" is on. History, recap and radar
+ * keep them.
+ */
+export function visibleFeed(feed: FeedEntry[], hideOwn: boolean): FeedEntry[] {
+  return hideOwn ? feed.filter((f) => f.status !== 'original') : feed;
+}
+
 export function withTranslation(f: FeedEntry, t: Translation): FeedEntry {
   const total = (f.lat ?? 0) + t.queueMs + t.ms;
   if (t.translated) {
     if (t.lang === (t.target || 'fr')) return { ...f, status: 'original', shown: null, tr: null };
     // Only CS terms kept by the glossary: say so, else it looks untranslated.
     const same = (x: string) => x.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
-    const note = same(t.translated) === same(f.orig) ? KEPT_NOTE : undefined;
+    const unchanged = same(t.translated) === same(f.orig);
+    const note = unchanged ? (t.lang === UNSURE_LANG ? UNSURE_NOTE : KEPT_NOTE) : undefined;
     return { ...f, status: 'final', tr: t.translated, shown: t.translated, lat: total, err: false, note };
   }
   const why = t.error ?? 'moteur indisponible';

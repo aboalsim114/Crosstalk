@@ -19,6 +19,12 @@ pub fn language_name(code: &str) -> &str {
         "uk" => "Ukrainian",
         "pl" => "Polish",
         "tr" => "Turkish",
+        "pt" => "Portuguese",
+        "ar" => "Arabic",
+        "zh" => "Simplified Chinese",
+        "ja" => "Japanese",
+        // Language not told for sure (translation::languages::UNSURE).
+        "auto" => "the original language",
         other => other,
     }
 }
@@ -34,7 +40,7 @@ pub fn system_prompt(source: &str, target: &str) -> String {
          - Reply with the {tgt} translation only: no quotes, no notes, no explanations, no \
          alternatives.\n\
          - Never add information, never drop any. Keep negations and the exact meaning of \
-         tactical calls (who, how many, where, when).\n\
+         tactical calls (who, how many, where, when, which side: left or right).\n\
          - Keep every number as a number (\"two\" may become \"2\" only if natural, never \
          change the value).\n\
          - Keep map positions as players say them (A, B, mid, long, short, banana, apps, \
@@ -42,6 +48,7 @@ pub fn system_prompt(source: &str, target: &str) -> String {
          smoke, flash, molotov, HE, kevlar, defuse kit) and game terms (rush, rotate, eco, \
          force buy, save, plant, defuse, lurk, low, lit).\n\
          - Keep codes such as KZ1, KZ2 exactly as written.\n\
+         - If the message is already in {tgt}, reply with it unchanged.\n\
          - Insults are translated as they are, without softening or commenting.",
         src = language_name(source),
         tgt = language_name(target),
@@ -59,6 +66,15 @@ pub fn is_translategemma(model: &str) -> bool {
 
 pub fn translategemma_prompt(source: &str, target: &str, text: &str) -> String {
     let (src, tgt) = (language_name(source), language_name(target));
+    if source == "auto" {
+        // Language not told for sure: TranslateGemma has no wording for it.
+        return format!(
+            "You are a professional translator into {tgt} ({target}). Produce only the {tgt} \
+             translation, without any additional explanations or commentary. If the text is \
+             already in {tgt}, return it unchanged. Please translate the following text into \
+             {tgt}:\n\n\n{text}"
+        );
+    }
     format!(
         "You are a professional {src} ({source}) to {tgt} ({target}) translator. Your goal is to \
          accurately convey the meaning and nuances of the original {src} text while adhering to \
@@ -69,6 +85,11 @@ pub fn translategemma_prompt(source: &str, target: &str, text: &str) -> String {
 }
 
 /// The URL, headers and JSON body of one translation request.
+/// Added on the second try, after an answer the guard rejected (translation::guard).
+pub const STRICT_RULE: &str =
+    "- Your previous answer changed a number, a site (A, B) or a direction. \
+     Write every number, every site letter and every left/right exactly as in the message.";
+
 pub fn request(
     config: &LlmConfig,
     key: Option<&str>,
@@ -76,6 +97,23 @@ pub fn request(
     source: &str,
     target: &str,
 ) -> (String, Vec<(&'static str, String)>, Value) {
+    request_with(config, key, text, source, target, false)
+}
+
+/// [`request`], with [`STRICT_RULE`] when `strict`.
+pub fn request_with(
+    config: &LlmConfig,
+    key: Option<&str>,
+    text: &str,
+    source: &str,
+    target: &str,
+    strict: bool,
+) -> (String, Vec<(&'static str, String)>, Value) {
+    let system = if strict {
+        format!("{}\n{STRICT_RULE}", system_prompt(source, target))
+    } else {
+        system_prompt(source, target)
+    };
     let max_tokens = (text.chars().count() * 3 + 64).min(1024);
     match config.provider {
         Provider::Openai => {
@@ -87,7 +125,7 @@ pub fn request(
                 json!([{ "role": "user", "content": translategemma_prompt(source, target, text) }])
             } else {
                 json!([
-                    { "role": "system", "content": system_prompt(source, target) },
+                    { "role": "system", "content": system },
                     { "role": "user", "content": text },
                 ])
             };
@@ -115,7 +153,7 @@ pub fn request(
             let body = json!({
                 "model": config.model,
                 "max_tokens": ANTHROPIC_MAX_TOKENS,
-                "system": system_prompt(source, target),
+                "system": system,
                 "messages": [ { "role": "user", "content": text } ],
             });
             (format!("{}/messages", config.base_url), headers, body)
@@ -179,4 +217,26 @@ pub fn parse_models(json: &str) -> Vec<String> {
     ids.dedup();
     ids.truncate(500);
     ids
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn names_every_target_language_in_the_prompt() {
+        for (code, name) in [
+            ("ar", "Arabic"),
+            ("zh", "Simplified Chinese"),
+            ("ja", "Japanese"),
+            ("pt", "Portuguese"),
+            ("tr", "Turkish"),
+        ] {
+            let p = system_prompt("ru", code);
+            assert!(p.contains(&format!("from Russian into {name}")), "{code}");
+        }
+        for code in crate::translation::languages::LANGUAGES {
+            assert_ne!(language_name(code), code, "{code} has no name");
+        }
+    }
 }

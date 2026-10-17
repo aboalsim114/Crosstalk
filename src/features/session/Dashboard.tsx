@@ -1,4 +1,5 @@
 import { AnimatePresence, motion } from 'motion/react';
+import { useMemo } from 'react';
 import { config } from '../../app/config';
 import { t, useT, type MessageKey } from '../../shared/i18n';
 import { EASE, Seg, fmtSeconds, fnt } from '../../shared/ui/atoms';
@@ -6,7 +7,7 @@ import { SIGNAL_THRESHOLD_DB, captureSummary, cs2Summary, isCapturing, useAudio 
 import { engineSummary, useSpeech } from '../speech/speech';
 import { translationSummary, useTranslation } from '../translation/translation';
 import { cs2SetupSummary, useChat } from '../chat/chat';
-import { isLive, useApp, type FeedMode } from '../../app/state/store';
+import { isLive, useApp, visibleFeed, type FeedMode } from '../../app/state/store';
 import { feedRow, isDemoLine, latencyAdvice, subtitle, voiceLatency } from './derive';
 
 const MODES: [FeedMode, MessageKey][] = [
@@ -17,7 +18,7 @@ const MODES: [FeedMode, MessageKey][] = [
 
 function Subtitle() {
   useT(); // re-render when the language changes
-  const f0 = useApp((s) => s.feed[0]);
+  const f0 = useApp((s) => visibleFeed(s.feed, s.tg.skipFr)[0]);
   const live = useApp(isLive);
   const sub = subtitle(f0, live);
   const demo = isDemoLine(useAudio((a) => a.native), f0);
@@ -42,11 +43,12 @@ function Subtitle() {
           <span>{sub.tag}</span>
           <span style={{ color: '#5a5650' }}>{sub.sender}</span>
         </div>
-        <div className="max-w-[560px]" style={{ font: fnt(400, 13.5, 'mono', 1.5), color: '#8f8a83' }}>
+        <div className="max-w-[560px]" dir="auto" style={{ font: fnt(400, 13.5, 'mono', 1.5), color: '#8f8a83' }}>
           {sub.orig}
         </div>
         <div
           className="max-w-[600px]"
+          dir="auto"
           style={{
             font: fnt(400, 44, 'serif', 1.12),
             fontStyle: sub.italic ? 'italic' : 'normal',
@@ -161,7 +163,9 @@ function StatusCards() {
 
 function ScriptPanel() {
   const t = useT();
-  const feed = useApp((s) => s.feed);
+  const all = useApp((s) => s.feed);
+  const hideOwn = useApp((s) => s.tg.skipFr);
+  const feed = useMemo(() => visibleFeed(all, hideOwn), [all, hideOwn]);
   const mode = useApp((s) => s.mode);
   const live = useApp(isLive);
   const set = useApp((s) => s.set);
@@ -204,11 +208,13 @@ function ScriptPanel() {
                     {e.status} <span style={{ color: '#5a5650' }}>{e.lat}</span>
                   </span>
                 </div>
-                <div style={{ font: fnt(400, 14.5, 'sans', 1.4), color: e.trColor, fontStyle: e.italic ? 'italic' : 'normal', textWrap: 'pretty' }}>
+                <div dir="auto" style={{ font: fnt(400, 14.5, 'sans', 1.4), color: e.trColor, fontStyle: e.italic ? 'italic' : 'normal', textWrap: 'pretty' }}>
                   {e.lead}
                   {e.shown}
                 </div>
-                <div style={{ font: fnt(400, 11.5, 'mono', 1.45), color: '#6e6961' }}>{e.orig}</div>
+                <div dir="auto" style={{ font: fnt(400, 11.5, 'mono', 1.45), color: '#6e6961' }}>
+                  {e.orig}
+                </div>
                 <div style={{ font: fnt(400, 10.5), color: e.noteColor }}>{e.note}</div>
               </motion.div>
             );

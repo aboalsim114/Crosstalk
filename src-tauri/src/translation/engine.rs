@@ -10,6 +10,11 @@ pub trait Translator: Send + Sync {
     fn translate(&self, text: &str, source: &str, target: &str) -> Result<String, String>;
     /// A live line still being spoken; may refuse (cost, rate) without harm.
     fn translate_partial(&self, text: &str, source: &str, target: &str) -> Result<String, String>;
+    /// A final line again, after an answer that changed a number, a site or a
+    /// direction (translation::guard): with a firmer reminder when it can.
+    fn translate_strict(&self, text: &str, source: &str, target: &str) -> Result<String, String> {
+        self.translate(text, source, target)
+    }
     /// Reported with each line ("llm").
     fn name(&self) -> &'static str {
         "llm"

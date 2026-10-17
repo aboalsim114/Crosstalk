@@ -4,9 +4,9 @@ use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
 
-/// Languages the recogniser may output: the players' languages and the
-/// user's own (chosen in Langues). A transcript's language is read among
-/// these only, which avoids mis-detections on short or noisy CS2 callouts.
+/// Languages the recogniser writes (Parakeet TDT 0.6B v3: European languages;
+/// its vocabulary has no Arabic, Chinese, Japanese or Turkish letters). The
+/// language of a transcript is detected among these, never chosen by the user.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Lang {
@@ -17,7 +17,7 @@ pub enum Lang {
     Es,
     Uk,
     Pl,
-    Tr,
+    Pt,
 }
 
 impl Lang {
@@ -29,10 +29,10 @@ impl Lang {
         Lang::Es,
         Lang::Uk,
         Lang::Pl,
-        Lang::Tr,
+        Lang::Pt,
     ];
-    /// Before the user chooses: the usual languages of CS2 voice chat.
-    pub const DEFAULT: [Lang; 2] = [Lang::Ru, Lang::En];
+    /// Every language the recogniser writes: detected, nothing to choose.
+    pub const DEFAULT: [Lang; 8] = Lang::ALL;
 
     /// ISO 639-1 language code.
     pub fn code(self) -> &'static str {
@@ -44,7 +44,7 @@ impl Lang {
             Lang::Es => "es",
             Lang::Uk => "uk",
             Lang::Pl => "pl",
-            Lang::Tr => "tr",
+            Lang::Pt => "pt",
         }
     }
 
@@ -125,6 +125,16 @@ pub struct Transcript {
     pub latency_ms: u32,
     /// Recogniser compute time.
     pub asr_ms: u32,
+    /// End of the voice → segment closed (the silence that ends it, the VAD hop).
+    #[serde(default)]
+    pub close_ms: u32,
+    /// Segment closed → recognition started (queue, a live pass still running).
+    #[serde(default)]
+    pub queue_ms: u32,
+    /// When the transcript left the core (Unix time, ms): the interface
+    /// measures its own delay from it.
+    #[serde(default)]
+    pub emitted_at_ms: u64,
     pub model: String,
     /// Name shown on CS2's voice indicator while it was spoken (src/speaker).
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -206,6 +216,27 @@ pub struct SpeechStats {
     /// "Focus voix": game sound removed over the last second, in dB
     /// (`None`: off, or a mono source).
     pub focus_db: Option<f32>,
+    /// Where the latency goes, stage by stage (same lines as `latency_*`).
+    #[serde(default)]
+    pub stages: StageLatency,
+}
+
+/// p50 / p95 of one stage, in ms (`None` before the first line).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Percentiles {
+    pub p50_ms: Option<u32>,
+    pub p95_ms: Option<u32>,
+}
+
+/// The latency of the final lines split by stage: the segment closing after
+/// the voice, the wait before recognition, the recognition itself.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StageLatency {
+    pub close: Percentiles,
+    pub queue: Percentiles,
+    pub asr: Percentiles,
 }
 
 /// Live voice activity, emitted when it changes.
@@ -246,7 +277,7 @@ mod tests {
             ..c
         }
         .sanitized();
-        assert_eq!(empty.languages, vec![Lang::Ru, Lang::En]);
+        assert_eq!(empty.languages, Lang::ALL.to_vec());
     }
 
     #[test]
@@ -260,6 +291,9 @@ mod tests {
             audio_ms: 1200,
             latency_ms: 900,
             asr_ms: 400,
+            close_ms: 0,
+            queue_ms: 0,
+            emitted_at_ms: 0,
             model: "parakeet-tdt-0.6b-v3".into(),
             speaker: None,
         };

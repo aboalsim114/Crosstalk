@@ -31,6 +31,8 @@ export function startStreamBridge(push: (l: StreamLine) => Promise<boolean> = st
     if (s.feed === prev.feed || !s.stream.enabled) return;
     for (const f of s.feed) {
       if (f.tid == null || sent.has(f.tid)) continue;
+      // "Masquer les phrases déjà dans ma langue" applies to the stream too.
+      if (s.tg.skipFr && f.status === 'original') continue;
       const line = streamLineFrom(f);
       if (!line) continue;
       sent.add(f.tid);

@@ -99,6 +99,8 @@ describe('overlay window', () => {
     const base = overlayPayload(useApp.getState());
     render(<OverlayWindow initial={{ ...base, feed: [voice] }} />);
     expect(screen.getByText(/Двое на B/)).toBeInTheDocument();
+    // dir="auto": an Arabic translation reads right to left.
+    expect(screen.getByText(/Двое на B/).closest('[dir]')?.getAttribute('dir')).toBe('auto');
   });
 
   it('shows a line again for the full duration when its translation arrives', () => {

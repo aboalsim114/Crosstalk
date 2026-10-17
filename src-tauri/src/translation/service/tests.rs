@@ -12,6 +12,8 @@ struct FakeLlm {
     /// Live lines refused (as towards a cloud provider).
     no_partial: bool,
     answer: Option<String>,
+    /// Answer to the firmer second try (translation::guard).
+    strict_answer: Option<String>,
 }
 
 impl Translator for FakeLlm {
@@ -25,6 +27,15 @@ impl Translator for FakeLlm {
             .answer
             .clone()
             .unwrap_or_else(|| format!("{}:{text}", target.to_uppercase())))
+    }
+    fn translate_strict(&self, text: &str, source: &str, target: &str) -> Result<String, String> {
+        match &self.strict_answer {
+            Some(a) => {
+                self.calls.fetch_add(1, Ordering::SeqCst);
+                Ok(a.clone())
+            }
+            None => self.translate(text, source, target),
+        }
     }
     fn translate_partial(&self, text: &str, source: &str, target: &str) -> Result<String, String> {
         if self.no_partial {
@@ -60,6 +71,7 @@ fn fake(delay_ms: u64) -> FakeLlm {
         problem: Mutex::new(None),
         no_partial: false,
         answer: None,
+        strict_answer: None,
     }
 }
 
@@ -111,17 +123,17 @@ fn subtitle_dashes_are_removed_from_the_answer() {
 fn a_line_comes_back_from_the_llm_then_from_the_cache() {
     let (svc, rx, llm) = service(0);
     assert!(svc.status().ready);
-    svc.submit(7, "ru", "Двое идут на B");
+    svc.submit(7, "ru", "Идут на B");
     let t = next(&rx);
     assert_eq!(
         (t.id, t.translated.as_deref(), t.cached, t.engine.as_deref()),
-        (7, Some("FR:Двое идут на B"), false, Some("llm"))
+        (7, Some("FR:Идут на B"), false, Some("llm"))
     );
-    svc.submit(8, "ru", "  двое   ИДУТ на b ");
+    svc.submit(8, "ru", "  идут   на b ");
     let t = next(&rx);
     assert_eq!(
         (t.id, t.translated.as_deref(), t.cached),
-        (8, Some("FR:Двое идут на B"), true)
+        (8, Some("FR:Идут на B"), true)
     );
     assert_eq!(calls(&llm), 1);
 }
@@ -189,6 +201,17 @@ fn the_users_own_language_is_never_sent() {
     svc.submit(3, "fr", "on push B");
     assert_eq!(next(&rx).translated.as_deref(), Some("on push B"));
     assert_eq!(calls(&llm), 0);
+}
+
+#[test]
+fn an_unsure_language_goes_to_the_llm_without_the_shortcuts() {
+    let (svc, rx, llm) = service(0);
+    // Maybe French, maybe not: never taken as the user's own, no lexicon.
+    svc.submit(4, crate::translation::languages::UNSURE, "CT, go, go.");
+    let t = next(&rx);
+    assert_eq!(t.translated.as_deref(), Some("FR:CT, go, go."));
+    assert_eq!(t.error, None);
+    assert_eq!(calls(&llm), 1);
 }
 
 #[test]
@@ -308,9 +331,10 @@ fn a_russian_user_gets_every_other_language_in_russian_directly() {
         ..TranslationConfig::default()
     });
     for (id, lang, text) in [
-        (1, "en", "two on B"),
-        (2, "fr", "deux en B"),
-        (3, "pl", "dwóch na B"),
+        // The fake engine echoes: no count, which would not survive the guard.
+        (1, "en", "push B"),
+        (2, "fr", "on push B"),
+        (3, "pl", "idą na B"),
     ] {
         svc.submit(id, lang, text);
         let t = next(&rx);
@@ -387,4 +411,33 @@ fn a_line_waiting_too_long_keeps_its_language() {
     assert_eq!(t.translated, None);
     assert!(t.error.unwrap().contains("délai dépassé"));
     assert_eq!(calls(&llm), 0);
+}
+
+#[test]
+fn a_changed_count_or_site_is_asked_again_then_left_untranslated() {
+    // Wrong, then right on the firmer try (not a lexicon callout: the LLM is asked).
+    let (svc, rx, llm) = with(FakeLlm {
+        answer: Some("Trois sur A".into()),
+        strict_answer: Some("Deux arrivent sur B".into()),
+        ..fake(0)
+    });
+    svc.submit(1, "ru", "Двое идут на B");
+    let t = next(&rx).translated.unwrap_or_default();
+    assert_eq!(t.to_lowercase(), "deux arrivent sur b");
+    assert_eq!(calls(&llm), 2);
+    // Wrong twice: the line stays in its language, with why; nothing cached.
+    let (svc, rx, llm) = with(FakeLlm {
+        answer: Some("Trois sur B".into()),
+        ..fake(0)
+    });
+    svc.submit(2, "ru", "Двое идут на B");
+    let t = next(&rx);
+    assert_eq!(t.translated, None);
+    assert_eq!(
+        t.error.as_deref(),
+        Some("traduction écartée : nombre modifié")
+    );
+    svc.submit(3, "ru", "Двое идут на B");
+    assert_eq!(next(&rx).translated, None);
+    assert_eq!(calls(&llm), 4);
 }

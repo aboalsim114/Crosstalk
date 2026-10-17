@@ -84,6 +84,39 @@ Il n'y a **plus de bascule automatique** sur un modèle plus léger : Parakeet e
 
 Joignez ces lignes au rapport (Diagnostic › Exporter).
 
+## 2 ter. Latence par étape, langues et Smart Comms (à faire sur Windows avec CS2)
+
+Ces essais n'ont **pas** pu être faits pendant le développement (pas de Windows ni de CS2 dans l'environnement de développement) : ils restent à faire sur un vrai PC de jeu.
+
+**Latence.** La ligne `pipeline` du journal se termine désormais par la latence découpée :
+
+```
+… latence p50 900 / p95 1400 ms (fin de phrase 610/640, attente 0/40, calcul 280/520)
+```
+
+- *fin de phrase* : silence qui clôt la phrase + pas de la VAD (plancher fixe d'environ 0,5 à 0,6 s) ;
+- *attente* : file d'attente et ligne provisoire en cours avant la reconnaissance (c'est elle qui montait en charge) ;
+- *calcul* : la reconnaissance elle-même.
+
+L'écran Audio & IA affiche les mêmes valeurs, plus le délai jusqu'à l'affichage (`data-testid="asr-stages"`).
+
+| # | Action | Attendu |
+| --- | --- | --- |
+| 2t.1 | 10 min de partie en compétitif, coéquipiers qui parlent | Relever la ligne `latence` toutes les 30 s ; « attente » p95 reste sous ~100 ms. |
+| 2t.2 | Même essai, CS2 en qualité maximale (processeur chargé) | « calcul » augmente ; « attente » p95 reste faible. Noter les deux. |
+| 2t.3 | Coéquipier anglais, russe, allemand, espagnol, portugais | La langue s'affiche sans rien choisir ; la traduction arrive dans votre langue. |
+| 2t.4 | Coéquipier qui parle votre langue | La phrase n'apparaît ni dans l'overlay ni dans le Script (option « Masquer les phrases déjà dans ma langue », Langues › Mes langues). Option désactivée : elle s'affiche une fois, sans « → ». |
+| 2t.5 | Chat écrit en turc, arabe, chinois, japonais | Traduit dans votre langue ; l'arabe se lit de droite à gauche. Les mêmes langues **à la voix** ne sont pas reconnues (modèle européen). |
+| 2t.6 | Appels avec nombres, sites, côtés : « two B one low », « двое на Б », « left side A » | Nombres, A/B et gauche/droite identiques dans la traduction. Si le LLM les change, la phrase reste dans sa langue avec « traduction écartée : … ». |
+
+Mesure hors CS2 de la latence (même chaîne que l'application, clips joués en temps réel) :
+
+```
+cargo run --release --example latency_bench -- --manifest corpus/manifest.tsv --threads 4 --load 4
+```
+
+`--load N` occupe N fils de calcul pendant l'essai (pour simuler un jeu).
+
 ## 3. Résultats à remonter
 
 ```
@@ -93,5 +126,7 @@ Windows : … (build …)      CPU : …      (reconnaissance sur processeur seu
 1.4 : … fichiers, … phrases correctes / …, faux positifs : …
 2.1 : segments …, transcrits …, latence p50 … / p95 …, CPU … %
 2.2 – 2.11 : ✅ / ❌ + remarques
+2t.1 – 2t.2 : latence p50/p95 et « fin de phrase / attente / calcul » relevées
+2t.3 – 2t.6 : ✅ / ❌ + remarques
 FPS CS2 avec / sans Crosstalk : … / …
 ```

@@ -6,6 +6,7 @@
 pub mod callouts;
 pub mod engine;
 pub mod glossary;
+pub mod guard;
 pub mod languages;
 pub mod legacy;
 pub mod llm;

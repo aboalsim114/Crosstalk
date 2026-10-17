@@ -21,9 +21,15 @@ vi.mock('../../shared/ipc', async (orig) => {
   };
 });
 
-const { ReplyBox, PASTE_HINT, teammatesLanguage } = await import('./ReplyBox');
+const { ReplyBox, PASTE_HINT, teammatesLanguage, quickTargets } = await import('./ReplyBox');
 
 describe('reply in the teammates’ language', () => {
+  it('offers English, Russian, the chosen language and those heard; the rest behind +N', () => {
+    const all = ['en', 'ru', 'es', 'de', 'pt', 'ar', 'zh', 'ja'];
+    expect(quickTargets(all, 'en')).toEqual(['en', 'ru']);
+    expect(quickTargets(all, 'ja', ['ar', 'ar', 'de'])).toEqual(['en', 'ru', 'de', 'ar', 'ja']);
+  });
+
   it('picks the language heard most in the recent real lines', () => {
     const feed = [
       { src: 'ru', tid: 1 },

@@ -4,7 +4,8 @@ import { feedRow, isDemoLine, subtitle } from '../session/derive';
 import { overlayBlocks } from '../overlay/OverlayPage';
 import { GLOSSARY } from '../../app/state/data';
 import { transcriptEntry } from '../speech/speech';
-import { useApp, withTranslation } from '../../app/state/store';
+import { UNSURE_NOTE, useApp, visibleFeed, withTranslation } from '../../app/state/store';
+import { UNSURE_LANG } from '../languages/langs';
 import { percentile, recordTime, translationConfigFrom, translationHealth, translationSummary, useTranslation } from './translation';
 
 const transcript = { id: 9, partial: false, text: 'Двое идут на B', lang: 'ru' as const, langProb: 0.97, audioMs: 1800, latencyMs: 1200, asrMs: 600, avgLogprob: -0.3, noSpeechProb: 0.02, model: 'base' };
@@ -117,5 +118,47 @@ describe('a translation made only of kept CS terms', () => {
     expect(line.note).toBe(KEPT_NOTE);
     expect(feedRow(line).note).toBe(KEPT_NOTE);
     expect(withTranslation(transcriptEntry(transcript), result()).note).toBeUndefined();
+  });
+});
+
+describe('lines already in the user’s language', () => {
+  const fr = { ...transcript, text: 'deux en B', lang: 'fr' as const };
+
+  it('are hidden when the language is sure, kept in the feed for the history', () => {
+    const sure = transcriptEntry({ ...fr, langProb: 0.9 }, new Date(), 'fr');
+    expect(sure.status).toBe('original');
+    expect(visibleFeed([sure], true)).toEqual([]);
+    expect(visibleFeed([sure], false)).toEqual([sure]);
+    // Live words too: never flashed on screen.
+    expect(transcriptEntry({ ...fr, partial: true, langProb: 0.9 }, new Date(), 'fr').status).toBe('original');
+  });
+
+  it('stay visible when the language is unsure', () => {
+    const unsure = transcriptEntry({ ...fr, langProb: 0.5 }, new Date(), 'fr');
+    expect(unsure.status).toBe('transcrit');
+    // The LLM gave it back unchanged: shown, with why.
+    const back = withTranslation(unsure, result({ lang: UNSURE_LANG, original: 'deux en B', translated: 'deux en B', target: 'fr' }));
+    expect(back.status).toBe('final');
+    expect(back.note).toBe(UNSURE_NOTE);
+    expect(visibleFeed([back], true)).toEqual([back]);
+  });
+
+  it('are shown once in the overlay when the option is off, without "→"', () => {
+    const sure = transcriptEntry({ ...fr, langProb: 0.9 }, new Date(), 'fr');
+    const [b] = overlayBlocks([sure], 3);
+    expect(b.orig).toBe('');
+    expect(b.line).toContain('deux en B');
+    expect(b.head).not.toContain('→');
+  });
+
+  it('the option is on by default and saved with the other switches', () => {
+    expect(useApp.getState().tg.skipFr).toBe(true);
+  });
+});
+
+describe('a translation that changed a count, a site or a side', () => {
+  it('leaves the original on screen with why, not as an engine error', () => {
+    const line = withTranslation(transcriptEntry(transcript), result({ translated: null, error: 'traduction écartée : nombre modifié' }));
+    expect(line).toMatchObject({ status: 'transcrit', err: false, note: 'traduction écartée : nombre modifié', shown: null });
   });
 });

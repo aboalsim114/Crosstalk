@@ -8,7 +8,7 @@ import { useApp } from '../../app/state/store';
 /** "Réponds dans leur langue": the same box as the in-game pop-up. */
 export function ReplyCard() {
   const feed = useApp((s) => s.feed);
-  const langKey = useApp((s) => `${s.target}|${Object.entries(s.src).filter(([, on]) => on).map(([l]) => l).join(',')}|${s.llm.enabled}|${s.llm.model}`);
+  const langKey = useApp((s) => `${s.target}|${s.llm.enabled}|${s.llm.model}`);
   const [target, setTarget] = useState<ReplyTarget>(() => teammatesLanguage(recentLangs(feed)));
   const [langs, setLangs] = useState<ReplyLanguage[]>([]);
   useEffect(() => {
@@ -39,7 +39,7 @@ export function ReplyCard() {
           Texte libre indisponible : {problem}. Les phrases CS toutes prêtes fonctionnent toujours.
         </div>
       )}
-      <ReplyBox target={target} onTarget={setTarget} />
+      <ReplyBox target={target} onTarget={setTarget} heard={recentLangs(feed)} />
     </div>
   );
 }
