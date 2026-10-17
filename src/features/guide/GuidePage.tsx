@@ -48,7 +48,7 @@ const SECTIONS: [keyof Pick<Chapter, 'prerequisites' | 'setup' | 'use' | 'check'
 function Screenshot({ shot }: { shot: Shot }) {
   return (
     <figure className="flex flex-col gap-3" style={{ margin: 0 }}>
-      <div className="relative overflow-hidden rounded-xl" style={{ border: '1px solid rgba(255,255,255,.08)' }}>
+      <div className="relative overflow-hidden rounded-xl" style={{ border: '1px solid rgba(255,255,255,.08)', maxWidth: shot.width }}>
         <img src={shot.src} alt={shot.alt} className="block w-full" loading="lazy" />
         {shot.notes.map((n, i) => (
           <span

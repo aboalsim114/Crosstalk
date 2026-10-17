@@ -20,6 +20,8 @@ export const CATEGORIES: [CategoryId, string][] = [
 export interface Shot {
   src: string;
   alt: string;
+  /** Natural width in px: small card shots are not stretched. */
+  width?: number;
   notes: { x: number; y: number; text: string }[];
 }
 
